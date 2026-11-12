@@ -1,0 +1,34 @@
+{
+  "name": "solecontrol",
+  "version": "1.0.0",
+  "private": true,
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "scripts": {
+    "setup": "npm install && npm run build:shared && npm run db:generate && npm run db:seed",
+    "build:shared": "npm run build --workspace=@solecontrol/shared",
+    "dev": "concurrently -k -p \"[{name}]\" -n \"api,web\" -c \"blue.bold,green.bold\" \"npm run dev --workspace=@solecontrol/api\" \"npm run dev --workspace=@solecontrol/web\"",
+    "dev:api": "npm run dev --workspace=@solecontrol/api",
+    "dev:web": "npm run dev --workspace=@solecontrol/web",
+    "build": "npm run build --workspace=@solecontrol/shared && npm run build --workspace=@solecontrol/api && npm run build --workspace=@solecontrol/web",
+    "test": "npm run test --workspaces --if-present",
+    "db:generate": "prisma generate",
+    "db:push": "prisma db push",
+    "db:migrate": "prisma migrate dev",
+    "db:seed": "ts-node prisma/seed.ts",
+    "seed:demo": "npx tsx prisma/seed-demo.ts"
+  },
+  "devDependencies": {
+    "concurrently": "^8.2.2",
+    "prisma": "^5.19.1",
+    "ts-node": "^10.9.2",
+    "typescript": "^5.5.4"
+  },
+  "dependencies": {
+    "@electric-sql/pglite": "^0.5.16",
+    "@prisma/adapter-pg": "^5.22.0",
+    "pg-gateway": "^0.3.0-beta.4"
+  }
+}

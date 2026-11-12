@@ -1,0 +1,426 @@
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+generator client {
+  provider        = "prisma-client-js"
+  previewFeatures = ["driverAdapters"]
+}
+
+enum UserStatus {
+  ACTIVE
+  INACTIVE
+  LOCKED
+}
+
+enum LocationType {
+  FLOOR
+  DEPARTMENT
+  RACK
+  SHELF
+  POSITION
+}
+
+enum Gender {
+  MENS
+  WOMENS
+  KIDS
+  UNISEX
+}
+
+model Store {
+  id        String   @id @default(uuid())
+  code      String   @unique
+  name      String
+  address   String?
+  gstin     String?
+  isActive  Boolean  @default(true) @map("is_active")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  userLocations   UserLocation[]
+  documentSeries DocumentSeries[]
+  locations      Location[]
+
+  @@map("stores")
+}
+
+model User {
+  id                  String     @id @default(uuid())
+  name                String
+  email               String     @unique
+  phone               String?
+  passwordHash        String     @map("password_hash")
+  status              UserStatus @default(ACTIVE)
+  mustChangePassword  Boolean    @default(true) @map("must_change_password")
+  failedLoginAttempts Int        @default(0) @map("failed_login_attempts")
+  lockedUntil         DateTime?  @map("locked_until")
+  lastLoginAt         DateTime?  @map("last_login_at")
+  createdAt           DateTime   @default(now()) @map("created_at")
+  updatedAt           DateTime   @updatedAt @map("updated_at")
+
+  roleId String @map("role_id")
+  role   Role   @relation(fields: [roleId], references: [id])
+
+  userLocations UserLocation[]
+  sessions      UserSession[]
+  loginEvents   LoginEvent[]
+  auditLogs     AuditLog[]
+  notifications Notification[]
+
+  @@index([roleId])
+  @@index([email])
+  @@map("users")
+}
+
+model Role {
+  id          String   @id @default(uuid())
+  code        String   @unique
+  name        String
+  description String?
+  isSystem    Boolean  @default(false) @map("is_system")
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  users           User[]
+  rolePermissions RolePermission[]
+
+  @@map("roles")
+}
+
+model Permission {
+  id          String   @id @default(uuid())
+  key         String   @unique
+  module      String
+  action      String
+  description String?
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  rolePermissions RolePermission[]
+
+  @@index([module])
+  @@map("permissions")
+}
+
+model RolePermission {
+  roleId       String @map("role_id")
+  permissionId String @map("permission_id")
+
+  role       Role       @relation(fields: [roleId], references: [id], onDelete: Cascade)
+  permission Permission @relation(fields: [permissionId], references: [id], onDelete: Cascade)
+
+  @@id([roleId, permissionId])
+  @@map("role_permissions")
+}
+
+model UserLocation {
+  userId  String @map("user_id")
+  storeId String @map("store_id")
+
+  user  User  @relation(fields: [userId], references: [id], onDelete: Cascade)
+  store Store @relation(fields: [storeId], references: [id], onDelete: Cascade)
+
+  @@id([userId, storeId])
+  @@map("user_locations")
+}
+
+model UserSession {
+  id               String    @id @default(uuid())
+  userId           String    @map("user_id")
+  refreshTokenHash String    @map("refresh_token_hash")
+  ipAddress        String?   @map("ip_address")
+  userAgent        String?   @map("user_agent")
+  isRevoked        Boolean   @default(false) @map("is_revoked")
+  expiresAt        DateTime  @map("expires_at")
+  createdAt        DateTime  @default(now()) @map("created_at")
+  updatedAt        DateTime  @updatedAt @map("updated_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([refreshTokenHash])
+  @@map("user_sessions")
+}
+
+model LoginEvent {
+  id            String   @id @default(uuid())
+  userId        String?  @map("user_id")
+  email         String
+  success       Boolean
+  ipAddress     String?  @map("ip_address")
+  userAgent     String?  @map("user_agent")
+  failureReason String?  @map("failure_reason")
+  createdAt     DateTime @default(now()) @map("created_at")
+
+  user User? @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@index([email, createdAt])
+  @@map("login_events")
+}
+
+model CompanyProfile {
+  id        String   @id @default(uuid())
+  legalName String   @map("legal_name")
+  tradeName String   @map("trade_name")
+  gstin     String?
+  address   String?
+  phone     String?
+  email     String?
+  logoUrl   String?  @map("logo_url")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@map("company_profile")
+}
+
+model Setting {
+  key         String   @id
+  value       Json
+  category    String   @default("general")
+  description String?
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  @@map("settings")
+}
+
+model FinancialYear {
+  id        String   @id @default(uuid())
+  code      String   @unique
+  startDate DateTime @map("start_date")
+  endDate   DateTime @map("end_date")
+  isCurrent Boolean  @default(false) @map("is_current")
+  isClosed  Boolean  @default(false) @map("is_closed")
+
+  @@map("financial_years")
+}
+
+model DocumentSeries {
+  id            String   @id @default(uuid())
+  storeId       String   @map("store_id")
+  type          String
+  prefix        String
+  currentNumber Int      @default(0) @map("current_number")
+  suffix        String?
+
+  store Store @relation(fields: [storeId], references: [id], onDelete: Cascade)
+
+  @@unique([storeId, type])
+  @@map("document_series")
+}
+
+model AuditLog {
+  id          String   @id @default(uuid())
+  action      String
+  entity      String
+  entityId    String?  @map("entity_id")
+  userId      String?  @map("user_id")
+  userName    String?  @map("user_name")
+  userRole    String?  @map("user_role")
+  ipAddress   String?  @map("ip_address")
+  userAgent   String?  @map("user_agent")
+  beforeState Json?    @map("before_state")
+  afterState  Json?    @map("after_state")
+  metadata    Json?
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  user User? @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@index([entity, createdAt])
+  @@index([userId, createdAt])
+  @@map("audit_logs")
+}
+
+model Notification {
+  id        String   @id @default(uuid())
+  userId    String   @map("user_id")
+  title     String
+  message   String
+  type      String   @default("INFO")
+  isRead    Boolean  @default(false) @map("is_read")
+  link      String?
+  createdAt DateTime @default(now()) @map("created_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, isRead])
+  @@map("notifications")
+}
+
+model AlertRule {
+  id        String   @id @default(uuid())
+  code      String   @unique
+  name      String
+  condition Json
+  isActive  Boolean  @default(true) @map("is_active")
+
+  @@map("alert_rules")
+}
+
+model IntegrationSetting {
+  id              String    @id @default(uuid())
+  provider        String    @unique
+  configEncrypted String    @map("config_encrypted")
+  isActive        Boolean   @default(false) @map("is_active")
+  lastTestedAt    DateTime? @map("last_tested_at")
+  status          String    @default("DISCONNECTED")
+
+  @@map("integration_settings")
+}
+
+model IntegrationLog {
+  id        String   @id @default(uuid())
+  provider  String
+  event     String
+  payload   Json?
+  response  Json?
+  status    String
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@index([provider, createdAt])
+  @@map("integration_logs")
+}
+
+
+
+model Brand {
+  id          String   @id @default(uuid())
+  code        String   @unique
+  name        String
+  description String?
+  isActive    Boolean  @default(true) @map("is_active")
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  articles Article[]
+  @@map("brands")
+}
+
+model Category {
+  id          String   @id @default(uuid())
+  code        String   @unique
+  name        String
+  gender      Gender   @default(UNISEX)
+  description String?
+  isActive    Boolean  @default(true) @map("is_active")
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  articles Article[]
+  @@map("categories")
+}
+
+model Size {
+  id        String   @id @default(uuid())
+  code      String   @unique
+  name      String
+  system    String   @default("UK")
+  sequence  Int      @default(0)
+  isActive  Boolean  @default(true) @map("is_active")
+
+  variants  ProductVariant[]
+  @@map("sizes")
+}
+
+model Colour {
+  id        String   @id @default(uuid())
+  code      String   @unique
+  name      String
+  hexCode   String?  @map("hex_code")
+  isActive  Boolean  @default(true) @map("is_active")
+
+  variants  ProductVariant[]
+  @@map("colours")
+}
+
+model Article {
+  id               String   @id @default(uuid())
+  articleNumber    String   @unique @map("article_number")
+  name             String
+  description      String?
+  brandId          String   @map("brand_id")
+  categoryId       String   @map("category_id")
+  gender           Gender   @default(UNISEX)
+  hsnCode          String?  @map("hsn_code")
+  baseCostPrice    Decimal  @default(0.00) @map("base_cost_price") @db.Decimal(14, 2)
+  baseMrp          Decimal  @default(0.00) @map("base_mrp") @db.Decimal(14, 2)
+  baseSellingPrice Decimal  @default(0.00) @map("base_selling_price") @db.Decimal(14, 2)
+  imageUrl         String?  @map("image_url")
+  isActive         Boolean  @default(true) @map("is_active")
+  createdAt        DateTime @default(now()) @map("created_at")
+  updatedAt        DateTime @updatedAt @map("updated_at")
+
+  brand            Brand    @relation(fields: [brandId], references: [id])
+  category         Category @relation(fields: [categoryId], references: [id])
+  variants         ProductVariant[]
+
+  @@map("articles")
+}
+
+model ProductVariant {
+  id           String   @id @default(uuid())
+  articleId    String   @map("article_id")
+  sizeId       String   @map("size_id")
+  colourId     String   @map("colour_id")
+  sku          String   @unique
+  barcode      String   @unique
+  costPrice    Decimal  @default(0.00) @map("cost_price") @db.Decimal(14, 2)
+  mrp          Decimal  @default(0.00) @map("mrp") @db.Decimal(14, 2)
+  sellingPrice Decimal  @default(0.00) @map("selling_price") @db.Decimal(14, 2)
+  isActive     Boolean  @default(true) @map("is_active")
+  createdAt    DateTime @default(now()) @map("created_at")
+  updatedAt    DateTime @updatedAt @map("updated_at")
+
+  article      Article  @relation(fields: [articleId], references: [id], onDelete: Cascade)
+  size         Size     @relation(fields: [sizeId], references: [id])
+  colour       Colour   @relation(fields: [colourId], references: [id])
+
+  @@unique([articleId, sizeId, colourId])
+  @@index([sku])
+  @@index([barcode])
+  @@map("product_variants")
+}
+
+model Location {
+  id        String       @id @default(uuid())
+  storeId   String       @map("store_id")
+  parentId  String?      @map("parent_id")
+  code      String
+  name      String
+  type      LocationType
+  barcode   String?      @unique
+  isActive  Boolean      @default(true) @map("is_active")
+  createdAt DateTime     @default(now()) @map("created_at")
+  updatedAt DateTime     @updatedAt @map("updated_at")
+
+  store     Store        @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  parent    Location?    @relation("LocationTree", fields: [parentId], references: [id], onDelete: Cascade)
+  children  Location[]   @relation("LocationTree")
+
+  @@unique([storeId, code])
+  @@index([storeId, parentId])
+  @@map("locations")
+}
+
+model TaxRate {
+  id        String   @id @default(uuid())
+  name      String
+  rate      Decimal  @db.Decimal(5, 2)
+  hsnCode   String?  @map("hsn_code")
+  cgstRate  Decimal  @default(0.00) @map("cgst_rate") @db.Decimal(5, 2)
+  sgstRate  Decimal  @default(0.00) @map("sgst_rate") @db.Decimal(5, 2)
+  igstRate  Decimal  @default(0.00) @map("igst_rate") @db.Decimal(5, 2)
+  isActive  Boolean  @default(true) @map("is_active")
+
+  @@map("tax_rates")
+}
+
+model PaymentMode {
+  id        String   @id @default(uuid())
+  code      String   @unique
+  name      String
+  type      String   @default("CASH")
+  isActive  Boolean  @default(true) @map("is_active")
+
+  @@map("payment_modes")
+}

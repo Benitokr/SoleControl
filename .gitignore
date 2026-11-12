@@ -1,0 +1,16 @@
+.env
+.env.*
+!.env.example
+
+node_modules/
+**/dist/
+**/build/
+coverage/
+.vite/
+*.tsbuildinfo
+*.log
+
+# Local business inputs, not application source
+/CDFC-Retail.xlsx
+/Retail_Scope_Updated (1).pdf
+/prisma/pglite-data*/
