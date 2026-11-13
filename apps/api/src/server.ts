@@ -100,7 +100,7 @@ export async function start() {
   return server;
 }
 
-// Only auto-start when run directly
-if (process.argv[1] && process.argv[1].endsWith('server.ts')) {
+// Always start server unless running under vitest / test runner
+if (!process.env.VITEST && process.env.NODE_ENV !== 'test') {
   start().catch((err) => { logger.error(err, 'Failed to start'); process.exit(1); });
 }
