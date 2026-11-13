@@ -55,16 +55,54 @@ let journals = [
 ];
 let bankAccounts = [...DB.bankAccounts];
 let bankLines = [...DB.bankLines];
-let capitalEntries = [...DB.capitalEntries];
-let withdrawals = [...DB.withdrawals];
+let capitalEntries = [
+  {
+    id: 'cap-01',
+    storeId: 'addac467-9344-4786-9a92-1b5855402c25',
+    type: 'CAPITAL_IN',
+    amount: 500000.00,
+    description: 'Initial Working Capital & Equity Infusion - Forty V Flagship',
+    reference: 'UTR-HDFC-991244',
+    status: 'APPROVED',
+    createdAt: new Date(Date.now() - 30 * 86400000).toISOString(),
+    created_at: new Date(Date.now() - 30 * 86400000).toISOString()
+  }
+];
+let withdrawals = [
+  {
+    id: 'w-01',
+    storeId: 'addac467-9344-4786-9a92-1b5855402c25',
+    amount: 25000.00,
+    description: 'Partner Drawings - Monthly Remuneration Advance',
+    drawn_by: 'Managing Partner',
+    status: 'APPROVED',
+    createdAt: new Date(Date.now() - 7 * 86400000).toISOString(),
+    created_at: new Date(Date.now() - 7 * 86400000).toISOString()
+  }
+];
 let ageingRules = [
   { id: 'ar-1', category_name: 'Running & Performance', threshold_days: 90, discount_pct: 25, label: 'Running Clearance 90d+', is_active: true },
   { id: 'ar-2', category_name: 'Formal Leather', threshold_days: 100, discount_pct: 30, label: 'Formal Off-Season Clearance', is_active: true }
 ];
 let barcodeQueue = [
-  { id: 'bq-1', sku: 'NK-AM-A5-8-BLK', article_name: 'Air Max Pulse Retro', size: 'UK 8', colour: 'Midnight Black', mrp: 8999, copies: 12, status: 'QUEUED', created_at: new Date().toISOString() },
-  { id: 'bq-2', sku: 'AD-SN-B2-9-WHT', article_name: 'Supernova Stride Pro', size: 'UK 9', colour: 'Cloud White', mrp: 7499, copies: 18, status: 'PRINTED', created_at: new Date(Date.now() - 86400000).toISOString() }
+  { id: 'bq-1', sku: 'NK-AM-A5-8-BLK', article_name: 'Air Max Pulse Retro', size: 'UK 8', colour: 'Midnight Black', mrp: 8999, copies: 12, quantity: 12, status: 'PENDING', createdAt: new Date().toISOString(), created_at: new Date().toISOString() },
+  { id: 'bq-2', sku: 'AD-SN-B2-9-WHT', article_name: 'Supernova Stride Pro', size: 'UK 9', colour: 'Cloud White', mrp: 7499, copies: 18, quantity: 18, status: 'PRINTED', createdAt: new Date(Date.now() - 86400000).toISOString(), created_at: new Date(Date.now() - 86400000).toISOString() }
 ];
+
+let alertRules = [
+  { id: 'ar-1', name: 'Low Stock Velocity Threshold', condition: 'STOCK_QTY < 5 AND 30D_SALES > 10', threshold: '5 units', severity: 'WARNING', isActive: true, is_active: true },
+  { id: 'ar-2', name: 'Dead Stock 90+ Days Aging', condition: 'DAYS_SINCE_RECEIPT > 90', threshold: '90 days', severity: 'DANGER', isActive: true, is_active: true },
+  { id: 'ar-3', name: 'Unreconciled Bank Deposit Discrepancy', condition: 'BANK_DISCREPANCY > 1000', threshold: '₹1,000.00', severity: 'DANGER', isActive: true, is_active: true },
+  { id: 'ar-4', name: 'GSTR-3B Tax Filing Due Date Warning', condition: 'CURRENT_DAY > 15 OF_MONTH', threshold: 'Day 15', severity: 'INFO', isActive: true, is_active: true },
+  { id: 'ar-5', name: 'Damaged Goods Ratio Breach', condition: 'DEFECT_RATE > 0.03', threshold: '3.0%', severity: 'WARNING', isActive: true, is_active: true }
+];
+
+let integrationConfigs = {
+  whatsapp: { phone_number_id: '10982348572', from_phone: '+919876543210', api_url: 'https://graph.facebook.com/v18.0' },
+  barcode_service: { base_url: 'https://solecontrol.fortyv.local/api/v1/barcodes' },
+  bank_gateway: { client_id: 'HDFC_CORP_40V', api_url: 'https://api.hdfcbank.com/corp/v1' },
+  gst_portal: { gstin: '33AABCF4050M1Z2', username: 'fortyv_tax_mgr', api_url: 'https://api.gst.gov.in' }
+};
 
 export default async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', req.headers?.origin || '*');
@@ -111,12 +149,14 @@ export default async function handler(req, res) {
     ]});
   }
   if (path.includes('/dashboard/recent-sales')) {
-    return res.status(200).json({ data: sales.slice(0, 5).map(s => ({ doc_number: s.document_number, customer_name: s.customer_name || 'Counter Customer', total_amount: s.total_amount, sale_date: s.created_at })) });
+    return res.status(200).json({ data: [
+      { id: 'sl-1', docNumber: 'INV-2026-001', customerName: 'Rahul Sharma', totalAmount: 8999.00, paymentMode: 'UPI', createdAt: new Date().toISOString() },
+      { id: 'sl-2', docNumber: 'INV-2026-002', customerName: 'Priya Sundaram', totalAmount: 14998.00, paymentMode: 'CARD', createdAt: new Date(Date.now() - 3600000).toISOString() },
+      { id: 'sl-3', docNumber: 'INV-2026-003', customerName: 'Karthik Raja', totalAmount: 999.00, paymentMode: 'CASH', createdAt: new Date(Date.now() - 7200000).toISOString() }
+    ]});
   }
   if (path.includes('/dashboard/targets')) {
-    return res.status(200).json({ data: [
-      { id: 'tgt-1', name: 'November Diwali Surge Target', period_start: '2026-11-01', period_end: '2026-11-30', target_amount: 500000.00, achieved: 418250.00 }
-    ]});
+    return res.status(200).json({ data: { currentSales: 168490.00, targetAmount: 250000.00, percentage: 67.4 } });
   }
 
   // 3. Masters
@@ -128,61 +168,116 @@ export default async function handler(req, res) {
   if (path.includes('/masters/variants')) return res.status(200).json({ data: DB.variants });
 
   // 4. Vendors & Customers
-  if (path.includes('/vendors')) return res.status(200).json({ data: DB.vendors });
-  if (path.includes('/customers')) return res.status(200).json({ data: DB.customers });
+  if (path.includes('/vendors')) {
+    const formatted = DB.vendors.map(v => ({
+      ...v,
+      isActive: v.isActive ?? v.is_active ?? true,
+      balance: Number(v.balance ?? 0)
+    }));
+    return res.status(200).json({ data: formatted });
+  }
+  if (path.includes('/customers')) {
+    const formatted = DB.customers.map(c => ({
+      ...c,
+      isActive: c.isActive ?? c.is_active ?? true,
+      lifetimeValue: Number(c.lifetimeValue ?? c.lifetime_value ?? 0),
+      creditOutstanding: Number(c.creditOutstanding ?? c.credit_outstanding ?? 0)
+    }));
+    return res.status(200).json({ data: formatted });
+  }
 
   // 5. Offers
   if (path.includes('/offers')) {
-    if (req.method === 'POST') {
+    if (req.method === 'POST' || req.method === 'PUT') {
       return res.status(200).json({ data: { success: true } });
     }
-    return res.status(200).json({ data: DB.offers });
+    const formatted = DB.offers.map(o => ({
+      ...o,
+      scopeType: o.scopeType || o.scope_type || 'ALL',
+      discountType: o.discountType || o.discount_type || 'PERCENTAGE',
+      discountValue: Number(o.discountValue ?? o.discount_value ?? 0),
+      validFrom: o.validFrom || o.valid_from || new Date().toISOString(),
+      validTo: o.validTo || o.valid_until || null,
+      isActive: o.isActive ?? o.is_active ?? true,
+      priority: o.priority ?? 1
+    }));
+    return res.status(200).json({ data: formatted });
   }
 
   // 6. Company & Locations
   if (path.includes('/company/profile')) {
     return res.status(200).json({ data: {
       name: 'Forty V Footwear Retail Private Limited',
+      legalName: 'Forty V Footwear Retail Pvt Ltd',
       legal_name: 'Forty V Footwear Retail Pvt Ltd',
       gstin: '33AABCF4050M1Z2',
       pan: 'AABCF4050M',
-      address_line1: '100 Feet Road, Gandhipuram',
-      city: 'Coimbatore',
-      state: 'Tamil Nadu',
-      pincode: '641012',
-      email: 'operations@fortyv.local',
-      phone: '+91 98401 99880'
+      email: 'contact@fortyv.local',
+      phone: '+91 98401 23456',
+      address: '104, Avinashi Road, Peelamedu, Coimbatore, Tamil Nadu - 641004'
     }});
   }
-  if (path.includes('/company/stores')) return res.status(200).json({ data: DB.stores });
+  if (path.includes('/company/stores')) {
+    const formatted = DB.stores.map(s => ({
+      ...s,
+      isActive: s.isActive ?? s.is_active ?? true
+    }));
+    return res.status(200).json({ data: formatted });
+  }
   if (path.includes('/company/settings')) {
     return res.status(200).json({ data: [
-      { key: 'valuation_method', value: 'WEIGHTED_AVERAGE', description: 'Inventory valuation methodology' },
-      { key: 'freight_allocation', value: 'VALUE', description: 'Freight allocation across bill items' },
-      { key: 'audit_cycle_days', value: '60', description: 'Stock physical audit cycle interval' },
-      { key: 'admin_sales_entry', value: 'true', description: 'Enable direct sales invoicing by Super Admin' }
+      { id: 'set-1', key: 'valuation_method', value: 'WEIGHTED_AVERAGE', description: 'Inventory valuation methodology' },
+      { id: 'set-2', key: 'freight_allocation', value: 'VALUE', description: 'Freight allocation across bill items' },
+      { id: 'set-3', key: 'audit_cycle_days', value: '60', description: 'Stock physical audit cycle interval' },
+      { id: 'set-4', key: 'admin_sales_entry', value: 'true', description: 'Enable direct sales invoicing by Super Admin' }
     ]});
   }
   if (path.includes('/locations/tree')) {
     return res.status(200).json({ data: [
-      { id: 'loc-fl', name: 'Ground Floor Showroom', type: 'FLOOR', children: [
-        { id: 'loc-dept-m', name: 'Mens Performance Footwear', type: 'DEPARTMENT', children: [
-          { id: 'loc-rck-1', name: 'Rack R1 (Running Wall)', type: 'RACK', stock_count: 320 },
-          { id: 'loc-rck-2', name: 'Rack R2 (Trail & Outdoor)', type: 'RACK', stock_count: 145 }
+      { id: 'loc-fl', name: 'Ground Floor Showroom', code: 'FL-01', type: 'FLOOR', children: [
+        { id: 'loc-dept-m', name: 'Mens Performance Footwear', code: 'DEPT-M', type: 'DEPARTMENT', children: [
+          { id: 'loc-rck-1', name: 'Rack R1 (Running Wall)', code: 'RCK-01', type: 'RACK', stock_count: 320 },
+          { id: 'loc-rck-2', name: 'Rack R2 (Trail & Outdoor)', code: 'RCK-02', type: 'RACK', stock_count: 145 }
         ]},
-        { id: 'loc-dept-w', name: 'Lifestyle & Streetwear', type: 'DEPARTMENT', children: [
-          { id: 'loc-rck-s1', name: 'Rack S1 (Retro Sneakers)', type: 'RACK', stock_count: 177 }
+        { id: 'loc-dept-w', name: 'Lifestyle & Streetwear', code: 'DEPT-W', type: 'DEPARTMENT', children: [
+          { id: 'loc-rck-s1', name: 'Rack S1 (Retro Sneakers)', code: 'RCK-S1', type: 'RACK', stock_count: 177 }
         ]}
       ]}
     ]});
   }
 
   // 7. Barcodes
-  if (path.includes('/barcodes/queue')) return res.status(200).json({ data: barcodeQueue });
+  if (path.includes('/barcodes/queue')) {
+    return res.status(200).json({ data: barcodeQueue });
+  }
+  if (path.includes('/barcodes/jobs')) {
+    return res.status(200).json({ data: { success: true } });
+  }
 
   // 8. Users & Roles
-  if (path.includes('/roles')) return res.status(200).json({ data: DB.roles });
-  if (path.includes('/users')) return res.status(200).json({ data: DB.users });
+  if (path.includes('/roles')) {
+    const formatted = DB.roles.map(r => ({
+      ...r,
+      isSystem: r.isSystem ?? r.is_system ?? true,
+      _count: r._count || {
+        users: r.code === 'SUPER_ADMIN' ? 1 : r.code === 'ADMINISTRATOR' ? 2 : 1,
+        rolePermissions: r.code === 'SUPER_ADMIN' ? 52 : 38
+      }
+    }));
+    return res.status(200).json({ data: formatted });
+  }
+  if (path.includes('/users')) {
+    if (req.method === 'PUT') {
+      return res.status(200).json({ data: { success: true } });
+    }
+    const formatted = DB.users.map(u => ({
+      ...u,
+      isActive: u.isActive ?? (u.status === 'ACTIVE' || u.is_active === true),
+      role: u.role || { name: u.role_name || 'Super Admin' },
+      lastLoginAt: u.lastLoginAt || u.last_login_at || new Date(Date.now() - 3600000).toISOString()
+    }));
+    return res.status(200).json({ data: formatted });
+  }
 
   // 9. Inventory Stock, Adjustments, Audits
   if (path.includes('/inventory/stock') || path.includes('/inventory/balances')) {
@@ -190,12 +285,14 @@ export default async function handler(req, res) {
   }
   if (path.includes('/inventory/adjustments')) {
     return res.status(200).json({ data: [
-      { id: 'adj-01', reference: 'ADJ-2026-001', variant_sku: 'NK-AM-A5-8-BLK', article_name: 'Air Max Pulse Retro', quantity_change: 2, reason: 'Physical cycle discrepancy audit correction', created_at: new Date(Date.now() - 4 * 86400000).toISOString() }
+      { id: 'adj-01', docNumber: 'ADJ-2026-001', reference: 'ADJ-2026-001', variant_sku: 'NK-AM-A5-8-BLK', article_name: 'Air Max Pulse Retro', quantity_change: 2, reason: 'Physical cycle discrepancy audit correction', status: 'POSTED', createdAt: new Date(Date.now() - 4 * 86400000).toISOString(), created_at: new Date(Date.now() - 4 * 86400000).toISOString() },
+      { id: 'adj-02', docNumber: 'ADJ-2026-002', reference: 'ADJ-2026-002', variant_sku: 'AD-SN-B2-9-WHT', article_name: 'Supernova Stride Pro', quantity_change: -1, reason: 'Damaged in display shelf transfer', status: 'POSTED', createdAt: new Date(Date.now() - 2 * 86400000).toISOString(), created_at: new Date(Date.now() - 2 * 86400000).toISOString() }
     ]});
   }
   if (path.includes('/inventory/audits')) {
     return res.status(200).json({ data: [
-      { id: 'aud-01', audit_number: 'AUD-NOV-2026', store_name: 'Forty V Flagship', status: 'COMPLETED', total_scanned: 640, matched_count: 638, discrepancy_count: 2, started_at: new Date(Date.now() - 10 * 86400000).toISOString() }
+      { id: 'aud-01', sessionNumber: 'AUD-NOV-2026', audit_number: 'AUD-NOV-2026', store_name: 'Forty V Flagship', status: 'COMPLETED', total_scanned: 640, matched_count: 638, discrepancy_count: 2, createdAt: new Date(Date.now() - 10 * 86400000).toISOString(), started_at: new Date(Date.now() - 10 * 86400000).toISOString() },
+      { id: 'aud-02', sessionNumber: 'AUD-OCT-2026', audit_number: 'AUD-OCT-2026', store_name: 'Forty V Flagship', status: 'COMPLETED', total_scanned: 590, matched_count: 590, discrepancy_count: 0, createdAt: new Date(Date.now() - 40 * 86400000).toISOString(), started_at: new Date(Date.now() - 40 * 86400000).toISOString() }
     ]});
   }
 
@@ -209,54 +306,46 @@ export default async function handler(req, res) {
         to_store_name: 'Forty V Flagship',
         from_location_name: 'Rack R1',
         to_location_name: 'Rack S1',
-        status: 'REQUESTED',
-        total_pairs: body.quantity || 4,
-        requested_by_name: 'Super Admin',
-        notes: body.notes || 'Inter-rack movement',
+        total_items: Number(body.items?.length || 1),
+        status: 'COMPLETED',
         created_at: new Date().toISOString()
       };
       transfers.unshift(newTransfer);
       return res.status(201).json({ data: newTransfer });
     }
-    return res.status(200).json({ data: transfers });
+    return res.status(200).json({ data: transfers, meta: { total: transfers.length } });
   }
 
   // 11. Display Stock
-  if (path.includes('/display')) {
-    if (req.method === 'POST') {
-      const newDisplay = {
-        id: 'disp-' + Date.now(),
-        article_name: body.article_name || 'Air Max Pulse Retro',
-        sku: 'NK-AM-A5-8-BLK',
-        colour_name: 'Midnight Black',
-        size_label: 'UK 8',
-        display_location_id: 'DISP-MAIN',
-        from_location_name: 'Rack R1',
-        quantity: Number(body.quantity || 1),
-        status: 'ACTIVE',
-        notes: body.notes || 'Showcase sample allocation',
-        created_at: new Date().toISOString()
-      };
-      displays.unshift(newDisplay);
-      return res.status(201).json({ data: newDisplay });
-    }
-    return res.status(200).json({ data: displays });
+  if (path.includes('/display/allocate')) {
+    const newDisplay = {
+      id: 'disp-' + Date.now(),
+      display_location_name: body.displayLocationName || 'Window Shelf Display',
+      sku: body.sku || 'NK-AM-A5-8-BLK',
+      article_name: body.articleName || 'Air Max Pulse Retro',
+      size_label: 'UK 8',
+      colour_name: 'Midnight Black',
+      allocated_at: new Date().toISOString()
+    };
+    displays.unshift(newDisplay);
+    return res.status(201).json({ data: newDisplay });
   }
+  if (path.includes('/display')) return res.status(200).json({ data: displays });
 
   // 12. Damaged Goods
   if (path.includes('/damage')) {
     if (req.method === 'POST') {
       const newDamage = {
         id: 'dmg-' + Date.now(),
-        article_name: body.article_name || 'Air Max Pulse Retro',
-        sku: 'NK-AM-A5-8-BLK',
-        colour_name: 'Midnight Black',
+        sku: body.sku || 'NK-AM-A5-8-BLK',
+        article_name: body.articleName || 'Air Max Pulse Retro',
         size_label: 'UK 8',
-        location_name: 'Rack R1',
+        colour_name: 'Midnight Black',
         quantity: Number(body.quantity || 1),
-        status: 'REPORTED',
-        description: body.description || 'Try-on defect',
-        created_at: new Date().toISOString()
+        reason: body.reason || 'Transit Scratch',
+        action: 'WRITTEN_OFF',
+        status: 'WRITTEN_OFF',
+        reported_at: new Date().toISOString()
       };
       damages.unshift(newDamage);
       return res.status(201).json({ data: newDamage });
@@ -264,107 +353,156 @@ export default async function handler(req, res) {
     return res.status(200).json({ data: damages });
   }
 
-  // 13. Ageing
+  // 13. Ageing & Clearance
   if (path.includes('/ageing/heatmap')) {
     return res.status(200).json({ data: [
-      { category_name: 'Running & Performance', d0_30: 142, d31_60: 84, d61_90: 22, d90_plus: 6, total: 254 },
-      { category_name: 'Lifestyle & Sneaker', d0_30: 180, d31_60: 60, d61_90: 14, d90_plus: 2, total: 256 },
-      { category_name: 'Formal Leather', d0_30: 45, d31_60: 38, d61_90: 16, d90_plus: 8, total: 107 },
-      { category_name: 'Sandals & Slides', d0_30: 65, d31_60: 12, d61_90: 4, d90_plus: 0, total: 81 }
+      { category: 'Running & Performance Footwear', '0-30': 180, '31-60': 95, '61-90': 40, '90+': 5 },
+      { category: 'Lifestyle & Streetwear Sneakers', '0-30': 140, '31-60': 60, '61-90': 22, '90+': 2 },
+      { category: 'Formal Leather & Boots', '0-30': 45, '31-60': 30, '61-90': 15, '90+': 8 },
+      { category: 'Comfort Sandals & Slides', '0-30': 30, '31-60': 10, '61-90': 3, '90+': 0 }
     ]});
   }
   if (path.includes('/ageing/rules')) return res.status(200).json({ data: ageingRules });
-  if (path.includes('/ageing/recommendations')) {
-    return res.status(200).json({ data: [
-      { id: 'rec-01', article_name: 'Air Max Pulse Retro', age_days: 96, current_stock: 6, current_mrp: 8999, suggested_discount: 25, status: 'PENDING' },
-      { id: 'rec-02', article_name: 'Formal Derby Oxford', age_days: 108, current_stock: 8, current_mrp: 5499, suggested_discount: 30, status: 'PENDING' }
-    ]});
-  }
 
   // 14. Purchases
   if (path.includes('/purchases')) {
     if (req.method === 'POST') {
-      const newPurchase = {
+      if (path.includes('/finalise')) {
+        const id = path.split('/purchases/')[1]?.split('/')[0];
+        const p = purchases.find(item => item.id === id);
+        if (p) p.status = 'FINALISED';
+        return res.status(200).json({ data: p || { id, status: 'FINALISED' } });
+      }
+      const newP = {
         id: 'pb-' + Date.now(),
-        document_number: 'PB-2026-00' + (purchases.length + 1),
-        vendor_name: body.vendor_name || 'Nike India Private Limited',
-        invoice_number: body.invoice_number || 'INV-' + Date.now().toString().slice(-4),
-        bill_number: body.invoice_number || 'INV-' + Date.now().toString().slice(-4),
+        doc_number: 'PB-2026-00' + (purchases.length + 1),
+        bill_number: body.billNumber || 'BILL-' + Date.now().toString().slice(-6),
+        vendor_id: body.vendorId,
+        vendor: { name: 'Nike India Operations Pvt Ltd' },
+        vendor_name: 'Nike India Operations Pvt Ltd',
+        total_amount: Number(body.totalAmount || 74990.00),
+        tax_amount: Number(body.taxAmount || 8998.80),
+        status: 'DRAFT',
+        class: body.purchaseClass || 'CLASS_A',
+        purchase_class: body.purchaseClass || 'CLASS_A',
         bill_date: new Date().toISOString(),
-        total_amount: Number(body.total_amount || 45000),
-        subtotal: Number(body.total_amount || 45000) * 0.8928,
-        tax_amount: Number(body.total_amount || 45000) * 0.1072,
-        payment_status: 'PENDING',
-        status: 'FINALISED',
-        class: 'CLASS_A',
+        created_at: new Date().toISOString(),
         items: []
       };
-      purchases.unshift(newPurchase);
-      return res.status(201).json({ data: newPurchase });
+      purchases.unshift(newP);
+      return res.status(201).json({ data: newP });
     }
-    return res.status(200).json({ data: purchases });
+    return res.status(200).json({ data: purchases, meta: { total: purchases.length } });
   }
 
   // 15. Sales
   if (path.includes('/sales')) {
     if (req.method === 'POST') {
       const newSale = {
-        id: 'sl-' + Date.now(),
-        document_number: 'INV-2026-00' + (sales.length + 1),
-        customer_name: body.customer_name || 'Walk-in Retail Shopper',
-        customer_phone: body.customer_phone || '9876543210',
-        total_amount: Number(body.total_amount || 8999),
-        subtotal: Number(body.total_amount || 8999) * 0.8928,
-        tax_amount: Number(body.total_amount || 8999) * 0.1072,
-        payment_mode: body.payment_mode || 'UPI',
+        id: 'inv-' + Date.now(),
+        doc_number: 'INV-2026-00' + (sales.length + 1),
+        customer_name: body.customerName || 'Walk-in Customer',
+        total_amount: Number(body.totalAmount || 8999.00),
+        paid_amount: Number(body.paidAmount || body.totalAmount || 8999.00),
         status: 'COMPLETED',
+        payment_mode: body.paymentMode || 'UPI',
+        sale_date: new Date().toISOString(),
         created_at: new Date().toISOString()
       };
       sales.unshift(newSale);
       return res.status(201).json({ data: newSale });
     }
-    return res.status(200).json({ data: sales });
+    return res.status(200).json({ data: sales, meta: { total: sales.length } });
   }
 
   // 16. Accounting
-  if (path.includes('/accounting/accounts')) {
+  if (path.includes('/accounting/accounts')) return res.status(200).json({ data: accounts });
+  if (path.includes('/accounting/journals')) {
     if (req.method === 'POST') {
-      const newAcc = { id: 'acc-' + Date.now(), ...body, is_active: true };
-      accounts.push(newAcc);
-      return res.status(201).json({ data: newAcc });
+      if (path.includes('/approve')) {
+        return res.status(200).json({ data: { success: true } });
+      }
+      if (path.includes('/reverse')) {
+        return res.status(200).json({ data: { success: true } });
+      }
+      const newJ = {
+        id: 'jv-' + Date.now(),
+        reference: body.reference || 'JV-2026-MANUAL',
+        type: body.type || 'MANUAL',
+        status: 'POSTED',
+        total_debit: 5000,
+        total_credit: 5000,
+        notes: body.notes || 'Adjustment journal',
+        posted_at: new Date().toISOString(),
+        lines: body.lines || []
+      };
+      journals.unshift(newJ);
+      return res.status(201).json({ data: newJ });
     }
-    return res.status(200).json({ data: accounts });
+    return res.status(200).json({ data: journals });
   }
-  if (path.includes('/accounting/journals')) return res.status(200).json({ data: journals });
   if (path.includes('/accounting/trial-balance')) {
-    return res.status(200).json({ data: [
-      { code: '1110', name: 'HDFC Corporate Current A/c', type: 'ASSET', debit: 482500.00, credit: 0 },
-      { code: '1300', name: 'Footwear Merchandise Inventory', type: 'ASSET', debit: 373000.00, credit: 0 },
-      { code: '2100', name: 'Trade Payables - Footwear Vendors', type: 'LIABILITY', debit: 0, credit: 274400.00 },
-      { code: '2210', name: 'Input CGST 6%', type: 'ASSET', debit: 22380.00, credit: 0 },
-      { code: '2220', name: 'Input SGST 6%', type: 'ASSET', debit: 22380.00, credit: 0 },
-      { code: '3000', name: 'Partner Equity Capital', type: 'EQUITY', debit: 0, credit: 500000.00 },
-      { code: '3100', name: 'Partner Remuneration Drawings', type: 'EQUITY', debit: 25000.00, credit: 0 },
-      { code: '4000', name: 'Gross Footwear Retail Sales', type: 'INCOME', debit: 0, credit: 150860.00 }
-    ]});
+    return res.status(200).json({
+      data: [
+        { code: '1110', name: 'HDFC Corporate Current A/c', type: 'ASSET', debit: 482500.00, credit: 0 },
+        { code: '1300', name: 'Footwear Merchandise Inventory', type: 'ASSET', debit: 373000.00, credit: 0 },
+        { code: '2100', name: 'Trade Payables - Footwear Vendors', type: 'LIABILITY', debit: 0, credit: 274400.00 },
+        { code: '2210', name: 'Input CGST 6%', type: 'ASSET', debit: 22380.00, credit: 0 },
+        { code: '2220', name: 'Input SGST 6%', type: 'ASSET', debit: 22380.00, credit: 0 },
+        { code: '3000', name: 'Partner Equity Capital', type: 'EQUITY', debit: 0, credit: 500000.00 },
+        { code: '3100', name: 'Partner Remuneration Drawings', type: 'EQUITY', debit: 25000.00, credit: 0 },
+        { code: '4000', name: 'Retail Footwear Sales Revenue', type: 'REVENUE', debit: 0, credit: 168490.00 },
+        { code: '5000', name: 'Cost of Goods Sold (COGS)', type: 'EXPENSE', debit: 68000.00, credit: 0 },
+        { code: '5100', name: 'Freight & Cartage Inwards', type: 'EXPENSE', debit: 10200.00, credit: 0 }
+      ],
+      meta: {
+        totalDebit: 983460.00,
+        totalCredit: 983460.00,
+        balanced: true
+      }
+    });
   }
   if (path.includes('/accounting/pl')) {
     return res.status(200).json({ data: {
-      revenue: 150860.00,
-      cogs: 82400.00,
-      grossProfit: 68460.00,
-      operatingExpenses: 18200.00,
-      netProfit: 50260.00,
-      marginPct: 33.31
+      totalRevenue: 168490.00,
+      totalExpenses: 78200.00,
+      grossProfit: 100490.00,
+      operatingExpenses: 10200.00,
+      netProfit: 90290.00,
+      marginPct: 53.59,
+      revenue: [
+        { name: 'Retail Footwear Counter Sales (Sneakers & Lifestyle)', net_amount: 114500.00 },
+        { name: 'Athletic Running & Performance Footwear Sales', net_amount: 53990.00 }
+      ],
+      expenses: [
+        { name: 'Cost of Goods Sold (Footwear Inventory)', net_amount: 68000.00 },
+        { name: 'Inward Freight & Logistics Transport', net_amount: 6200.00 },
+        { name: 'Store Operations & Packaging Materials', net_amount: 4000.00 }
+      ]
     }});
   }
   if (path.includes('/accounting/balance-sheet')) {
     return res.status(200).json({ data: {
-      totalAssets: 900260.00,
-      currentAssets: 900260.00,
+      totalAssets: 877880.00,
+      currentAssets: 877880.00,
       totalLiabilities: 274400.00,
-      totalEquity: 525860.00,
-      balanced: true
+      totalEquity: 603480.00,
+      balanced: true,
+      assets: [
+        { name: 'HDFC Corporate Current A/c (Avinashi Rd)', balance: 482500.00 },
+        { name: 'Footwear Merchandise Inventory (Racks & Display)', balance: 373000.00 },
+        { name: 'Input CGST 6% Asset', balance: 11190.00 },
+        { name: 'Input SGST 6% Asset', balance: 11190.00 }
+      ],
+      liabilities: [
+        { name: 'Trade Payables - Footwear Vendors (Nike, Puma, Adidas)', balance: 265000.00 },
+        { name: 'Output GST Payable (Net Central & State)', balance: 9400.00 }
+      ],
+      equity: [
+        { name: 'Partner Equity Capital Infusion', balance: 500000.00 },
+        { name: 'Retained Net Earnings (Current Financial Period)', balance: 128480.00 },
+        { name: 'Less: Partner Drawings & Remuneration', balance: -25000.00 }
+      ]
     }});
   }
   if (path.includes('/accounting/cashbook')) {
@@ -377,24 +515,65 @@ export default async function handler(req, res) {
   // 17. Capital & Withdrawals
   if (path.includes('/capital/withdrawals')) {
     if (req.method === 'POST') {
-      const newW = { id: 'w-' + Date.now(), store_id: 'addac467-9344-4786-9a92-1b5855402c25', amount: Number(body.amount), description: body.description || 'Drawings', drawn_by: 'Managing Partner', status: 'APPROVED', created_at: new Date().toISOString() };
+      const newW = {
+        id: 'w-' + Date.now(),
+        storeId: 'addac467-9344-4786-9a92-1b5855402c25',
+        amount: Number(body.amount),
+        description: body.description || 'Partner Drawings',
+        status: 'APPROVED',
+        createdAt: new Date().toISOString(),
+        created_at: new Date().toISOString()
+      };
       withdrawals.unshift(newW);
       return res.status(201).json({ data: newW });
     }
-    return res.status(200).json({ data: withdrawals });
+    const formatted = withdrawals.map(w => ({
+      ...w,
+      createdAt: w.createdAt || w.created_at || new Date().toISOString(),
+      amount: Number(w.amount || 0)
+    }));
+    return res.status(200).json({ data: formatted });
   }
   if (path.includes('/capital')) {
     if (req.method === 'POST') {
-      const newC = { id: 'cap-' + Date.now(), store_id: 'addac467-9344-4786-9a92-1b5855402c25', type: body.type || 'CONTRIBUTION', amount: Number(body.amount), description: body.description || 'Capital', reference: body.reference || 'UTR-LOCAL', status: 'APPROVED', created_at: new Date().toISOString() };
+      const newC = {
+        id: 'cap-' + Date.now(),
+        storeId: 'addac467-9344-4786-9a92-1b5855402c25',
+        type: 'CAPITAL_IN',
+        amount: Number(body.amount),
+        description: body.description || 'Capital Infusion',
+        reference: body.reference || 'UTR-LOCAL',
+        status: 'APPROVED',
+        createdAt: new Date().toISOString(),
+        created_at: new Date().toISOString()
+      };
       capitalEntries.unshift(newC);
       return res.status(201).json({ data: newC });
     }
-    return res.status(200).json({ data: capitalEntries });
+    const formatted = capitalEntries.map(c => ({
+      ...c,
+      type: 'CAPITAL_IN',
+      createdAt: c.createdAt || c.created_at || new Date().toISOString(),
+      amount: Number(c.amount || 0)
+    }));
+    return res.status(200).json({ data: formatted });
   }
 
   // 18. Bank & GST
   if (path.includes('/bank/accounts') || path.includes('/bank-gst/accounts')) {
-    return res.status(200).json({ data: bankAccounts });
+    const formatted = bankAccounts.map(b => ({
+      ...b,
+      accountNumber: b.accountNumber || b.account_number || '50200088991122',
+      account_number: b.account_number || b.accountNumber || '50200088991122',
+      bankName: b.bankName || b.bank_name || 'HDFC Bank',
+      bank_name: b.bank_name || b.bankName || 'HDFC Bank',
+      balance: Number(b.balance ?? b.current_balance ?? b.opening_balance ?? 482500),
+      current_balance: Number(b.current_balance ?? b.balance ?? 482500)
+    }));
+    return res.status(200).json({ data: formatted });
+  }
+  if (path.includes('/bank/reconcile') || path.includes('/bank/unreconcile')) {
+    return res.status(200).json({ data: { success: true } });
   }
   if (path.includes('/bank/gst-summary') || path.includes('/bank-gst/gst-summary')) {
     return res.status(200).json({ data: [
@@ -403,47 +582,133 @@ export default async function handler(req, res) {
   }
   if (path.includes('/bank/gst-register') || path.includes('/bank-gst/gst-register')) {
     return res.status(200).json({ data: [
-      { id: 'gst-1', type: 'INPUT', purchase_class: 'CLASS_A', reference_type: 'PURCHASE', purchase_doc: 'PB-2026-001', taxable_value: 128000.00, cgst: 7680.00, sgst: 7680.00, igst: 0.00, total_value: 143360.00, transaction_date: new Date(Date.now() - 15 * 86400000).toISOString() },
-      { id: 'gst-2', type: 'OUTPUT', purchase_class: 'CLASS_A', reference_type: 'SALE', sale_doc: 'INV-2026-001', taxable_value: 8034.82, cgst: 482.09, sgst: 482.09, igst: 0.00, total_value: 8999.00, transaction_date: new Date(Date.now() - 3 * 86400000).toISOString() }
+      { id: 'gst-1', type: 'INPUT', purchase_class: 'CLASS_A', reference_type: 'PURCHASE', purchase_doc: 'PB-2026-001', taxable_amount: 128000.00, taxable_value: 128000.00, cgst: 7680.00, sgst: 7680.00, igst: 0.00, tax_amount: 15360.00, total_value: 143360.00, transaction_date: new Date(Date.now() - 15 * 86400000).toISOString() },
+      { id: 'gst-2', type: 'OUTPUT', purchase_class: 'CLASS_A', reference_type: 'SALE', sale_doc: 'INV-2026-001', taxable_amount: 8034.82, taxable_value: 8034.82, cgst: 482.09, sgst: 482.09, igst: 0.00, tax_amount: 964.18, total_value: 8999.00, transaction_date: new Date(Date.now() - 3 * 86400000).toISOString() }
     ]});
   }
   if (path.includes('/statement')) return res.status(200).json({ data: bankLines });
 
-  // 19. Audit, Alerts, Sessions
-  if (path.includes('/alerts/rules')) return res.status(200).json({ data: DB.alertRules });
+  // 19. Audit, Alerts, Sessions (Specific paths before general /alerts)
+  if (path.includes('/alerts/audit-log') || path.includes('/audit/logs')) {
+    return res.status(200).json({ data: DB.auditLogs });
+  }
+  if (path.includes('/alerts/rules')) return res.status(200).json({ data: alertRules });
   if (path.includes('/alerts/sessions')) {
+    if (req.method === 'POST') return res.status(200).json({ data: { success: true } });
     return res.status(200).json({ data: [
       { id: 'ses-1', user_name: 'Super Administrator', ip_address: '127.0.0.1', user_agent: 'Chrome / Windows', active: true, created_at: new Date().toISOString() }
     ]});
   }
   if (path.includes('/alerts')) {
+    if (req.method === 'POST' || req.method === 'DELETE') {
+      return res.status(200).json({ data: { success: true } });
+    }
     return res.status(200).json({ data: [
-      { id: 'alt-1', title: 'Low Stock Alert', message: 'Size UK 7 for Suede Classic XXI High is below safety threshold (2 pairs left)', severity: 'warning', created_at: new Date().toISOString() },
-      { id: 'alt-2', title: 'GST Filing Reminder', message: 'GSTR-3B return filing window for October period is open', severity: 'info', created_at: new Date(Date.now() - 86400000).toISOString() }
+      { id: 'alt-1', title: 'Low Stock Velocity Alert', message: 'Size UK 7 for Suede Classic XXI High is below safety threshold (2 pairs left)', severity: 'warning', isRead: false, is_read: false, createdAt: new Date().toISOString(), created_at: new Date().toISOString() },
+      { id: 'alt-2', title: 'GST Filing Reminder', message: 'GSTR-3B return filing window for October period is open', severity: 'info', isRead: false, is_read: false, createdAt: new Date(Date.now() - 86400000).toISOString(), created_at: new Date(Date.now() - 86400000).toISOString() }
     ]});
   }
-  if (path.includes('/audit/logs')) return res.status(200).json({ data: DB.auditLogs });
 
   // 20. Integrations
-  if (path.includes('/integrations')) {
+  if (path.includes('/integrations/printer/test')) {
+    return res.status(200).json({ data: { connected: true, latencyMs: 14 } });
+  }
+  if (path.includes('/integrations/') && path.includes('/test')) {
+    return res.status(200).json({ data: { connected: true, latencyMs: 42 } });
+  }
+  if (path.includes('/integrations/') && path.includes('/logs')) {
     return res.status(200).json({ data: [
-      { provider: 'WHATSAPP', name: 'WhatsApp Business Cloud API', status: 'CONFIGURED', is_active: true, last_tested_at: new Date().toISOString() },
-      { provider: 'GST_PORTAL', name: 'GST e-Way & e-Invoice Sandbox', status: 'CONNECTED', is_active: true, last_tested_at: new Date().toISOString() },
-      { provider: 'HDFC_BANK', name: 'HDFC Corporate Direct Banking Feed', status: 'ACTIVE', is_active: true, last_tested_at: new Date().toISOString() },
-      { provider: 'THERMAL_PRINTER', name: 'TSC Barcode & TSC Label Printer', status: 'READY', is_active: true, last_tested_at: new Date().toISOString() }
+      { id: 'log-1', action: 'HEARTBEAT_CHECK', status: 'SUCCESS', details: 'Provider endpoint handshake successful (HTTP 200)', created_at: new Date().toISOString() },
+      { id: 'log-2', action: 'TOKEN_VALIDATION', status: 'SUCCESS', details: 'OAuth/API Bearer token valid for 24h', created_at: new Date(Date.now() - 3600000).toISOString() }
+    ]});
+  }
+  if (path.includes('/integrations')) {
+    if (req.method === 'PUT') {
+      const provider = path.split('/integrations/')[1]?.split('?')[0];
+      if (provider && body.config) {
+        integrationConfigs[provider] = body.config;
+      }
+      return res.status(200).json({ data: { success: true } });
+    }
+    return res.status(200).json({ data: [
+      { id: 'int-1', provider: 'whatsapp', name: 'WhatsApp Business Cloud API', isActive: true, lastStatus: 'CONNECTED', config: integrationConfigs.whatsapp, lastTestedAt: new Date().toISOString() },
+      { id: 'int-2', provider: 'barcode_service', name: 'Barcode Generation & Label Service', isActive: true, lastStatus: 'CONNECTED', config: integrationConfigs.barcode_service, lastTestedAt: new Date().toISOString() },
+      { id: 'int-3', provider: 'bank_gateway', name: 'HDFC Corporate Direct Banking Feed', isActive: true, lastStatus: 'CONNECTED', config: integrationConfigs.bank_gateway, lastTestedAt: new Date().toISOString() },
+      { id: 'int-4', provider: 'gst_portal', name: 'GSTN Portal & E-Way / GSTR API', isActive: true, lastStatus: 'CONNECTED', config: integrationConfigs.gst_portal, lastTestedAt: new Date().toISOString() }
     ]});
   }
 
   // 21. Reports
+  if (path.includes('/reports/sales')) {
+    const rows = sales.map(s => ({
+      doc_number: s.doc_number || s.docNumber,
+      customer: s.customer_name || 'Walk-in Customer',
+      sale_date: s.created_at || s.sale_date,
+      payment_mode: s.payment_mode || 'UPI',
+      total_amount: Number(s.total_amount || 0),
+      paid_amount: Number(s.paid_amount || s.total_amount || 0),
+      status: s.status || 'COMPLETED'
+    }));
+    return res.status(200).json({ data: rows });
+  }
+  if (path.includes('/reports/purchases')) {
+    const rows = purchases.map(p => ({
+      doc_number: p.bill_number || p.doc_number || p.docNumber,
+      vendor: p.vendor_name || 'Nike India Operations Pvt Ltd',
+      bill_date: p.bill_date || p.created_at,
+      purchase_class: (p.class === 'CLASS_A' || p.purchase_class === 'CLASS_A') ? 'A' : 'B',
+      total_amount: Number(p.total_amount || 0),
+      status: p.status || 'FINALISED'
+    }));
+    return res.status(200).json({ data: rows });
+  }
+  if (path.includes('/reports/inventory')) {
+    const rows = DB.balances.map(b => ({
+      sku: b.sku,
+      barcode: b.barcode || `BC-${b.sku}`,
+      article: b.article_name,
+      size: b.size_label,
+      colour: b.colour_name,
+      qty: b.quantity,
+      cost: Number(b.cost_price || 0),
+      mrp: Number(b.selling_price || 0)
+    }));
+    return res.status(200).json({ data: rows });
+  }
+  if (path.includes('/reports/ageing')) {
+    const rows = DB.balances.map(b => ({
+      sku: b.sku,
+      article: b.article_name,
+      category: 'Running & Performance Footwear',
+      qty: b.quantity,
+      first_movement: b.updated_at
+    }));
+    return res.status(200).json({ data: rows });
+  }
+  if (path.includes('/reports/gst')) {
+    const rows = [
+      { doc_number: 'PB-2026-001', party_name: 'Nike India Operations Pvt Ltd', party_gstin: '33AABCN1234F1Z5', doc_date: new Date(Date.now() - 15 * 86400000).toISOString(), taxable_value: 128000.00, cgst: 7680.00, sgst: 7680.00, igst: 0.00, total_invoice_value: 143360.00 },
+      { doc_number: 'INV-2026-001', party_name: 'Rahul Sharma', party_gstin: 'URP', doc_date: new Date(Date.now() - 3 * 86400000).toISOString(), taxable_value: 8034.82, cgst: 482.09, sgst: 482.09, igst: 0.00, total_invoice_value: 8999.00 },
+      { doc_number: 'INV-2026-002', party_name: 'Priya Sundaram', party_gstin: 'URP', doc_date: new Date(Date.now() - 2 * 86400000).toISOString(), taxable_value: 13391.07, cgst: 803.46, sgst: 803.46, igst: 0.00, total_invoice_value: 14998.00 }
+    ];
+    return res.status(200).json({ data: rows });
+  }
+  if (path.includes('/reports/trial-balance')) {
+    return res.status(200).json({ data: [
+      { code: '1110', name: 'HDFC Corporate Current A/c', type: 'ASSET', debit: 482500.00, credit: 0 },
+      { code: '1300', name: 'Footwear Merchandise Inventory', type: 'ASSET', debit: 373000.00, credit: 0 },
+      { code: '2100', name: 'Trade Payables - Footwear Vendors', type: 'LIABILITY', debit: 0, credit: 274400.00 },
+      { code: '2210', name: 'Input CGST 6%', type: 'ASSET', debit: 22380.00, credit: 0 },
+      { code: '2220', name: 'Input SGST 6%', type: 'ASSET', debit: 22380.00, credit: 0 },
+      { code: '3000', name: 'Partner Equity Capital', type: 'EQUITY', debit: 0, credit: 500000.00 },
+      { code: '3100', name: 'Partner Remuneration Drawings', type: 'EQUITY', debit: 25000.00, credit: 0 },
+      { code: '4000', name: 'Retail Footwear Sales Revenue', type: 'REVENUE', debit: 0, credit: 168490.00 },
+      { code: '5000', name: 'Cost of Goods Sold (COGS)', type: 'EXPENSE', debit: 68000.00, credit: 0 },
+      { code: '5100', name: 'Freight & Cartage Inwards', type: 'EXPENSE', debit: 10200.00, credit: 0 }
+    ]});
+  }
   if (path.includes('/reports')) {
-    return res.status(200).json({ data: {
-      salesSummary: { totalGross: 168490.00, totalDiscount: 6200.00, totalNet: 162290.00, unitsSold: 28 },
-      topArticles: [
-        { name: 'Air Max Pulse Retro', units: 14, revenue: 125986.00 },
-        { name: 'Supernova Stride Pro', units: 8, revenue: 59992.00 },
-        { name: 'Suede Classic XXI High', units: 6, revenue: 35994.00 }
-      ]
-    }});
+    return res.status(200).json({ data: [] });
   }
 
   return res.status(200).json({ data: [], meta: { status: 'ok' } });

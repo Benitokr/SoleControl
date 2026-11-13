@@ -144,7 +144,7 @@ export function TransfersPage() {
                 {transfers.map((t: any) => (
                   <tr key={t.id} className="hover:bg-slate-50/50 dark:hover:bg-slate-800/40 transition-colors">
                     <td className="px-5 py-3.5 font-mono text-xs font-semibold" style={{ color: 'var(--color-primary)' }}>
-                      {t.id.slice(0, 8).toUpperCase()}
+                      {String(t?.id || '').slice(0, 8).toUpperCase()}
                     </td>
                     <td className="px-5 py-3.5 text-xs font-medium" style={{ color: 'var(--color-text)' }}>
                       Main Warehouse (CBE)

@@ -127,7 +127,7 @@ export function DisplayStockPage() {
                 {allocations.map((a: any) => (
                   <tr key={a.id} className="hover:bg-slate-50/50 dark:hover:bg-slate-800/40 transition-colors">
                     <td className="px-5 py-3.5 font-mono text-xs font-semibold" style={{ color: 'var(--color-primary)' }}>
-                      {a.id.slice(0, 8).toUpperCase()}
+                      {String(a?.id || '').slice(0, 8).toUpperCase()}
                     </td>
                     <td className="px-5 py-3.5 text-xs font-medium" style={{ color: 'var(--color-text)' }}>
                       {a.from_location_id || a.fromLocationId || 'Warehouse Rack R1'}

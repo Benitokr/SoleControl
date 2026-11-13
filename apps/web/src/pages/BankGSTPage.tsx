@@ -195,10 +195,10 @@ export function BankGSTPage() {
                   </div>
                   <div className="mt-4 flex justify-between items-end">
                     <span className="font-mono text-xs" style={{ color: 'var(--color-muted)' }}>
-                      •••• {b.accountNumber.slice(-4)}
+                      •••• {String(b.accountNumber || (b as any).account_number || '0000').slice(-4)}
                     </span>
                     <span className="font-mono text-lg font-bold tabular-nums" style={{ color: 'var(--color-primary)' }}>
-                      ₹{parseFloat(b.balance as any || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                      ₹{parseFloat(String(b.balance ?? (b as any).current_balance ?? (b as any).opening_balance ?? 0)).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
                     </span>
                   </div>
                 </div>

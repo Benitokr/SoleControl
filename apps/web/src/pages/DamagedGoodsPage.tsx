@@ -135,7 +135,7 @@ export function DamagedGoodsPage() {
                 {damages.map((d: any) => (
                   <tr key={d.id} className="hover:bg-slate-50/50 dark:hover:bg-slate-800/40 transition-colors">
                     <td className="px-5 py-3.5 font-mono text-xs font-semibold" style={{ color: 'var(--color-danger)' }}>
-                      {d.id.slice(0, 8).toUpperCase()}
+                      {String(d?.id || '').slice(0, 8).toUpperCase()}
                     </td>
                     <td className="px-5 py-3.5 text-xs font-medium" style={{ color: 'var(--color-text)' }}>
                       {d.location_id || d.locationId || 'Rack R1'}
