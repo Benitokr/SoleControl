@@ -1,6 +1,5 @@
-const crypto = require('crypto');
+import crypto from 'crypto';
 
-// Helper to sign a mock JWT for Vercel Serverless
 function createToken(payload) {
   const header = Buffer.from(JSON.stringify({ alg: 'HS256', typ: 'JWT' })).toString('base64url');
   const body = Buffer.from(JSON.stringify({ ...payload, exp: Math.floor(Date.now() / 1000) + 86400 })).toString('base64url');
@@ -42,7 +41,6 @@ const SUPER_ADMIN_USER = {
   mustChangePassword: false
 };
 
-// Seeded In-Memory State for Vercel Cloud Execution
 let memoryTransfers = [
   { id: 'tr-001', reference: 'TR-2026-001', from_store_name: 'Forty V Flagship', to_store_name: 'Forty V Flagship', from_location_name: 'Rack R1', to_location_name: 'Rack S1', status: 'RECEIVED', total_pairs: 6, requested_by_name: 'Super Admin', notes: 'Weekend surge replenishment for road running wall', created_at: new Date(Date.now() - 5 * 86400000).toISOString() },
   { id: 'tr-002', reference: 'TR-2026-002', from_store_name: 'Forty V Flagship', to_store_name: 'Forty V Flagship', from_location_name: 'Rack R1', to_location_name: 'Rack S1', status: 'DISPATCHED', total_pairs: 6, requested_by_name: 'Super Admin', notes: 'Transfer of UK 8/9 sizes to High-Traffic Sneaker Wall S1', created_at: new Date(Date.now() - 2 * 86400000).toISOString() },
@@ -70,9 +68,9 @@ let memorySales = [
   { id: 'sl-002', document_number: 'INV-2026-002', customer_name: 'Priya Sundaram', customer_phone: '9443298765', total_amount: 7499.00, subtotal: 6695.54, tax_amount: 803.46, payment_mode: 'CARD', status: 'COMPLETED', created_at: new Date(Date.now() - 1 * 86400000).toISOString() }
 ];
 
-module.exports = async (req, res) => {
+export default async function handler(req, res) {
   // Global CORS
-  res.setHeader('Access-Control-Allow-Origin', req.headers.origin || '*');
+  res.setHeader('Access-Control-Allow-Origin', req.headers?.origin || '*');
   res.setHeader('Access-Control-Allow-Credentials', 'true');
   res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, PATCH, DELETE, OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, x-request-id');
@@ -84,7 +82,6 @@ module.exports = async (req, res) => {
   const url = req.url || '';
   const path = url.split('?')[0];
 
-  // Helper for reading JSON body
   let body = req.body || {};
   if (typeof body === 'string') {
     try { body = JSON.parse(body); } catch {}
@@ -342,6 +339,5 @@ module.exports = async (req, res) => {
     });
   }
 
-  // Fallback for general API
   return res.status(200).json({ data: [], meta: { status: 'ok' } });
-};
+}
