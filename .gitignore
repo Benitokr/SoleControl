@@ -14,3 +14,4 @@ coverage/
 /CDFC-Retail.xlsx
 /Retail_Scope_Updated (1).pdf
 /prisma/pglite-data*/
+.vercel
