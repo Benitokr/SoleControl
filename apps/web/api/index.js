@@ -114,8 +114,24 @@ export default async function handler(req, res) {
     return res.status(200).end();
   }
 
-  const url = req.url || '';
-  const path = url.split('?')[0];
+  // Extract path robustly from any Vercel forwarding mechanism
+  const rawUrl = req.url || '';
+  let searchParamsPath = '';
+  if (rawUrl.includes('path=')) {
+    try {
+      const u = new URL(rawUrl, 'http://localhost');
+      searchParamsPath = u.searchParams.get('path') ? '/' + u.searchParams.get('path') : '';
+    } catch {}
+  }
+  const queryPath = (req.query && req.query.path) ? '/' + req.query.path : '';
+  const matchedPath = req.headers['x-matched-path'] 
+    || req.headers['x-vercel-matched-path'] 
+    || req.headers['x-forwarded-uri'] 
+    || req.headers['x-original-uri'] 
+    || '';
+  const urlPath = rawUrl.split('?')[0];
+  const candidate = searchParamsPath || queryPath || matchedPath || (urlPath !== '/api/index' && urlPath !== '/api' ? urlPath : '');
+  const path = (candidate || rawUrl).toLowerCase();
 
   let body = req.body || {};
   if (typeof body === 'string') {
@@ -123,7 +139,7 @@ export default async function handler(req, res) {
   }
 
   // 1. Auth Login
-  if (path.endsWith('/auth/login') && req.method === 'POST') {
+  if ((path.includes('/auth/login') || path.endsWith('login')) && req.method === 'POST') {
     const { email, password } = body;
     if (email === 'superadmin@fortyv.local' && (password === 'ChangeMe@123' || password === 'admin')) {
       const accessToken = createToken({ sub: SUPER_ADMIN_USER.id, email, role: 'SUPER_ADMIN' });
@@ -132,10 +148,13 @@ export default async function handler(req, res) {
     return res.status(401).json({ error: { code: 'INVALID_CREDENTIALS', message: 'Invalid email or password' } });
   }
 
-  if (path.endsWith('/auth/me')) return res.status(200).json({ data: SUPER_ADMIN_USER });
-  if (path.endsWith('/auth/refresh')) {
+  if (path.includes('/auth/me')) return res.status(200).json({ data: SUPER_ADMIN_USER });
+  if (path.includes('/auth/refresh')) {
     const accessToken = createToken({ sub: SUPER_ADMIN_USER.id, email: SUPER_ADMIN_USER.email, role: 'SUPER_ADMIN' });
     return res.status(200).json({ data: { accessToken } });
+  }
+  if (path.includes('/auth/logout')) {
+    return res.status(200).json({ data: { success: true } });
   }
 
   // 2. Dashboard
@@ -353,16 +372,34 @@ export default async function handler(req, res) {
     return res.status(200).json({ data: damages });
   }
 
-  // 13. Ageing & Clearance
+  // 13. Ageing & Clearance (Combines SKU table format for AgeingPage and category bucket format for InventoryPage)
   if (path.includes('/ageing/heatmap')) {
     return res.status(200).json({ data: [
-      { category: 'Running & Performance Footwear', '0-30': 180, '31-60': 95, '61-90': 40, '90+': 5 },
-      { category: 'Lifestyle & Streetwear Sneakers', '0-30': 140, '31-60': 60, '61-90': 22, '90+': 2 },
-      { category: 'Formal Leather & Boots', '0-30': 45, '31-60': 30, '61-90': 15, '90+': 8 },
-      { category: 'Comfort Sandals & Slides', '0-30': 30, '31-60': 10, '61-90': 3, '90+': 0 }
+      { sku: 'NK-AM-A5-8-BLK', article: 'Air Max Alpha 5', category: 'Running & Performance Footwear', category_name: 'Running & Performance Footwear', quantity: 24, age_days: 14, d30: 24, d60: 0, d90: 0, d180: 0, d180plus: 0 },
+      { sku: 'AD-SN-B2-9-WHT', article: 'Supernova Stride Pro', category: 'Running & Performance Footwear', category_name: 'Running & Performance Footwear', quantity: 18, age_days: 28, d30: 18, d60: 0, d90: 0, d180: 0, d180plus: 0 },
+      { sku: 'PM-SD-C1-8-RED', article: 'Suede Classic XXI High', category: 'Lifestyle & Streetwear Sneakers', category_name: 'Lifestyle & Streetwear Sneakers', quantity: 12, age_days: 42, d30: 0, d60: 12, d90: 0, d180: 0, d180plus: 0 },
+      { sku: 'RB-CL-L1-7-WHT', article: 'Club C 85 Vintage Court', category: 'Lifestyle & Streetwear Sneakers', category_name: 'Lifestyle & Streetwear Sneakers', quantity: 15, age_days: 56, d30: 0, d60: 15, d90: 0, d180: 0, d180plus: 0 },
+      { sku: 'NB-57-D4-9-GRY', article: '574 Core Heritage Grey', category: 'Lifestyle & Streetwear Sneakers', category_name: 'Lifestyle & Streetwear Sneakers', quantity: 10, age_days: 72, d30: 0, d60: 0, d90: 10, d180: 0, d180plus: 0 },
+      { sku: 'AS-GT-K2-8-BLU', article: 'GT-2000 12 Trail Runner', category: 'Running & Performance Footwear', category_name: 'Running & Performance Footwear', quantity: 8, age_days: 85, d30: 0, d60: 0, d90: 8, d180: 0, d180plus: 0 },
+      { sku: 'CK-OX-L3-9-BRN', article: 'Derby Oxford Brogue Leather', category: 'Formal Leather & Boots', category_name: 'Formal Leather & Boots', quantity: 14, age_days: 105, d30: 0, d60: 0, d90: 0, d180: 14, d180plus: 0 },
+      { sku: 'RD-LO-M1-8-TAN', article: 'Classic Handcrafted Loafer', category: 'Formal Leather & Boots', category_name: 'Formal Leather & Boots', quantity: 6, age_days: 120, d30: 0, d60: 0, d90: 0, d180: 6, d180plus: 0 }
     ]});
   }
-  if (path.includes('/ageing/rules')) return res.status(200).json({ data: ageingRules });
+  if (path.includes('/ageing/rules')) {
+    if (req.method === 'POST') {
+      const newRule = {
+        id: 'ar-' + Date.now(),
+        category_name: body.category_name || 'All Categories',
+        threshold_days: Number(body.thresholdDays || 90),
+        discount_pct: Number(body.discountPct || 20),
+        label: body.label || 'Clearance Sale',
+        is_active: true
+      };
+      ageingRules.push(newRule);
+      return res.status(201).json({ data: newRule });
+    }
+    return res.status(200).json({ data: ageingRules });
+  }
 
   // 14. Purchases
   if (path.includes('/purchases')) {

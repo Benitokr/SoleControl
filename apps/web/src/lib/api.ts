@@ -15,22 +15,36 @@ api.interceptors.request.use((config) => {
 })
 
 let refreshing: Promise<string | null> | null = null
-api.interceptors.response.use(r => r, async (err) => {
-  const original = err.config
-  if (err.response?.status === 401 && !original._retry) {
-    original._retry = true
-    if (!refreshing) {
-      refreshing = api.post('/auth/refresh').then(r => {
-        const t = r.data.data.accessToken
-        useAuthStore.getState().setAccessToken(t)
-        refreshing = null; return t
-      }).catch(() => { useAuthStore.getState().logout(); refreshing = null; return null })
+api.interceptors.response.use(
+  r => r,
+  async (err) => {
+    const original = err.config
+    // Never retry auth login or refresh requests to avoid infinite loops
+    if (original?.url?.includes('/auth/login') || original?.url?.includes('/auth/refresh')) {
+      return Promise.reject(err)
     }
-    const token = await refreshing
-    if (token) { original.headers.Authorization = `Bearer ${token}`; return api(original) }
+    if (err.response?.status === 401 && !original._retry) {
+      original._retry = true
+      if (!refreshing) {
+        refreshing = api.post('/auth/refresh').then(r => {
+          const t = r.data.data.accessToken
+          useAuthStore.getState().setAccessToken(t)
+          refreshing = null
+          return t
+        }).catch(() => {
+          useAuthStore.getState().logout()
+          refreshing = null
+          return null
+        })
+      }
+      const token = await refreshing
+      if (token) {
+        original.headers.Authorization = `Bearer ${token}`
+        return api(original)
+      }
+    }
+    return Promise.reject(err)
   }
-  return Promise.reject(err)
-})
+)
 
 export const fmt = (n: number) => `₹${Number(n).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
-
