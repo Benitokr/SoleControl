@@ -60,7 +60,7 @@ export function BankGSTPage() {
     queryFn: () => api.get('/bank/accounts').then(r => r.data),
   })
 
-  const bankAccounts = bankData?.data || []
+  const bankAccounts = Array.isArray(bankData?.data) ? bankData.data : []
   const currentBankId = selectedBankId || bankAccounts[0]?.id
 
   const { data: statementData, isLoading: loadingStatement } = useQuery<{ data: StatementLine[] }>({
@@ -105,8 +105,8 @@ export function BankGSTPage() {
     },
   })
 
-  const gstList = gstData?.data || []
-  const gstSummaries = gstSummaryData?.data || []
+  const gstList = Array.isArray(gstData?.data) ? gstData.data : []
+  const gstSummaries = Array.isArray(gstSummaryData?.data) ? gstSummaryData.data : []
 
   return (
     <div className="p-6 space-y-4">
@@ -230,7 +230,7 @@ export function BankGSTPage() {
                   </tr>
                 </thead>
                 <tbody>
-                  {(!statementData?.data || statementData.data.length === 0) ? (
+                  {(!Array.isArray(statementData?.data) || statementData.data.length === 0) ? (
                     <tr><td colSpan={7} className="py-8 text-center" style={{ color: 'var(--color-muted)' }}>No statement transactions found</td></tr>
                   ) : (
                     statementData.data.map(line => (

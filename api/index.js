@@ -169,13 +169,16 @@ export default async function handler(req, res) {
   }
   if (path.includes('/dashboard/recent-sales')) {
     return res.status(200).json({ data: [
-      { id: 'sl-1', docNumber: 'INV-2026-001', customerName: 'Rahul Sharma', totalAmount: 8999.00, paymentMode: 'UPI', createdAt: new Date().toISOString() },
-      { id: 'sl-2', docNumber: 'INV-2026-002', customerName: 'Priya Sundaram', totalAmount: 14998.00, paymentMode: 'CARD', createdAt: new Date(Date.now() - 3600000).toISOString() },
-      { id: 'sl-3', docNumber: 'INV-2026-003', customerName: 'Karthik Raja', totalAmount: 999.00, paymentMode: 'CASH', createdAt: new Date(Date.now() - 7200000).toISOString() }
+      { id: 'sl-1', doc_number: 'INV-2026-001', docNumber: 'INV-2026-001', customer_name: 'Rahul Sharma', customerName: 'Rahul Sharma', total_amount: 8999.00, totalAmount: 8999.00, payment_mode: 'UPI', paymentMode: 'UPI', sale_date: new Date().toISOString(), createdAt: new Date().toISOString() },
+      { id: 'sl-2', doc_number: 'INV-2026-002', docNumber: 'INV-2026-002', customer_name: 'Priya Sundaram', customerName: 'Priya Sundaram', total_amount: 14998.00, totalAmount: 14998.00, payment_mode: 'CARD', paymentMode: 'CARD', sale_date: new Date(Date.now() - 3600000).toISOString(), createdAt: new Date(Date.now() - 3600000).toISOString() },
+      { id: 'sl-3', doc_number: 'INV-2026-003', docNumber: 'INV-2026-003', customer_name: 'Karthik Raja', customerName: 'Karthik Raja', total_amount: 999.00, totalAmount: 999.00, payment_mode: 'CASH', paymentMode: 'CASH', sale_date: new Date(Date.now() - 7200000).toISOString(), createdAt: new Date(Date.now() - 7200000).toISOString() }
     ]});
   }
   if (path.includes('/dashboard/targets')) {
-    return res.status(200).json({ data: { currentSales: 168490.00, targetAmount: 250000.00, percentage: 67.4 } });
+    return res.status(200).json({ data: [
+      { id: 'tgt-1', name: 'November Store Revenue Goal', target_amount: 250000.00, targetAmount: 250000.00, achieved: 168490.00, currentSales: 168490.00, percentage: 67.4, period_start: '2026-11-01T00:00:00.000Z', period_end: '2026-11-30T23:59:59.000Z' },
+      { id: 'tgt-2', name: 'Athletic Running Category Target', target_amount: 80000.00, targetAmount: 80000.00, achieved: 65990.00, currentSales: 65990.00, percentage: 82.5, period_start: '2026-11-01T00:00:00.000Z', period_end: '2026-11-30T23:59:59.000Z' }
+    ]});
   }
 
   // 3. Masters
