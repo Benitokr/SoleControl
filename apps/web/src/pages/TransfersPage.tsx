@@ -42,6 +42,16 @@ export function TransfersPage() {
     }
   })
 
+  const dispatchMutation = useMutation({
+    mutationFn: (id: string) => api.post(`/transfers/${id}/dispatch`),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['transfers'] }),
+  })
+
+  const receiveMutation = useMutation({
+    mutationFn: (id: string) => api.post(`/transfers/${id}/receive`),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['transfers'] }),
+  })
+
   const handleCreate = (e: React.FormEvent) => {
     e.preventDefault()
     setFormError('')
@@ -138,6 +148,7 @@ export function TransfersPage() {
                   <th className="px-5 py-3 text-left font-medium">Status</th>
                   <th className="px-5 py-3 text-left font-medium">Date</th>
                   <th className="px-5 py-3 text-left font-medium">Notes</th>
+                  <th className="px-5 py-3 text-right font-medium">Action</th>
                 </tr>
               </thead>
               <tbody className="divide-y" style={{ borderColor: 'var(--color-border)' }}>
@@ -160,6 +171,31 @@ export function TransfersPage() {
                     </td>
                     <td className="px-5 py-3.5 text-xs" style={{ color: 'var(--color-muted)' }}>
                       {t.notes || '—'}
+                    </td>
+                    <td className="px-5 py-3.5 text-right">
+                      {t.status === 'REQUESTED' && (
+                        <button
+                          onClick={() => dispatchMutation.mutate(t.id)}
+                          disabled={dispatchMutation.isPending}
+                          className="inline-flex items-center gap-1 text-xs px-2.5 py-1 rounded-lg border font-semibold hover:border-sky-500 hover:text-sky-600 transition-colors"
+                          style={{ borderColor: 'var(--color-border)', color: 'var(--color-text)' }}
+                        >
+                          <Truck size={12} /> Dispatch
+                        </button>
+                      )}
+                      {t.status === 'DISPATCHED' && (
+                        <button
+                          onClick={() => receiveMutation.mutate(t.id)}
+                          disabled={receiveMutation.isPending}
+                          className="inline-flex items-center gap-1 text-xs px-2.5 py-1 rounded-lg border font-semibold hover:border-emerald-500 hover:text-emerald-600 transition-colors"
+                          style={{ borderColor: 'var(--color-border)', color: 'var(--color-text)' }}
+                        >
+                          <CheckCircle size={12} /> Receive
+                        </button>
+                      )}
+                      {t.status === 'RECEIVED' && (
+                        <span className="text-xs text-slate-400 font-medium">Completed</span>
+                      )}
                     </td>
                   </tr>
                 ))}

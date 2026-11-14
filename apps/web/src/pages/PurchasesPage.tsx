@@ -554,7 +554,7 @@ export function PurchasesPage() {
               </div>
             </div>
 
-            <div className="pt-4 border-t" style={{ borderColor: 'var(--color-border)' }}>
+            <div className="pt-4 border-t space-y-2" style={{ borderColor: 'var(--color-border)' }}>
               {selectedPurchase.status !== 'FINALISED' ? (
                 <button
                   onClick={() => finaliseMutation.mutate(selectedPurchase.id)}
@@ -565,13 +565,22 @@ export function PurchasesPage() {
                   {finaliseMutation.isPending ? 'Finalising…' : 'Finalise Bill & Post Journal'}
                 </button>
               ) : (
-                <button
-                  onClick={() => setSelectedPurchase(null)}
-                  className="w-full py-2.5 rounded-xl text-xs font-semibold border"
-                  style={{ borderColor: 'var(--color-border)', color: 'var(--color-text)' }}
-                >
-                  Close Drawer
-                </button>
+                <div className="flex gap-2">
+                  <button
+                    onClick={() => window.print()}
+                    className="flex-1 py-2.5 rounded-xl text-xs font-semibold text-white shadow-xs"
+                    style={{ background: 'var(--color-primary)' }}
+                  >
+                    Print Inward GRN
+                  </button>
+                  <button
+                    onClick={() => setSelectedPurchase(null)}
+                    className="px-4 py-2.5 rounded-xl text-xs font-semibold border"
+                    style={{ borderColor: 'var(--color-border)', color: 'var(--color-text)' }}
+                  >
+                    Close
+                  </button>
+                </div>
               )}
             </div>
           </div>

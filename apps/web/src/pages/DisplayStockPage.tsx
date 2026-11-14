@@ -38,6 +38,14 @@ export function DisplayStockPage() {
     }
   })
 
+  const returnToStorageMutation = useMutation({
+    mutationFn: (id: string) => api.post(`/display/${id}/return`),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['display-allocations'] })
+      queryClient.invalidateQueries({ queryKey: ['inventory-stock'] })
+    }
+  })
+
   const handleAllocate = (e: React.FormEvent) => {
     e.preventDefault()
     setFormError('')
@@ -121,6 +129,7 @@ export function DisplayStockPage() {
                   <th className="px-5 py-3 text-left font-medium">Status</th>
                   <th className="px-5 py-3 text-left font-medium">Date</th>
                   <th className="px-5 py-3 text-left font-medium">Notes</th>
+                  <th className="px-5 py-3 text-right font-medium">Action</th>
                 </tr>
               </thead>
               <tbody className="divide-y" style={{ borderColor: 'var(--color-border)' }}>
@@ -148,6 +157,16 @@ export function DisplayStockPage() {
                     </td>
                     <td className="px-5 py-3.5 text-xs" style={{ color: 'var(--color-muted)' }}>
                       {a.notes || '—'}
+                    </td>
+                    <td className="px-5 py-3.5 text-right">
+                      <button
+                        onClick={() => returnToStorageMutation.mutate(a.id)}
+                        disabled={returnToStorageMutation.isPending}
+                        className="inline-flex items-center gap-1 text-xs px-2.5 py-1 rounded-lg border font-semibold hover:border-indigo-400 transition-colors"
+                        style={{ borderColor: 'var(--color-border)', color: 'var(--color-text)' }}
+                      >
+                        <ArrowDownLeft size={12} /> Return to Storage
+                      </button>
                     </td>
                   </tr>
                 ))}

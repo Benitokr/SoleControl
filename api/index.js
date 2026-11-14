@@ -80,6 +80,14 @@ let withdrawals = [
     created_at: new Date(Date.now() - 7 * 86400000).toISOString()
   }
 ];
+let adjustments = [
+  { id: 'adj-01', docNumber: 'ADJ-2026-001', reference: 'ADJ-2026-001', variant_sku: 'NK-AM-A5-8-BLK', article_name: 'Air Max Pulse Retro', quantity_change: 2, reason: 'Physical cycle discrepancy audit correction', status: 'POSTED', createdAt: new Date(Date.now() - 4 * 86400000).toISOString(), created_at: new Date(Date.now() - 4 * 86400000).toISOString() },
+  { id: 'adj-02', docNumber: 'ADJ-2026-002', reference: 'ADJ-2026-002', variant_sku: 'AD-SN-B2-9-WHT', article_name: 'Supernova Stride Pro', quantity_change: -1, reason: 'Damaged in display shelf transfer', status: 'POSTED', createdAt: new Date(Date.now() - 2 * 86400000).toISOString(), created_at: new Date(Date.now() - 2 * 86400000).toISOString() }
+];
+let audits = [
+  { id: 'aud-01', sessionNumber: 'AUD-NOV-2026', audit_number: 'AUD-NOV-2026', store_name: 'Forty V Flagship', status: 'COMPLETED', total_scanned: 640, matched_count: 638, discrepancy_count: 2, createdAt: new Date(Date.now() - 10 * 86400000).toISOString(), started_at: new Date(Date.now() - 10 * 86400000).toISOString() },
+  { id: 'aud-02', sessionNumber: 'AUD-OCT-2026', audit_number: 'AUD-OCT-2026', store_name: 'Forty V Flagship', status: 'COMPLETED', total_scanned: 590, matched_count: 590, discrepancy_count: 0, createdAt: new Date(Date.now() - 40 * 86400000).toISOString(), started_at: new Date(Date.now() - 40 * 86400000).toISOString() }
+];
 let ageingRules = [
   { id: 'ar-1', category_name: 'Running & Performance', threshold_days: 90, discount_pct: 25, label: 'Running Clearance 90d+', is_active: true },
   { id: 'ar-2', category_name: 'Formal Leather', threshold_days: 100, discount_pct: 30, label: 'Formal Off-Season Clearance', is_active: true }
@@ -182,15 +190,63 @@ export default async function handler(req, res) {
   }
 
   // 3. Masters
-  if (path.includes('/masters/brands')) return res.status(200).json({ data: DB.brands });
-  if (path.includes('/masters/categories')) return res.status(200).json({ data: DB.categories });
-  if (path.includes('/masters/sizes')) return res.status(200).json({ data: DB.sizes });
-  if (path.includes('/masters/colours')) return res.status(200).json({ data: DB.colours });
-  if (path.includes('/masters/articles')) return res.status(200).json({ data: DB.articles });
+  if (path.includes('/masters/brands')) {
+    if (req.method === 'POST') {
+      const newB = { id: 'br-' + Date.now(), name: body.name || 'New Brand', code: (body.code || body.name?.slice(0, 3) || 'BR').toUpperCase(), isActive: true, is_active: true };
+      DB.brands.push(newB);
+      return res.status(201).json({ data: newB });
+    }
+    return res.status(200).json({ data: DB.brands });
+  }
+  if (path.includes('/masters/categories')) {
+    if (req.method === 'POST') {
+      const newC = { id: 'cat-' + Date.now(), name: body.name || 'New Category', code: (body.code || body.name?.slice(0, 3) || 'CAT').toUpperCase(), hsn: body.hsn || '6404', isActive: true, is_active: true };
+      DB.categories.push(newC);
+      return res.status(201).json({ data: newC });
+    }
+    return res.status(200).json({ data: DB.categories });
+  }
+  if (path.includes('/masters/sizes')) {
+    if (req.method === 'POST') {
+      const newS = { id: 'sz-' + Date.now(), size_system: body.size_system || 'UK', label: body.label || 'UK 10', sort_order: Number(body.sort_order || 10), isActive: true, is_active: true };
+      DB.sizes.push(newS);
+      return res.status(201).json({ data: newS });
+    }
+    return res.status(200).json({ data: DB.sizes });
+  }
+  if (path.includes('/masters/colours')) {
+    if (req.method === 'POST') {
+      const newCol = { id: 'col-' + Date.now(), name: body.name || 'Custom Colour', hex_code: body.hex_code || '#4F46E5', isActive: true, is_active: true };
+      DB.colours.push(newCol);
+      return res.status(201).json({ data: newCol });
+    }
+    return res.status(200).json({ data: DB.colours });
+  }
+  if (path.includes('/masters/articles')) {
+    if (req.method === 'POST') {
+      const newArt = { id: 'art-' + Date.now(), name: body.name || 'New Article Model', brand_name: body.brand_name || 'Forty V Pro', category_name: body.category_name || 'Footwear', hsn_code: '6404', is_active: true, isActive: true };
+      DB.articles.push(newArt);
+      return res.status(201).json({ data: newArt });
+    }
+    return res.status(200).json({ data: DB.articles });
+  }
   if (path.includes('/masters/variants')) return res.status(200).json({ data: DB.variants });
 
   // 4. Vendors & Customers
   if (path.includes('/vendors')) {
+    if (req.method === 'POST') {
+      const newV = {
+        id: 'vnd-' + Date.now(),
+        name: body.name || 'New Supplier',
+        phone: body.phone || '+91 98401 00000',
+        gstin: body.gstin || '33AABCV1234F1Z1',
+        balance: 0,
+        isActive: true,
+        is_active: true
+      };
+      DB.vendors.unshift(newV);
+      return res.status(201).json({ data: newV });
+    }
     const formatted = DB.vendors.map(v => ({
       ...v,
       isActive: v.isActive ?? v.is_active ?? true,
@@ -199,6 +255,20 @@ export default async function handler(req, res) {
     return res.status(200).json({ data: formatted });
   }
   if (path.includes('/customers')) {
+    if (req.method === 'POST') {
+      const newC = {
+        id: 'cust-' + Date.now(),
+        name: body.name || 'New Customer',
+        phone: body.phone || '+91 98401 00000',
+        email: body.email || 'customer@example.com',
+        lifetimeValue: 0,
+        creditOutstanding: 0,
+        isActive: true,
+        is_active: true
+      };
+      DB.customers.unshift(newC);
+      return res.status(201).json({ data: newC });
+    }
     const formatted = DB.customers.map(c => ({
       ...c,
       isActive: c.isActive ?? c.is_active ?? true,
@@ -210,7 +280,31 @@ export default async function handler(req, res) {
 
   // 5. Offers
   if (path.includes('/offers')) {
-    if (req.method === 'POST' || req.method === 'PUT') {
+    if (path.includes('/deactivate')) {
+      const id = path.split('/offers/')[1]?.split('/')[0];
+      const o = DB.offers.find(x => x.id === id);
+      if (o) o.isActive = false;
+      return res.status(200).json({ data: { success: true } });
+    }
+    if (req.method === 'POST') {
+      const newO = {
+        id: 'off-' + Date.now(),
+        name: body.name || 'Promotional Offer',
+        scopeType: body.scopeType || 'ALL',
+        discountType: body.discountType || 'PERCENTAGE',
+        discountValue: Number(body.discountValue || 15),
+        validFrom: body.validFrom || new Date().toISOString(),
+        validTo: body.validTo || null,
+        isActive: true,
+        priority: Number(body.priority || 1)
+      };
+      DB.offers.unshift(newO);
+      return res.status(201).json({ data: newO });
+    }
+    if (req.method === 'PUT') {
+      const id = path.split('/offers/')[1]?.split('?')[0];
+      const o = DB.offers.find(x => x.id === id);
+      if (o && body.isActive !== undefined) o.isActive = body.isActive;
       return res.status(200).json({ data: { success: true } });
     }
     const formatted = DB.offers.map(o => ({
@@ -228,6 +322,17 @@ export default async function handler(req, res) {
 
   // 6. Company & Locations
   if (path.includes('/company/profile')) {
+    if (req.method === 'PUT') {
+      return res.status(200).json({ data: {
+        name: body.name || 'Forty V Footwear Retail Private Limited',
+        legalName: body.legalName || 'Forty V Footwear Retail Pvt Ltd',
+        gstin: body.gstin || '33AABCF4050M1Z2',
+        pan: body.pan || 'AABCF4050M',
+        email: body.email || 'contact@fortyv.local',
+        phone: body.phone || '+91 98401 23456',
+        address: body.address || '104, Avinashi Road, Peelamedu, Coimbatore, Tamil Nadu - 641004'
+      }});
+    }
     return res.status(200).json({ data: {
       name: 'Forty V Footwear Retail Private Limited',
       legalName: 'Forty V Footwear Retail Pvt Ltd',
@@ -240,6 +345,19 @@ export default async function handler(req, res) {
     }});
   }
   if (path.includes('/company/stores')) {
+    if (req.method === 'POST') {
+      const newStore = {
+        id: 'store-' + Date.now(),
+        name: body.name || 'Forty V Express',
+        code: body.code || 'STR-02',
+        address: body.address || 'Cross Cut Road, Gandhipuram, Coimbatore',
+        gstin: body.gstin || '33AABCF4050M1Z2',
+        isActive: true,
+        is_active: true
+      };
+      DB.stores.push(newStore);
+      return res.status(201).json({ data: newStore });
+    }
     const formatted = DB.stores.map(s => ({
       ...s,
       isActive: s.isActive ?? s.is_active ?? true
@@ -269,7 +387,30 @@ export default async function handler(req, res) {
   }
 
   // 7. Barcodes
+  if (path.includes('/barcodes/jobs/') && path.includes('/mark-printed')) {
+    const id = path.split('/barcodes/jobs/')[1]?.split('/')[0];
+    const job = barcodeQueue.find(j => j.id === id);
+    if (job) job.status = 'PRINTED';
+    return res.status(200).json({ data: { success: true } });
+  }
   if (path.includes('/barcodes/queue')) {
+    if (req.method === 'POST') {
+      const newJob = {
+        id: 'bq-' + Date.now(),
+        sku: body.sku || 'NK-AM-A5-8-BLK',
+        article_name: body.article_name || 'Air Max Pulse Retro',
+        size: body.size || 'UK 8',
+        colour: body.colour || 'Midnight Black',
+        mrp: Number(body.mrp || 8999),
+        copies: Number(body.copies || 12),
+        quantity: Number(body.copies || 12),
+        status: 'PENDING',
+        createdAt: new Date().toISOString(),
+        created_at: new Date().toISOString()
+      };
+      barcodeQueue.unshift(newJob);
+      return res.status(201).json({ data: newJob });
+    }
     return res.status(200).json({ data: barcodeQueue });
   }
   if (path.includes('/barcodes/jobs')) {
@@ -289,6 +430,21 @@ export default async function handler(req, res) {
     return res.status(200).json({ data: formatted });
   }
   if (path.includes('/users')) {
+    if (req.method === 'POST') {
+      const newU = {
+        id: 'usr-' + Date.now(),
+        name: body.name || 'New Staff Member',
+        email: body.email || 'user@fortyv.local',
+        role: { name: body.roleName || 'Store Manager' },
+        role_name: body.roleName || 'Store Manager',
+        isActive: true,
+        is_active: true,
+        status: 'ACTIVE',
+        lastLoginAt: new Date().toISOString()
+      };
+      DB.users.unshift(newU);
+      return res.status(201).json({ data: newU });
+    }
     if (req.method === 'PUT') {
       return res.status(200).json({ data: { success: true } });
     }
@@ -306,19 +462,57 @@ export default async function handler(req, res) {
     return res.status(200).json({ data: DB.balances, meta: { total: DB.balances.length, page: 1, pageSize: 50 } });
   }
   if (path.includes('/inventory/adjustments')) {
-    return res.status(200).json({ data: [
-      { id: 'adj-01', docNumber: 'ADJ-2026-001', reference: 'ADJ-2026-001', variant_sku: 'NK-AM-A5-8-BLK', article_name: 'Air Max Pulse Retro', quantity_change: 2, reason: 'Physical cycle discrepancy audit correction', status: 'POSTED', createdAt: new Date(Date.now() - 4 * 86400000).toISOString(), created_at: new Date(Date.now() - 4 * 86400000).toISOString() },
-      { id: 'adj-02', docNumber: 'ADJ-2026-002', reference: 'ADJ-2026-002', variant_sku: 'AD-SN-B2-9-WHT', article_name: 'Supernova Stride Pro', quantity_change: -1, reason: 'Damaged in display shelf transfer', status: 'POSTED', createdAt: new Date(Date.now() - 2 * 86400000).toISOString(), created_at: new Date(Date.now() - 2 * 86400000).toISOString() }
-    ]});
+    if (req.method === 'POST') {
+      const newAdj = {
+        id: 'adj-' + Date.now(),
+        docNumber: 'ADJ-2026-00' + (adjustments.length + 1),
+        reference: 'ADJ-2026-00' + (adjustments.length + 1),
+        variant_sku: body.sku || 'NK-AM-A5-8-BLK',
+        article_name: body.article_name || 'Air Max Pulse Retro',
+        quantity_change: Number(body.quantity || 1),
+        reason: body.reason || 'Manual cycle discrepancy adjustment',
+        status: 'POSTED',
+        createdAt: new Date().toISOString(),
+        created_at: new Date().toISOString()
+      };
+      adjustments.unshift(newAdj);
+      return res.status(201).json({ data: newAdj });
+    }
+    return res.status(200).json({ data: adjustments });
   }
   if (path.includes('/inventory/audits')) {
-    return res.status(200).json({ data: [
-      { id: 'aud-01', sessionNumber: 'AUD-NOV-2026', audit_number: 'AUD-NOV-2026', store_name: 'Forty V Flagship', status: 'COMPLETED', total_scanned: 640, matched_count: 638, discrepancy_count: 2, createdAt: new Date(Date.now() - 10 * 86400000).toISOString(), started_at: new Date(Date.now() - 10 * 86400000).toISOString() },
-      { id: 'aud-02', sessionNumber: 'AUD-OCT-2026', audit_number: 'AUD-OCT-2026', store_name: 'Forty V Flagship', status: 'COMPLETED', total_scanned: 590, matched_count: 590, discrepancy_count: 0, createdAt: new Date(Date.now() - 40 * 86400000).toISOString(), started_at: new Date(Date.now() - 40 * 86400000).toISOString() }
-    ]});
+    if (req.method === 'POST') {
+      const newAudit = {
+        id: 'aud-' + Date.now(),
+        sessionNumber: 'AUD-SESS-' + Date.now().toString().slice(-4),
+        audit_number: 'AUD-SESS-' + Date.now().toString().slice(-4),
+        store_name: body.store_name || 'Forty V Flagship',
+        status: 'IN_PROGRESS',
+        total_scanned: 0,
+        matched_count: 0,
+        discrepancy_count: 0,
+        createdAt: new Date().toISOString(),
+        started_at: new Date().toISOString()
+      };
+      audits.unshift(newAudit);
+      return res.status(201).json({ data: newAudit });
+    }
+    return res.status(200).json({ data: audits });
   }
 
   // 10. Transfers
+  if (path.includes('/transfers/') && path.includes('/dispatch')) {
+    const id = path.split('/transfers/')[1]?.split('/')[0];
+    const tr = transfers.find(t => t.id === id);
+    if (tr) tr.status = 'DISPATCHED';
+    return res.status(200).json({ data: { success: true, status: 'DISPATCHED' } });
+  }
+  if (path.includes('/transfers/') && path.includes('/receive')) {
+    const id = path.split('/transfers/')[1]?.split('/')[0];
+    const tr = transfers.find(t => t.id === id);
+    if (tr) tr.status = 'RECEIVED';
+    return res.status(200).json({ data: { success: true, status: 'RECEIVED' } });
+  }
   if (path.includes('/transfers')) {
     if (req.method === 'POST') {
       const newTransfer = {
@@ -326,10 +520,10 @@ export default async function handler(req, res) {
         reference: 'TR-2026-00' + (transfers.length + 1),
         from_store_name: 'Forty V Flagship',
         to_store_name: 'Forty V Flagship',
-        from_location_name: 'Rack R1',
-        to_location_name: 'Rack S1',
+        from_location_name: body.from_location_name || 'Rack R1',
+        to_location_name: body.to_location_name || 'Rack S1',
         total_items: Number(body.items?.length || 1),
-        status: 'COMPLETED',
+        status: 'REQUESTED',
         created_at: new Date().toISOString()
       };
       transfers.unshift(newTransfer);
@@ -339,6 +533,12 @@ export default async function handler(req, res) {
   }
 
   // 11. Display Stock
+  if (path.includes('/display/') && path.includes('/return')) {
+    const id = path.split('/display/')[1]?.split('/')[0];
+    const idx = displays.findIndex(d => d.id === id);
+    if (idx !== -1) displays.splice(idx, 1);
+    return res.status(200).json({ data: { success: true } });
+  }
   if (path.includes('/display/allocate')) {
     const newDisplay = {
       id: 'disp-' + Date.now(),
@@ -355,6 +555,24 @@ export default async function handler(req, res) {
   if (path.includes('/display')) return res.status(200).json({ data: displays });
 
   // 12. Damaged Goods
+  if (path.includes('/damage/') && path.includes('/write-off')) {
+    const id = path.split('/damage/')[1]?.split('/')[0];
+    const dmg = damages.find(d => d.id === id);
+    if (dmg) {
+      dmg.status = 'WRITTEN_OFF';
+      dmg.action = 'WRITTEN_OFF';
+    }
+    return res.status(200).json({ data: { success: true } });
+  }
+  if (path.includes('/damage/') && path.includes('/repair')) {
+    const id = path.split('/damage/')[1]?.split('/')[0];
+    const dmg = damages.find(d => d.id === id);
+    if (dmg) {
+      dmg.status = 'REPAIRED';
+      dmg.action = 'REPAIRED';
+    }
+    return res.status(200).json({ data: { success: true } });
+  }
   if (path.includes('/damage')) {
     if (req.method === 'POST') {
       const newDamage = {
@@ -365,8 +583,8 @@ export default async function handler(req, res) {
         colour_name: 'Midnight Black',
         quantity: Number(body.quantity || 1),
         reason: body.reason || 'Transit Scratch',
-        action: 'WRITTEN_OFF',
-        status: 'WRITTEN_OFF',
+        action: 'PENDING_REVIEW',
+        status: 'REPORTED',
         reported_at: new Date().toISOString()
       };
       damages.unshift(newDamage);

@@ -430,13 +430,20 @@ export function SalesPage() {
               </div>
             </div>
 
-            <div className="pt-4 border-t" style={{ borderColor: 'var(--color-border)' }}>
+            <div className="pt-4 border-t flex gap-2" style={{ borderColor: 'var(--color-border)' }}>
+              <button
+                onClick={() => window.print()}
+                className="flex-1 py-2.5 rounded-xl text-xs font-semibold text-white shadow-xs flex items-center justify-center gap-1.5"
+                style={{ background: 'var(--color-primary)' }}
+              >
+                Print POS Receipt
+              </button>
               <button
                 onClick={() => setSelectedSale(null)}
-                className="w-full py-2.5 rounded-xl text-xs font-semibold border"
+                className="px-4 py-2.5 rounded-xl text-xs font-semibold border"
                 style={{ borderColor: 'var(--color-border)', color: 'var(--color-text)' }}
               >
-                Close Drawer
+                Close
               </button>
             </div>
           </div>

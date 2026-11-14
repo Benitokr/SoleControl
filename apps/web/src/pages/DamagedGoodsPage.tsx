@@ -37,6 +37,22 @@ export function DamagedGoodsPage() {
     }
   })
 
+  const writeOffMutation = useMutation({
+    mutationFn: (id: string) => api.post(`/damage/${id}/write-off`),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['damage-records'] })
+      queryClient.invalidateQueries({ queryKey: ['inventory-stock'] })
+    }
+  })
+
+  const repairMutation = useMutation({
+    mutationFn: (id: string) => api.post(`/damage/${id}/repair`),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['damage-records'] })
+      queryClient.invalidateQueries({ queryKey: ['inventory-stock'] })
+    }
+  })
+
   const handleCreate = (e: React.FormEvent) => {
     e.preventDefault()
     setFormError('')
@@ -129,6 +145,7 @@ export function DamagedGoodsPage() {
                   <th className="px-5 py-3 text-left font-medium">Status</th>
                   <th className="px-5 py-3 text-left font-medium">Defect Description</th>
                   <th className="px-5 py-3 text-left font-medium">Reported Date</th>
+                  <th className="px-5 py-3 text-right font-medium">Action</th>
                 </tr>
               </thead>
               <tbody className="divide-y" style={{ borderColor: 'var(--color-border)' }}>
@@ -151,6 +168,30 @@ export function DamagedGoodsPage() {
                     </td>
                     <td className="px-5 py-3.5 text-xs font-mono" style={{ color: 'var(--color-muted)' }}>
                       {d.created_at || d.createdAt ? format(new Date(d.created_at || d.createdAt), 'd MMM yyyy') : 'Recent'}
+                    </td>
+                    <td className="px-5 py-3.5 text-right">
+                      {d.status === 'REPORTED' ? (
+                        <div className="flex items-center justify-end gap-1.5">
+                          <button
+                            onClick={() => writeOffMutation.mutate(d.id)}
+                            disabled={writeOffMutation.isPending}
+                            className="text-xs px-2.5 py-1 rounded-lg border font-semibold hover:border-rose-400 hover:text-rose-500 transition-colors"
+                            style={{ borderColor: 'var(--color-border)', color: 'var(--color-text)' }}
+                          >
+                            Write Off
+                          </button>
+                          <button
+                            onClick={() => repairMutation.mutate(d.id)}
+                            disabled={repairMutation.isPending}
+                            className="text-xs px-2.5 py-1 rounded-lg border font-semibold hover:border-emerald-400 hover:text-emerald-500 transition-colors"
+                            style={{ borderColor: 'var(--color-border)', color: 'var(--color-text)' }}
+                          >
+                            Repaired
+                          </button>
+                        </div>
+                      ) : (
+                        <span className="text-xs text-slate-400 font-medium">{d.status}</span>
+                      )}
                     </td>
                   </tr>
                 ))}
