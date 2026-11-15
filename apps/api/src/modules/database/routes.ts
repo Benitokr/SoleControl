@@ -6,7 +6,15 @@ export const databaseRoutes = Router();
 databaseRoutes.use(requireAuth);
 
 const TABLE_METADATA: Record<string, { group: string; description: string }> = {
+  // Company & Locations
   stores: { group: 'Company & Locations', description: 'Store branch profiles and GSTIN configuration' },
+  company_profile: { group: 'Company & Locations', description: 'Forty V legal entity details and headquarters address' },
+  settings: { group: 'Company & Locations', description: 'System-wide business and accounting configuration parameters' },
+  financial_years: { group: 'Company & Locations', description: 'Fiscal year calendars and active period' },
+  document_series: { group: 'Company & Locations', description: 'Invoice, GRN, and receipt voucher numbering sequence' },
+  locations: { group: 'Company & Locations', description: 'Physical store warehouse hierarchy (Floor -> Dept -> Rack -> Shelf -> Position)' },
+
+  // Auth & Access
   users: { group: 'Auth & Access', description: 'Super Admin and staff user credentials' },
   roles: { group: 'Auth & Access', description: 'System and custom RBAC security roles' },
   permissions: { group: 'Auth & Access', description: 'Granular module and action permissions' },
@@ -14,46 +22,76 @@ const TABLE_METADATA: Record<string, { group: string; description: string }> = {
   user_locations: { group: 'Auth & Access', description: 'User store branch assignments' },
   user_sessions: { group: 'Auth & Access', description: 'Active and revoked JWT refresh tokens' },
   login_events: { group: 'Auth & Access', description: 'Security audit trail of user login attempts' },
-  company_profile: { group: 'Company & Locations', description: 'Forty V legal entity details and headquarters address' },
-  settings: { group: 'Company & Locations', description: 'System-wide business and accounting configuration parameters' },
-  financial_years: { group: 'Company & Locations', description: 'Fiscal year calendars and active period' },
-  document_series: { group: 'Company & Locations', description: 'Invoice, GRN, and receipt voucher numbering sequence' },
+
+  // Master Data
   brands: { group: 'Master Data', description: 'Footwear footwear manufacturer brands' },
   categories: { group: 'Master Data', description: 'Footwear merchandise taxonomy categories' },
   sizes: { group: 'Master Data', description: 'Standardized footwear sizing systems (UK/US/EU)' },
   colours: { group: 'Master Data', description: 'Footwear color ways and hex color codes' },
   articles: { group: 'Master Data', description: 'Parent footwear product models and styles' },
+  products: { group: 'Master Data', description: 'Product catalog master entities' },
   product_variants: { group: 'Master Data', description: 'Granular SKU/barcode variants (Article + Size + Colour)' },
-  locations: { group: 'Company & Locations', description: 'Physical store warehouse hierarchy (Floor -> Dept -> Rack -> Shelf)' },
+  tax_rates: { group: 'Master Data', description: 'GST rate slabs (5%, 12%, 18%, 28%) and HSN codes' },
+  payment_modes: { group: 'Master Data', description: 'Accepted payment tender methods (Cash, UPI, Card, NetBanking)' },
+
+  // Procurement
   vendors: { group: 'Procurement', description: 'Footwear suppliers and trade payable accounts' },
   purchases: { group: 'Procurement', description: 'Inward purchase bills and GRN headers' },
   purchase_items: { group: 'Procurement', description: 'Itemized footwear variants received with unit cost & tax' },
+  purchase_expenses: { group: 'Procurement', description: 'Freight, packaging, and logistics cost allocations' },
+  purchase_attachments: { group: 'Procurement', description: 'Uploaded vendor bill PDFs and invoice scans' },
+  purchase_returns: { group: 'Procurement', description: 'Debit notes and vendor returns' },
+
+  // Inventory
   stock_balances: { group: 'Inventory', description: 'Live quantity on hand per variant and physical rack' },
   stock_movements: { group: 'Inventory', description: 'Immutable transaction ledger of all inventory inflows/outflows' },
   stock_adjustments: { group: 'Inventory', description: 'Audit discrepancy physical count adjustments' },
+  stock_adjustment_items: { group: 'Inventory', description: 'Line items adjusted during physical discrepancy reconciliation' },
   stock_audit_sessions: { group: 'Inventory', description: 'Bi-monthly scheduled stock audit counts' },
+  stock_audit_lines: { group: 'Inventory', description: 'Physical counts recorded per SKU during audit cycle' },
   display_allocations: { group: 'Inventory', description: 'Sample footwear pairs allocated to showroom displays' },
   stock_transfers: { group: 'Inventory', description: 'Inter-store and inter-rack inventory movement orders' },
+  stock_transfer_items: { group: 'Inventory', description: 'SKU quantities dispatched and received in transfers' },
   damage_records: { group: 'Inventory', description: 'Defective/damaged footwear quarantine and write-offs' },
+  damage_events: { group: 'Inventory', description: 'Repair, disposal, and vendor claim history for damaged shoes' },
+  ageing_rules: { group: 'Inventory', description: 'Days-in-stock thresholds for fresh, slow, and dead stock' },
+  clearance_recommendations: { group: 'Inventory', description: 'Algorithmic discount suggestions for ageing inventory' },
+  clearance_movements: { group: 'Inventory', description: 'Stock transfers to clearance discount racks' },
   barcode_labels: { group: 'Inventory', description: 'Generated SKU price barcodes and label print queue' },
+  label_templates: { group: 'Inventory', description: 'Thermal barcode printer dimension templates' },
+  print_jobs: { group: 'Inventory', description: 'Batch barcode print queue execution logs' },
+
+  // Sales & CRM
   customers: { group: 'Sales & CRM', description: 'Retail customers and loyalty accounts' },
+  customer_communications: { group: 'Sales & CRM', description: 'Automated WhatsApp receipts and SMS dispatch logs' },
   sales: { group: 'Sales & CRM', description: 'POS counter sales and retail tax invoices' },
   sale_items: { group: 'Sales & CRM', description: 'Line items billed per customer sale' },
   sale_payments: { group: 'Sales & CRM', description: 'Tender payments (Cash, UPI, Card, Split, Credit)' },
+  sale_returns: { group: 'Sales & CRM', description: 'Credit notes and customer footwear returns' },
+  sale_return_items: { group: 'Sales & CRM', description: 'Returned items restocked or sent to inspection' },
   offers: { group: 'Sales & CRM', description: 'Promotional schemes, discounts, and tier pricing' },
+  offer_redemptions: { group: 'Sales & CRM', description: 'Coupon and promotion redemption logs' },
+  sales_targets: { group: 'Sales & CRM', description: 'Store and executive monthly sales goals' },
+
+  // Finance & GST
   accounts: { group: 'Finance & GST', description: 'Chart of Accounts general ledger master' },
   journal_entries: { group: 'Finance & GST', description: 'Double-entry general journal headers' },
   journal_lines: { group: 'Finance & GST', description: 'Individual balanced debit and credit ledger rows' },
-  bank_accounts: { group: 'Finance & GST', description: 'Corporate current accounts and bank registers' },
-  bank_statement_lines: { group: 'Finance & GST', description: 'Imported bank statement transactions for reconciliation' },
-  gst_transactions: { group: 'Finance & GST', description: 'Input/Output tax ledgers for GSTR-1 and GSTR-3B filings' },
+  payment_receipts: { group: 'Finance & GST', description: 'Unified customer receipt vouchers and vendor payments' },
   capital_entries: { group: 'Finance & GST', description: 'Partner working capital infusions' },
   withdrawals: { group: 'Finance & GST', description: 'Partner drawings and monthly profit withdrawals' },
+  bank_accounts: { group: 'Finance & GST', description: 'Corporate current accounts and bank registers' },
+  bank_statement_lines: { group: 'Finance & GST', description: 'Imported bank statement transactions for reconciliation' },
+  bank_reconciliations: { group: 'Finance & GST', description: 'Bank statement to general ledger reconciliation sessions' },
+  gst_transactions: { group: 'Finance & GST', description: 'Input/Output tax ledgers for GSTR-1 and GSTR-3B filings' },
+
+  // Audit & System
   audit_logs: { group: 'Audit & System', description: 'Append-only audit trail of system operations' },
   notifications: { group: 'Audit & System', description: 'Operational alerts and threshold notifications' },
   alert_rules: { group: 'Audit & System', description: 'Automated monitoring triggers (Low Stock, Deadstock)' },
   integration_settings: { group: 'Audit & System', description: 'External API provider gateway configurations' },
-  integration_logs: { group: 'Audit & System', description: 'API dispatch request and response logs' }
+  integration_logs: { group: 'Audit & System', description: 'API dispatch request and response logs' },
+  files: { group: 'Audit & System', description: 'Secure attachment storage and document metadata' }
 };
 
 // 1. Overview
@@ -94,12 +132,31 @@ databaseRoutes.get('/overview', async (_req, res) => {
   });
 });
 
-// 2. Tables list
+// 2. Tables list (Dynamic Schema Discovery + Complete Metadata)
 databaseRoutes.get('/tables', async (_req, res) => {
   const pglite = getPGlite();
   const tables = [];
+  const discoveredNames = new Set(Object.keys(TABLE_METADATA));
 
-  for (const [name, meta] of Object.entries(TABLE_METADATA)) {
+  try {
+    const dbTables = await pglite.query(`
+      SELECT table_name 
+      FROM information_schema.tables 
+      WHERE table_schema = 'public' 
+        AND table_type = 'BASE TABLE' 
+        AND table_name NOT LIKE '_prisma%'
+      ORDER BY table_name ASC
+    `);
+    (dbTables.rows || []).forEach((row: any) => {
+      if (row.table_name) discoveredNames.add(row.table_name);
+    });
+  } catch {}
+
+  for (const name of discoveredNames) {
+    const meta = TABLE_METADATA[name] || {
+      group: 'Relational Entities',
+      description: `Application relational data entity for ${name}`
+    };
     let count = 0;
     try {
       const resCount = await pglite.query(`SELECT COUNT(*)::int as cnt FROM "${name}"`);
@@ -120,19 +177,21 @@ databaseRoutes.get('/tables', async (_req, res) => {
   res.json({ data: tables });
 });
 
-// 3. Table records (Sanitized Data Grid)
+// 3. Table records (Sanitized Data Grid + Consistent Counts)
 databaseRoutes.get('/tables/:tableName/records', async (req, res) => {
   const { tableName } = req.params;
   const page = parseInt(req.query.page as string || '1', 10);
   const pageSize = parseInt(req.query.pageSize as string || '20', 10);
   const search = (req.query.search as string || '').toLowerCase();
-  
-  if (!TABLE_METADATA[tableName]) {
-    return res.status(404).json({ error: { message: `Table '${tableName}' not found in schema` } });
-  }
 
   const pglite = getPGlite();
   try {
+    let total = 0;
+    try {
+      const countRes = await pglite.query(`SELECT COUNT(*)::int as cnt FROM "${tableName}"`);
+      total = Number((countRes.rows[0] as any)?.cnt || 0);
+    } catch {}
+
     const rawResult = await pglite.query(`SELECT * FROM "${tableName}" LIMIT 200`);
     let rows = rawResult.rows || [];
 
@@ -140,6 +199,7 @@ databaseRoutes.get('/tables/:tableName/records', async (req, res) => {
     rows = rows.map((r: any) => {
       const clean = { ...r };
       if ('password_hash' in clean) clean.password_hash = '•••••••••••••••• [REDACTED BCRYPT]';
+      if ('passwordHash' in clean) clean.passwordHash = '•••••••••••••••• [REDACTED BCRYPT]';
       if ('config_encrypted' in clean) clean.config_encrypted = '•••••••• [AES-256-GCM PROTECTED]';
       return clean;
     });
@@ -148,7 +208,7 @@ databaseRoutes.get('/tables/:tableName/records', async (req, res) => {
       rows = rows.filter((r: any) => JSON.stringify(r).toLowerCase().includes(search));
     }
 
-    const total = rows.length;
+    const filteredTotal = search ? rows.length : (total || rows.length);
     const paginated = rows.slice((page - 1) * pageSize, page * pageSize);
     const columns = rawResult.fields ? rawResult.fields.map(f => ({
       name: f.name,
@@ -165,8 +225,8 @@ databaseRoutes.get('/tables/:tableName/records', async (req, res) => {
         pagination: {
           page,
           pageSize,
-          total,
-          totalPages: Math.ceil(total / pageSize) || 1
+          total: filteredTotal,
+          totalPages: Math.ceil(filteredTotal / pageSize) || 1
         }
       }
     });

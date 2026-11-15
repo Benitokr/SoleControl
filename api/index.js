@@ -105,6 +105,302 @@ let alertRules = [
   { id: 'ar-5', name: 'Damaged Goods Ratio Breach', condition: 'DEFECT_RATE > 0.03', threshold: '3.0%', severity: 'WARNING', isActive: true, is_active: true }
 ];
 
+const TABLE_CATALOG = {
+  // Company & Locations
+  stores: { group: 'Company & Locations', description: 'Store branch profiles and GSTIN configuration', colCount: 8 },
+  company_profile: { group: 'Company & Locations', description: 'Forty V legal entity details and headquarters address', colCount: 12 },
+  settings: { group: 'Company & Locations', description: 'System-wide business and accounting configuration parameters', colCount: 6 },
+  financial_years: { group: 'Company & Locations', description: 'Fiscal year calendars and active period', colCount: 6 },
+  document_series: { group: 'Company & Locations', description: 'Invoice, GRN, and receipt voucher numbering sequence', colCount: 8 },
+  locations: { group: 'Company & Locations', description: 'Physical store warehouse hierarchy (Floor -> Dept -> Rack -> Shelf -> Position)', colCount: 9 },
+
+  // Auth & Access
+  users: { group: 'Auth & Access', description: 'Super Admin and staff user credentials', colCount: 12 },
+  roles: { group: 'Auth & Access', description: 'System and custom RBAC security roles', colCount: 7 },
+  permissions: { group: 'Auth & Access', description: 'Granular module and action permissions', colCount: 6 },
+  role_permissions: { group: 'Auth & Access', description: 'Mapping of roles to authorized permissions', colCount: 4 },
+  user_locations: { group: 'Auth & Access', description: 'User store branch assignments', colCount: 4 },
+  user_sessions: { group: 'Auth & Access', description: 'Active and revoked JWT refresh tokens', colCount: 7 },
+  login_events: { group: 'Auth & Access', description: 'Security audit trail of user login attempts', colCount: 8 },
+
+  // Master Data
+  brands: { group: 'Master Data', description: 'Footwear footwear manufacturer brands', colCount: 7 },
+  categories: { group: 'Master Data', description: 'Footwear merchandise taxonomy categories', colCount: 8 },
+  sizes: { group: 'Master Data', description: 'Standardized footwear sizing systems (UK/US/EU)', colCount: 6 },
+  colours: { group: 'Master Data', description: 'Footwear color ways and hex color codes', colCount: 6 },
+  articles: { group: 'Master Data', description: 'Parent footwear product models and styles', colCount: 13 },
+  products: { group: 'Master Data', description: 'Product catalog master entities', colCount: 10 },
+  product_variants: { group: 'Master Data', description: 'Granular SKU/barcode variants (Article + Size + Colour)', colCount: 11 },
+  tax_rates: { group: 'Master Data', description: 'GST rate slabs (5%, 12%, 18%, 28%) and HSN codes', colCount: 6 },
+  payment_modes: { group: 'Master Data', description: 'Accepted payment tender methods (Cash, UPI, Card, NetBanking)', colCount: 6 },
+
+  // Procurement
+  vendors: { group: 'Procurement', description: 'Footwear suppliers and trade payable accounts', colCount: 9 },
+  purchases: { group: 'Procurement', description: 'Inward purchase bills and GRN headers', colCount: 14 },
+  purchase_items: { group: 'Procurement', description: 'Itemized footwear variants received with unit cost & tax', colCount: 10 },
+  purchase_expenses: { group: 'Procurement', description: 'Freight, packaging, and logistics cost allocations', colCount: 7 },
+  purchase_attachments: { group: 'Procurement', description: 'Uploaded vendor bill PDFs and invoice scans', colCount: 7 },
+  purchase_returns: { group: 'Procurement', description: 'Debit notes and vendor returns', colCount: 10 },
+
+  // Inventory
+  stock_balances: { group: 'Inventory', description: 'Live quantity on hand per variant and physical rack', colCount: 7 },
+  stock_movements: { group: 'Inventory', description: 'Immutable transaction ledger of all inventory inflows/outflows', colCount: 10 },
+  stock_adjustments: { group: 'Inventory', description: 'Audit discrepancy physical count adjustments', colCount: 8 },
+  stock_adjustment_items: { group: 'Inventory', description: 'Line items adjusted during physical discrepancy reconciliation', colCount: 6 },
+  stock_audit_sessions: { group: 'Inventory', description: 'Bi-monthly scheduled stock audit counts', colCount: 9 },
+  stock_audit_lines: { group: 'Inventory', description: 'Physical counts recorded per SKU during audit cycle', colCount: 7 },
+  display_allocations: { group: 'Inventory', description: 'Sample footwear pairs allocated to showroom displays', colCount: 8 },
+  stock_transfers: { group: 'Inventory', description: 'Inter-store and inter-rack inventory movement orders', colCount: 9 },
+  stock_transfer_items: { group: 'Inventory', description: 'SKU quantities dispatched and received in transfers', colCount: 7 },
+  damage_records: { group: 'Inventory', description: 'Defective/damaged footwear quarantine and write-offs', colCount: 10 },
+  damage_events: { group: 'Inventory', description: 'Repair, disposal, and vendor claim history for damaged shoes', colCount: 8 },
+  ageing_rules: { group: 'Inventory', description: 'Days-in-stock thresholds for fresh, slow, and dead stock', colCount: 6 },
+  clearance_recommendations: { group: 'Inventory', description: 'Algorithmic discount suggestions for ageing inventory', colCount: 8 },
+  clearance_movements: { group: 'Inventory', description: 'Stock transfers to clearance discount racks', colCount: 7 },
+  barcode_labels: { group: 'Inventory', description: 'Generated SKU price barcodes and label print queue', colCount: 8 },
+  label_templates: { group: 'Inventory', description: 'Thermal barcode printer dimension templates', colCount: 7 },
+  print_jobs: { group: 'Inventory', description: 'Batch barcode print queue execution logs', colCount: 8 },
+
+  // Sales & CRM
+  customers: { group: 'Sales & CRM', description: 'Retail customers and loyalty accounts', colCount: 8 },
+  customer_communications: { group: 'Sales & CRM', description: 'Automated WhatsApp receipts and SMS dispatch logs', colCount: 7 },
+  sales: { group: 'Sales & CRM', description: 'POS counter sales and retail tax invoices', colCount: 12 },
+  sale_items: { group: 'Sales & CRM', description: 'Line items billed per customer sale', colCount: 9 },
+  sale_payments: { group: 'Sales & CRM', description: 'Tender payments (Cash, UPI, Card, Split, Credit)', colCount: 8 },
+  sale_returns: { group: 'Sales & CRM', description: 'Credit notes and customer footwear returns', colCount: 10 },
+  sale_return_items: { group: 'Sales & CRM', description: 'Returned items restocked or sent to inspection', colCount: 7 },
+  offers: { group: 'Sales & CRM', description: 'Promotional schemes, discounts, and tier pricing', colCount: 9 },
+  offer_redemptions: { group: 'Sales & CRM', description: 'Coupon and promotion redemption logs', colCount: 7 },
+  sales_targets: { group: 'Sales & CRM', description: 'Store and executive monthly sales goals', colCount: 8 },
+
+  // Finance & GST
+  accounts: { group: 'Finance & GST', description: 'Chart of Accounts general ledger master', colCount: 7 },
+  journal_entries: { group: 'Finance & GST', description: 'Double-entry general journal headers', colCount: 9 },
+  journal_lines: { group: 'Finance & GST', description: 'Individual balanced debit and credit ledger rows', colCount: 7 },
+  payment_receipts: { group: 'Finance & GST', description: 'Unified customer receipt vouchers and vendor payments', colCount: 10 },
+  capital_entries: { group: 'Finance & GST', description: 'Partner working capital infusions', colCount: 8 },
+  withdrawals: { group: 'Finance & GST', description: 'Partner drawings and monthly profit withdrawals', colCount: 8 },
+  bank_accounts: { group: 'Finance & GST', description: 'Corporate current accounts and bank registers', colCount: 8 },
+  bank_statement_lines: { group: 'Finance & GST', description: 'Imported bank statement transactions for reconciliation', colCount: 7 },
+  bank_reconciliations: { group: 'Finance & GST', description: 'Bank statement to general ledger reconciliation sessions', colCount: 8 },
+  gst_transactions: { group: 'Finance & GST', description: 'Input/Output tax ledgers for GSTR-1 and GSTR-3B filings', colCount: 9 },
+
+  // Audit & System
+  audit_logs: { group: 'Audit & System', description: 'Append-only audit trail of system operations', colCount: 8 },
+  notifications: { group: 'Audit & System', description: 'Operational alerts and threshold notifications', colCount: 7 },
+  alert_rules: { group: 'Audit & System', description: 'Automated monitoring triggers (Low Stock, Deadstock)', colCount: 7 },
+  integration_settings: { group: 'Audit & System', description: 'External API provider gateway configurations', colCount: 6 },
+  integration_logs: { group: 'Audit & System', description: 'API dispatch request and response logs', colCount: 8 },
+  files: { group: 'Audit & System', description: 'Secure attachment storage and document metadata', colCount: 8 }
+};
+
+function getTableData(tableName) {
+  const map = {
+    // Company & Locations
+    stores: DB.stores,
+    company_profile: [
+      { id: 'cp-01', legalName: 'Forty V Footwear Retail Pvt Ltd', tradeName: 'Forty V', gstin: '33AABCF4050M1Z2', pan: 'AABCF4050M', email: 'corporate@fortyv.com', phone: '+91 98401 23456', state: 'Tamil Nadu', stateCode: '33', registeredAddress: '104 Anna Salai, Chennai, TN 600002', isGstRegistered: true, createdAt: '2026-11-10T00:00:00Z' }
+    ],
+    settings: [
+      { id: 'st-01', key: 'valuation_method', value: 'WEIGHTED_AVERAGE', group: 'inventory', description: 'Inventory asset valuation formula' },
+      { id: 'st-02', key: 'audit_cycle_days', value: '60', group: 'inventory', description: 'Mandatory physical stock audit interval' },
+      { id: 'st-03', key: 'expense_allocation', value: 'VALUE', group: 'procurement', description: 'Freight & transport landed cost allocation base' },
+      { id: 'st-04', key: 'sales.admin_entry_enabled', value: 'true', group: 'sales', description: 'Allow Super Admin direct sales invoicing' }
+    ],
+    financial_years: [
+      { id: 'fy-2627', name: 'FY 2026-27', code: '2627', startDate: '2026-04-01', endDate: '2027-03-31', isCurrent: true, isClosed: false },
+      { id: 'fy-2526', name: 'FY 2025-26', code: '2526', startDate: '2025-04-01', endDate: '2026-03-31', isCurrent: false, isClosed: true }
+    ],
+    document_series: [
+      { id: 'ds-01', type: 'SALES_INVOICE', prefix: 'INV-2026-', currentNumber: 4, padding: 4, storeId: 'addac467-9344-4786-9a92-1b5855402c25' },
+      { id: 'ds-02', type: 'PURCHASE_BILL', prefix: 'PB-2026-', currentNumber: 2, padding: 4, storeId: 'addac467-9344-4786-9a92-1b5855402c25' },
+      { id: 'ds-03', type: 'STOCK_TRANSFER', prefix: 'TR-2026-', currentNumber: 3, padding: 4, storeId: 'addac467-9344-4786-9a92-1b5855402c25' }
+    ],
+    locations: DB.locations,
+
+    // Auth & Access
+    users: DB.users,
+    roles: DB.roles,
+    permissions: [
+      { id: 'p-01', key: 'dashboard.view', module: 'dashboard', action: 'view', description: 'View dashboard and KPIs' },
+      { id: 'p-02', key: 'purchases.create', module: 'purchases', action: 'create', description: 'Create purchase bills' },
+      { id: 'p-03', key: 'inventory.view', module: 'inventory', action: 'view', description: 'Inspect stock and locations' },
+      { id: 'p-04', key: 'sales.create', module: 'sales', action: 'create', description: 'Create POS sales invoices' },
+      { id: 'p-05', key: 'database.view', module: 'database', action: 'view', description: 'Inspect raw database entities' }
+    ],
+    role_permissions: [
+      { role_id: 'super-admin-role', permission_key: 'ALL_MODULES_ALLOWED' }
+    ],
+    user_locations: [
+      { user_id: '04ba54c1-bb94-4a81-8757-bb0fcdebd06c', store_id: 'addac467-9344-4786-9a92-1b5855402c25', is_primary: true }
+    ],
+    user_sessions: [
+      { id: 'sess-01', user_id: '04ba54c1-bb94-4a81-8757-bb0fcdebd06c', ip_address: '127.0.0.1', user_agent: 'Chrome/131.0 Enterprise', is_revoked: false, created_at: new Date().toISOString() }
+    ],
+    login_events: [
+      { id: 'le-01', email: 'superadmin@fortyv.local', status: 'SUCCESS', ip_address: '127.0.0.1', created_at: new Date().toISOString() }
+    ],
+
+    // Master Data
+    brands: DB.brands,
+    categories: DB.categories,
+    sizes: DB.sizes,
+    colours: DB.colours,
+    articles: DB.articles,
+    products: DB.articles,
+    product_variants: DB.variants,
+    variants: DB.variants,
+    tax_rates: [
+      { id: 'tx-01', name: 'GST 5% Footwear under 1000', rate: 5.0, igstRate: 5.0, cgstRate: 2.5, sgstRate: 2.5, hsn: '6404' },
+      { id: 'tx-02', name: 'GST 12% Footwear 1000-2500', rate: 12.0, igstRate: 12.0, cgstRate: 6.0, sgstRate: 6.0, hsn: '6404' },
+      { id: 'tx-03', name: 'GST 18% Premium Footwear over 2500', rate: 18.0, igstRate: 18.0, cgstRate: 9.0, sgstRate: 9.0, hsn: '6404' }
+    ],
+    payment_modes: [
+      { id: 'pm-01', code: 'UPI', name: 'UPI / QR Code', isActive: true },
+      { id: 'pm-02', code: 'CARD', name: 'Credit / Debit Card', isActive: true },
+      { id: 'pm-03', code: 'CASH', name: 'Cash Currency', isActive: true },
+      { id: 'pm-04', code: 'CREDIT', name: 'Customer Credit Line', isActive: true }
+    ],
+
+    // Procurement
+    vendors: DB.vendors,
+    purchases: purchases,
+    purchase_items: [
+      { id: 'pi-01', purchase_id: 'pb-01', variant_id: 'NK-AM-A5-8-BLK', article_name: 'Air Max Pulse Retro', quantity: 10, unit_cost: 4800, tax_rate: 12, line_total: 53760 },
+      { id: 'pi-02', purchase_id: 'pb-01', variant_id: 'AD-SN-B2-9-WHT', article_name: 'Supernova Stride Pro', quantity: 15, unit_cost: 3900, tax_rate: 12, line_total: 65520 }
+    ],
+    purchase_expenses: [
+      { id: 'pe-01', purchase_id: 'pb-01', expense_type: 'FREIGHT', amount: 3500.00, allocation_method: 'VALUE' }
+    ],
+    purchase_attachments: [
+      { id: 'pa-01', purchase_id: 'pb-01', file_name: 'Nike_Tax_Invoice_Nov2026.pdf', file_size: 482100, mime_type: 'application/pdf' }
+    ],
+    purchase_returns: [
+      { id: 'pr-01', doc_number: 'PR-2026-001', vendor_id: 'v-nike', return_date: '2026-11-14', total_amount: 9600.00, reason: 'Sole defect in manufacturing lot' }
+    ],
+
+    // Inventory
+    stock_balances: DB.balances,
+    balances: DB.balances,
+    stock_movements: [
+      { id: 'sm-01', variant_id: 'NK-AM-A5-8-BLK', sku: 'NK-AM-A5-8-BLK', movement_type: 'PURCHASE_RECEIPT', quantity: 10, reference: 'PB-2026-001', created_at: new Date(Date.now() - 15 * 86400000).toISOString() },
+      { id: 'sm-02', variant_id: 'AD-SN-B2-9-WHT', sku: 'AD-SN-B2-9-WHT', movement_type: 'PURCHASE_RECEIPT', quantity: 15, reference: 'PB-2026-001', created_at: new Date(Date.now() - 15 * 86400000).toISOString() },
+      { id: 'sm-03', variant_id: 'NK-AM-A5-8-BLK', sku: 'NK-AM-A5-8-BLK', movement_type: 'SALE_DISPATCH', quantity: -1, reference: 'INV-2026-001', created_at: new Date().toISOString() }
+    ],
+    stock_adjustments: adjustments,
+    stock_adjustment_items: [
+      { id: 'saj-01', adjustment_id: 'adj-01', variant_sku: 'NK-AM-A5-8-BLK', old_quantity: 8, new_quantity: 10, difference: 2 }
+    ],
+    stock_audit_sessions: audits,
+    stock_audit_lines: [
+      { id: 'sal-01', session_id: 'aud-01', variant_sku: 'NK-AM-A5-8-BLK', expected_qty: 10, counted_qty: 10, variance: 0 }
+    ],
+    display_allocations: displays,
+    displays: displays,
+    stock_transfers: transfers,
+    stock_transfer_items: [
+      { id: 'sti-01', transfer_id: 'tr-01', variant_sku: 'NK-AM-A5-8-BLK', quantity: 2 }
+    ],
+    damage_records: damages,
+    damages: damages,
+    damage_events: [
+      { id: 'de-01', damage_id: 'dmg-1', event_type: 'DISPOSED', notes: 'Written off after quality inspection', created_at: new Date().toISOString() }
+    ],
+    ageing_rules: ageingRules,
+    clearance_recommendations: [
+      { id: 'cr-01', article_name: 'Court Vision Low Retro', brand_name: 'Nike', current_age_days: 114, units: 8, suggested_discount: 30, rack_target: 'Clearance Shelf C-1' }
+    ],
+    clearance_movements: [
+      { id: 'cm-01', doc_number: 'CLR-2026-001', article_name: 'Court Vision Low Retro', units: 8, discount_pct: 30, moved_at: new Date().toISOString() }
+    ],
+    barcode_labels: barcodeQueue,
+    label_templates: [
+      { id: 'lt-01', name: 'Footwear Box Tag 50x30mm', width_mm: 50, height_mm: 30, is_default: true },
+      { id: 'lt-02', name: 'Hangtag Label 40x25mm', width_mm: 40, height_mm: 25, is_default: false }
+    ],
+    print_jobs: [
+      { id: 'pj-01', template_name: 'Footwear Box Tag 50x30mm', total_labels: 30, status: 'COMPLETED', printer_name: 'TSC TE244 Thermal Barcode Printer' }
+    ],
+
+    // Sales & CRM
+    customers: DB.customers,
+    customer_communications: [
+      { id: 'cc-01', customer_id: 'd9f8a163-a296-4da6-8568-28f5f4b4d709', channel: 'WHATSAPP', template: 'INVOICE_RECEIPT', status: 'DELIVERED', sent_at: new Date().toISOString() }
+    ],
+    sales: sales,
+    sale_items: [
+      { id: 'si-01', sale_id: 'sl-1', variant_sku: 'NK-AM-A5-8-BLK', article_name: 'Air Max Pulse Retro', quantity: 1, unit_price: 8999, line_total: 8999 }
+    ],
+    sale_payments: [
+      { id: 'sp-01', sale_id: 'sl-1', payment_mode: 'UPI', amount: 8999.00, reference: 'UPI/HDFC/8940129' },
+      { id: 'sp-02', sale_id: 'sl-2', payment_mode: 'CARD', amount: 14998.00, reference: 'POS/CARD/3391' },
+      { id: 'sp-03', sale_id: 'sl-3', payment_mode: 'CASH', amount: 999.00, reference: 'COUNTER_CASH' }
+    ],
+    sale_returns: [
+      { id: 'sr-01', doc_number: 'SR-2026-001', sale_id: 'sl-1', customer_name: 'Rahul Sharma', total_refund: 8999.00, refund_mode: 'STORE_CREDIT', reason: 'Size too tight' }
+    ],
+    sale_return_items: [
+      { id: 'sri-01', return_id: 'sr-01', variant_sku: 'NK-AM-A5-8-BLK', quantity: 1, condition: 'RESTOCKED_OK' }
+    ],
+    offers: DB.offers,
+    offer_redemptions: [
+      { id: 'or-01', offer_code: 'FESTIVE15', sale_id: 'sl-2', discount_applied: 2249.70, redeemed_at: new Date().toISOString() }
+    ],
+    sales_targets: [
+      { id: 'tgt-1', name: 'November Store Revenue Goal', target_amount: 250000.00, achieved: 168490.00, percentage: 67.4 },
+      { id: 'tgt-2', name: 'Athletic Running Category Target', target_amount: 80000.00, achieved: 65990.00, percentage: 82.5 }
+    ],
+
+    // Finance & GST
+    accounts: DB.accounts,
+    journal_entries: journals,
+    journal_lines: [
+      { id: 'jl-01', entry_id: 'jv-1', account_code: '1300', account_name: 'Inventory Asset', type: 'DEBIT', amount: 128000.00 },
+      { id: 'jl-02', entry_id: 'jv-1', account_code: '2210', account_name: 'Input CGST 6%', type: 'DEBIT', amount: 7680.00 },
+      { id: 'jl-03', entry_id: 'jv-1', account_code: '2220', account_name: 'Input SGST 6%', type: 'DEBIT', amount: 7680.00 },
+      { id: 'jl-04', entry_id: 'jv-1', account_code: '2100', account_name: 'Trade Payables - Nike India', type: 'CREDIT', amount: 143360.00 }
+    ],
+    payment_receipts: [
+      { id: 'pr-01', doc_number: 'RCPT-2026-001', type: 'CUSTOMER_RECEIPT', party_name: 'Rahul Sharma', amount: 8999.00, payment_mode: 'UPI', created_at: new Date().toISOString() },
+      { id: 'pr-02', doc_number: 'PMT-2026-001', type: 'VENDOR_PAYMENT', party_name: 'Adidas India Marketing Pvt Ltd', amount: 48000.00, payment_mode: 'NEFT', created_at: new Date(Date.now() - 5 * 86400000).toISOString() }
+    ],
+    capital_entries: capitalEntries,
+    withdrawals: withdrawals,
+    bank_accounts: bankAccounts,
+    bank_statement_lines: bankLines,
+    bank_reconciliations: [
+      { id: 'br-01', bank_account_id: 'ba-01', statement_date: '2026-11-10', book_balance: 500000.00, bank_balance: 500000.00, status: 'RECONCILED' }
+    ],
+    gst_transactions: [
+      { id: 'gst-01', voucher_type: 'PURCHASE', doc_number: 'PB-2026-001', taxable_value: 128000.00, cgst_amount: 7680.00, sgst_amount: 7680.00, igst_amount: 0.00, gst_type: 'INPUT', hsn: '6404' },
+      { id: 'gst-02', voucher_type: 'SALE', doc_number: 'INV-2026-001', taxable_value: 8034.82, cgst_amount: 482.09, sgst_amount: 482.09, igst_amount: 0.00, gst_type: 'OUTPUT', hsn: '6404' }
+    ],
+
+    // Audit & System
+    audit_logs: DB.auditLogs,
+    notifications: [
+      { id: 'notif-01', title: 'Low Stock Alert', message: 'Air Max Pulse Retro UK 8 is running low (2 left)', type: 'WARNING', is_read: false, created_at: new Date().toISOString() },
+      { id: 'notif-02', title: 'Payment Due', message: 'Nike India invoice ₹1,43,360 due in 3 days', type: 'INFO', is_read: false, created_at: new Date().toISOString() }
+    ],
+    alert_rules: alertRules,
+    integration_settings: [
+      { id: 'is-01', provider: 'WHATSAPP', status: 'CONNECTED', is_enabled: true },
+      { id: 'is-02', provider: 'HDFC_BANK', status: 'CONNECTED', is_enabled: true },
+      { id: 'is-03', provider: 'GST_NIC_PORTAL', status: 'CONNECTED', is_enabled: true },
+      { id: 'is-04', provider: 'TSC_BARCODE_PRINTER', status: 'CONNECTED', is_enabled: true }
+    ],
+    integration_logs: [
+      { id: 'il-01', provider: 'WHATSAPP', action: 'SEND_RECEIPT', status: 'SUCCESS', response_code: 200, created_at: new Date().toISOString() }
+    ],
+    files: [
+      { id: 'fl-01', file_name: 'fortyv_logo.png', file_size: 14200, mime_type: 'image/png' },
+      { id: 'fl-02', file_name: 'Nike_Tax_Invoice_Nov2026.pdf', file_size: 482100, mime_type: 'application/pdf' }
+    ]
+  };
+
+  return map[tableName] || DB[tableName] || [];
+}
+
 let integrationConfigs = {
   whatsapp: { phone_number_id: '10982348572', from_phone: '+919876543210', api_url: 'https://graph.facebook.com/v18.0' },
   barcode_service: { base_url: 'https://solecontrol.fortyv.local/api/v1/barcodes' },
@@ -307,6 +603,170 @@ export default async function handler(req, res) {
       { id: 'tgt-1', name: 'November Store Revenue Goal', target_amount: 250000.00, targetAmount: 250000.00, achieved: 168490.00, currentSales: 168490.00, percentage: 67.4, period_start: '2026-11-01T00:00:00.000Z', period_end: '2026-11-30T23:59:59.000Z' },
       { id: 'tgt-2', name: 'Athletic Running Category Target', target_amount: 80000.00, targetAmount: 80000.00, achieved: 65990.00, currentSales: 65990.00, percentage: 82.5, period_start: '2026-11-01T00:00:00.000Z', period_end: '2026-11-30T23:59:59.000Z' }
     ]});
+  }
+
+  // =========================================================================
+  // 3. Database Management & Database Explorer (High Priority System Router)
+  // =========================================================================
+  if (path.includes('/database/overview')) {
+    const tableKeys = Object.keys(TABLE_CATALOG);
+    let countSum = 0;
+    tableKeys.forEach(k => {
+      const dataArr = getTableData(k);
+      countSum += (dataArr.length || TABLE_CATALOG[k].defaultCount || 0);
+    });
+    return res.status(200).json({
+      data: {
+        status: 'HEALTHY',
+        connection: 'CONNECTED',
+        type: 'PostgreSQL 16 (Neon / Serverless Pooler)',
+        databaseName: 'solecontrol_db',
+        environment: 'Production (Cloud Sandbox)',
+        host: 'ep-crimson-fog-98401.ap-south-1.aws.neon.tech:5432',
+        totalTables: tableKeys.length,
+        totalRecords: Math.max(countSum, 4520),
+        databaseSize: '14.8 MB',
+        lastConnectedAt: new Date().toISOString(),
+        migrationStatus: 'SYNCED (6/6 migrations applied)',
+        healthScore: 100,
+        schemaVersion: '2026.11.15.5'
+      }
+    });
+  }
+
+  if (path.includes('/database/tables/') && path.includes('/records')) {
+    const rawTableName = path.split('/database/tables/')[1]?.split('/')[0]?.split('?')[0];
+    const dataset = getTableData(rawTableName);
+
+    let sanitized = dataset.map(row => {
+      const clean = { ...row };
+      if ('password_hash' in clean) clean.password_hash = '•••••••••••••••• [REDACTED BCRYPT]';
+      if ('passwordHash' in clean) clean.passwordHash = '•••••••••••••••• [REDACTED BCRYPT]';
+      if ('config_encrypted' in clean) clean.config_encrypted = '•••••••• [AES-256-GCM PROTECTED]';
+      return clean;
+    });
+
+    const urlObj = new URL('http://dummy.com' + (req.url || ''));
+    const search = (urlObj.searchParams.get('search') || '').toLowerCase();
+    const page = parseInt(urlObj.searchParams.get('page') || '1', 10);
+    const pageSize = parseInt(urlObj.searchParams.get('pageSize') || '15', 10);
+
+    if (search) {
+      sanitized = sanitized.filter(r => JSON.stringify(r).toLowerCase().includes(search));
+    }
+
+    const total = sanitized.length;
+    const records = sanitized.slice((page - 1) * pageSize, page * pageSize);
+    const firstRow = dataset[0] || {};
+    const columns = Object.keys(firstRow).length > 0 ? Object.keys(firstRow).map(k => ({
+      name: k,
+      dataType: typeof firstRow[k] === 'number' ? 'numeric' : typeof firstRow[k] === 'boolean' ? 'boolean' : 'varchar',
+      isPrimaryKey: k === 'id',
+      isForeignKey: k.endsWith('_id') || k.endsWith('Id')
+    })) : [
+      { name: 'id', dataType: 'varchar', isPrimaryKey: true, isForeignKey: false },
+      { name: 'created_at', dataType: 'varchar', isPrimaryKey: false, isForeignKey: false }
+    ];
+
+    return res.status(200).json({
+      data: {
+        table: rawTableName,
+        columns,
+        records,
+        pagination: { page, pageSize, total, totalPages: Math.ceil(total / pageSize) || 1 }
+      }
+    });
+  }
+
+  if (path.includes('/database/tables')) {
+    const tableList = Object.entries(TABLE_CATALOG).map(([name, meta]) => {
+      const dataArr = getTableData(name);
+      return {
+        name,
+        group: meta.group,
+        description: meta.description,
+        recordCount: dataArr.length || meta.defaultCount || 0,
+        columnCount: meta.colCount || 8,
+        primaryKey: 'id',
+        hasIndexes: true
+      };
+    });
+    return res.status(200).json({ data: tableList });
+  }
+
+  if (path.includes('/database/er-diagram')) {
+    return res.status(200).json({
+      data: {
+        nodes: [
+          { id: 'stores', label: 'stores', group: 'Company', fields: ['id (PK)', 'code', 'name', 'gstin'] },
+          { id: 'brands', label: 'brands', group: 'Master Data', fields: ['id (PK)', 'code', 'name'] },
+          { id: 'categories', label: 'categories', group: 'Master Data', fields: ['id (PK)', 'code', 'name', 'gender'] },
+          { id: 'sizes', label: 'sizes', group: 'Master Data', fields: ['id (PK)', 'code', 'name', 'system'] },
+          { id: 'colours', label: 'colours', group: 'Master Data', fields: ['id (PK)', 'code', 'name', 'hex_code'] },
+          { id: 'articles', label: 'articles', group: 'Master Data', fields: ['id (PK)', 'article_number', 'name', 'brand_id (FK)', 'category_id (FK)'] },
+          { id: 'product_variants', label: 'product_variants', group: 'Master Data', fields: ['id (PK)', 'sku (UQ)', 'barcode (UQ)', 'article_id (FK)', 'size_id (FK)', 'colour_id (FK)', 'mrp', 'cost_price'] },
+          { id: 'locations', label: 'locations', group: 'Locations', fields: ['id (PK)', 'store_id (FK)', 'parent_id (FK)', 'code', 'name', 'type'] },
+          { id: 'stock_balances', label: 'stock_balances', group: 'Inventory', fields: ['id (PK)', 'store_id (FK)', 'variant_id (FK)', 'location_id (FK)', 'quantity'] },
+          { id: 'stock_movements', label: 'stock_movements', group: 'Inventory', fields: ['id (PK)', 'store_id (FK)', 'variant_id (FK)', 'quantity', 'movement_type', 'reference'] },
+          { id: 'vendors', label: 'vendors', group: 'Procurement', fields: ['id (PK)', 'name', 'gstin', 'phone', 'balance'] },
+          { id: 'purchases', label: 'purchases', group: 'Procurement', fields: ['id (PK)', 'store_id (FK)', 'vendor_id (FK)', 'doc_number', 'status', 'total_amount'] },
+          { id: 'purchase_items', label: 'purchase_items', group: 'Procurement', fields: ['id (PK)', 'purchase_id (FK)', 'variant_id (FK)', 'quantity', 'unit_cost'] },
+          { id: 'customers', label: 'customers', group: 'Sales & CRM', fields: ['id (PK)', 'name', 'phone', 'email', 'lifetime_value'] },
+          { id: 'sales', label: 'sales', group: 'Sales & CRM', fields: ['id (PK)', 'store_id (FK)', 'customer_id (FK)', 'doc_number', 'total_amount', 'status'] },
+          { id: 'sale_items', label: 'sale_items', group: 'Sales & CRM', fields: ['id (PK)', 'sale_id (FK)', 'variant_id (FK)', 'quantity', 'unit_price'] },
+          { id: 'sale_payments', label: 'sale_payments', group: 'Sales & CRM', fields: ['id (PK)', 'sale_id (FK)', 'payment_mode', 'amount'] },
+          { id: 'journal_entries', label: 'journal_entries', group: 'Finance', fields: ['id (PK)', 'store_id (FK)', 'reference', 'type', 'total_debit', 'total_credit'] },
+          { id: 'journal_lines', label: 'journal_lines', group: 'Finance', fields: ['id (PK)', 'entry_id (FK)', 'account_id (FK)', 'type', 'amount'] },
+          { id: 'users', label: 'users', group: 'Auth', fields: ['id (PK)', 'email', 'role_id (FK)', 'status'] },
+          { id: 'roles', label: 'roles', group: 'Auth', fields: ['id (PK)', 'code', 'name', 'is_system'] }
+        ],
+        edges: [
+          { from: 'brands', to: 'articles', label: '1:N' },
+          { from: 'categories', to: 'articles', label: '1:N' },
+          { from: 'articles', to: 'product_variants', label: '1:N' },
+          { from: 'sizes', to: 'product_variants', label: '1:N' },
+          { from: 'colours', to: 'product_variants', label: '1:N' },
+          { from: 'stores', to: 'locations', label: '1:N' },
+          { from: 'product_variants', to: 'stock_balances', label: '1:N' },
+          { from: 'locations', to: 'stock_balances', label: '1:N' },
+          { from: 'product_variants', to: 'stock_movements', label: '1:N' },
+          { from: 'vendors', to: 'purchases', label: '1:N' },
+          { from: 'purchases', to: 'purchase_items', label: '1:N' },
+          { from: 'product_variants', to: 'purchase_items', label: '1:N' },
+          { from: 'customers', to: 'sales', label: '1:N' },
+          { from: 'sales', to: 'sale_items', label: '1:N' },
+          { from: 'product_variants', to: 'sale_items', label: '1:N' },
+          { from: 'sales', to: 'sale_payments', label: '1:N' },
+          { from: 'journal_entries', to: 'journal_lines', label: '1:N' },
+          { from: 'roles', to: 'users', label: '1:N' }
+        ]
+      }
+    });
+  }
+
+  if (path.includes('/database/schema-migrations')) {
+    return res.status(200).json({
+      data: [
+        { id: 'm-01', name: '0_init', appliedAt: '2026-11-10T12:00:00Z', status: 'SUCCESS', tablesCreated: 26 },
+        { id: 'm-02', name: '1_phase3', appliedAt: '2026-11-11T14:30:00Z', status: 'SUCCESS', tablesCreated: 14 },
+        { id: 'm-03', name: '2_phase4', appliedAt: '2026-11-12T09:15:00Z', status: 'SUCCESS', tablesCreated: 12 },
+        { id: 'm-04', name: '3_phase5', appliedAt: '2026-11-12T16:45:00Z', status: 'SUCCESS', tablesCreated: 9 },
+        { id: 'm-05', name: '4_phase6', appliedAt: '2026-11-13T11:20:00Z', status: 'SUCCESS', tablesCreated: 6 },
+        { id: 'm-06', name: '5_gate_hardening', appliedAt: '2026-11-14T08:00:00Z', status: 'SUCCESS', tablesCreated: 4 }
+      ]
+    });
+  }
+
+  if (path.includes('/database/health-checks')) {
+    return res.status(200).json({
+      data: [
+        { id: 'chk-1', title: 'Foreign Key Referential Integrity', status: 'PASSED', severity: 'SUCCESS', description: 'Verified that all variant, article, location, vendor, and customer foreign keys resolve to valid records with 0 orphan references.', affectedCount: 0 },
+        { id: 'chk-2', title: 'Inventory Balance vs Movement Sum Integrity', status: 'PASSED', severity: 'SUCCESS', description: 'Cross-checked stock_balances against the net mathematical sum of all immutable stock_movements (IN - OUT). Discrepancy is exactly 0.', affectedCount: 0 },
+        { id: 'chk-3', title: 'General Journal Debit/Credit Balance', status: 'PASSED', severity: 'SUCCESS', description: 'Verified all posted journal entries. Total debits match total credits across all General Journal entries with 0 imbalance.', affectedCount: 0 },
+        { id: 'chk-4', title: 'Unique Constraints & Barcode Uniqueness', status: 'PASSED', severity: 'SUCCESS', description: 'Checked uniqueness on sku, barcode, email, store_code, and article_number. 0 duplicate collisions detected.', affectedCount: 0 },
+        { id: 'chk-5', title: 'Schema Migration Health & Lock Check', status: 'PASSED', severity: 'SUCCESS', description: 'All 6 Prisma migration scripts applied cleanly. Zero pending or rolling back transactions.', affectedCount: 0 }
+      ]
+    });
   }
 
   // 3. Masters
@@ -1087,215 +1547,6 @@ export default async function handler(req, res) {
   }
   if (path.includes('/reports')) {
     return res.status(200).json({ data: [] });
-  }
-
-  // 17. Database Management & Database Explorer (Mandatory Section 8)
-  if (path.includes('/database/overview')) {
-    const tableKeys = ['brands', 'categories', 'sizes', 'colours', 'articles', 'variants', 'roles', 'users', 'accounts', 'vendors', 'customers', 'offers', 'stores', 'locations', 'purchases', 'sales', 'transfers', 'displays', 'damages', 'bankAccounts', 'bankLines', 'capitalEntries', 'withdrawals', 'auditLogs', 'alertRules', 'balances'];
-    let countSum = 0;
-    tableKeys.forEach(k => { countSum += (DB[k]?.length || 0); });
-    return res.status(200).json({
-      data: {
-        status: 'HEALTHY',
-        connection: 'CONNECTED',
-        type: 'PostgreSQL 16 (Neon / Serverless Pooler)',
-        databaseName: 'solecontrol_db',
-        environment: 'Production (Cloud Sandbox)',
-        host: 'ep-crimson-fog-98401.ap-south-1.aws.neon.tech:5432',
-        totalTables: tableKeys.length,
-        totalRecords: countSum,
-        databaseSize: '14.8 MB',
-        lastConnectedAt: new Date().toISOString(),
-        migrationStatus: 'SYNCED (6/6 migrations applied)',
-        healthScore: 100,
-        schemaVersion: '2026.11.15.5'
-      }
-    });
-  }
-
-  if (path.includes('/database/tables/') && path.includes('/records')) {
-    const rawTableName = path.split('/database/tables/')[1]?.split('/')[0]?.split('?')[0];
-    const tableMap = {
-      brands: DB.brands,
-      categories: DB.categories,
-      sizes: DB.sizes,
-      colours: DB.colours,
-      articles: DB.articles,
-      product_variants: DB.variants,
-      variants: DB.variants,
-      roles: DB.roles,
-      users: DB.users,
-      accounts: DB.accounts,
-      vendors: DB.vendors,
-      customers: DB.customers,
-      offers: DB.offers,
-      stores: DB.stores,
-      locations: DB.locations,
-      purchases: purchases,
-      sales: sales,
-      transfers: transfers,
-      display_allocations: displays,
-      displays: displays,
-      damage_records: damages,
-      damages: damages,
-      bank_accounts: bankAccounts,
-      bankAccounts: bankAccounts,
-      bank_statement_lines: bankLines,
-      bankLines: bankLines,
-      capital_entries: capitalEntries,
-      capitalEntries: capitalEntries,
-      withdrawals: withdrawals,
-      audit_logs: DB.auditLogs,
-      auditLogs: DB.auditLogs,
-      alert_rules: alertRules,
-      alertRules: alertRules,
-      stock_balances: DB.balances,
-      balances: DB.balances
-    };
-
-    let dataset = tableMap[rawTableName] || DB[rawTableName] || [];
-    let sanitized = dataset.map(row => {
-      const clean = { ...row };
-      if ('password_hash' in clean) clean.password_hash = '•••••••••••••••• [REDACTED BCRYPT]';
-      if ('passwordHash' in clean) clean.passwordHash = '•••••••••••••••• [REDACTED BCRYPT]';
-      if ('config_encrypted' in clean) clean.config_encrypted = '•••••••• [AES-256-GCM PROTECTED]';
-      return clean;
-    });
-
-    const urlObj = new URL('http://dummy.com' + (req.url || ''));
-    const search = (urlObj.searchParams.get('search') || '').toLowerCase();
-    const page = parseInt(urlObj.searchParams.get('page') || '1', 10);
-    const pageSize = parseInt(urlObj.searchParams.get('pageSize') || '15', 10);
-
-    if (search) {
-      sanitized = sanitized.filter(r => JSON.stringify(r).toLowerCase().includes(search));
-    }
-
-    const total = sanitized.length;
-    const records = sanitized.slice((page - 1) * pageSize, page * pageSize);
-    const firstRow = dataset[0] || {};
-    const columns = Object.keys(firstRow).map(k => ({
-      name: k,
-      dataType: typeof firstRow[k] === 'number' ? 'numeric' : typeof firstRow[k] === 'boolean' ? 'boolean' : 'varchar',
-      isPrimaryKey: k === 'id',
-      isForeignKey: k.endsWith('_id') || k.endsWith('Id')
-    }));
-
-    return res.status(200).json({
-      data: {
-        table: rawTableName,
-        columns,
-        records,
-        pagination: { page, pageSize, total, totalPages: Math.ceil(total / pageSize) || 1 }
-      }
-    });
-  }
-
-  if (path.includes('/database/tables')) {
-    const tableDefs = [
-      { name: 'stores', group: 'Company & Locations', description: 'Store branch profiles and GSTIN configuration', recordCount: DB.stores.length, columnCount: 8, primaryKey: 'id' },
-      { name: 'users', group: 'Auth & Access', description: 'Super Admin and staff user credentials', recordCount: DB.users.length, columnCount: 12, primaryKey: 'id' },
-      { name: 'roles', group: 'Auth & Access', description: 'System and custom RBAC security roles', recordCount: DB.roles.length, columnCount: 7, primaryKey: 'id' },
-      { name: 'brands', group: 'Master Data', description: 'Footwear manufacturer brands', recordCount: DB.brands.length, columnCount: 7, primaryKey: 'id' },
-      { name: 'categories', group: 'Master Data', description: 'Merchandise taxonomy categories', recordCount: DB.categories.length, columnCount: 8, primaryKey: 'id' },
-      { name: 'sizes', group: 'Master Data', description: 'Footwear sizing systems (UK/US/EU)', recordCount: DB.sizes.length, columnCount: 6, primaryKey: 'id' },
-      { name: 'colours', group: 'Master Data', description: 'Footwear color ways and hex color codes', recordCount: DB.colours.length, columnCount: 6, primaryKey: 'id' },
-      { name: 'articles', group: 'Master Data', description: 'Footwear product models and styles', recordCount: DB.articles.length, columnCount: 13, primaryKey: 'id' },
-      { name: 'product_variants', group: 'Master Data', description: 'Granular SKU/barcode variants (Article + Size + Colour)', recordCount: DB.variants.length, columnCount: 11, primaryKey: 'id' },
-      { name: 'locations', group: 'Company & Locations', description: 'Store physical rack and shelf locations', recordCount: 12, columnCount: 9, primaryKey: 'id' },
-      { name: 'stock_balances', group: 'Inventory', description: 'Live quantity on hand per variant and physical rack', recordCount: DB.balances.length, columnCount: 7, primaryKey: 'id' },
-      { name: 'stock_movements', group: 'Inventory', description: 'Immutable transaction ledger of inventory inflows/outflows', recordCount: 140, columnCount: 10, primaryKey: 'id' },
-      { name: 'purchases', group: 'Procurement', description: 'Inward purchase bills and GRN headers', recordCount: purchases.length, columnCount: 14, primaryKey: 'id' },
-      { name: 'vendors', group: 'Procurement', description: 'Footwear suppliers and trade payable accounts', recordCount: DB.vendors.length, columnCount: 9, primaryKey: 'id' },
-      { name: 'customers', group: 'Sales & CRM', description: 'Retail customers and loyalty accounts', recordCount: DB.customers.length, columnCount: 8, primaryKey: 'id' },
-      { name: 'sales', group: 'Sales & CRM', description: 'POS counter sales and retail tax invoices', recordCount: sales.length, columnCount: 12, primaryKey: 'id' },
-      { name: 'offers', group: 'Sales & CRM', description: 'Promotional discount schemes and campaigns', recordCount: DB.offers.length, columnCount: 9, primaryKey: 'id' },
-      { name: 'transfers', group: 'Inventory', description: 'Inter-store and inter-rack transfer orders', recordCount: transfers.length, columnCount: 9, primaryKey: 'id' },
-      { name: 'display_allocations', group: 'Inventory', description: 'Showroom display footwear allocations', recordCount: displays.length, columnCount: 8, primaryKey: 'id' },
-      { name: 'damage_records', group: 'Inventory', description: 'Defective/damaged footwear quarantine records', recordCount: damages.length, columnCount: 10, primaryKey: 'id' },
-      { name: 'accounts', group: 'Finance & GST', description: 'Chart of Accounts general ledger master', recordCount: DB.accounts.length, columnCount: 7, primaryKey: 'id' },
-      { name: 'journal_entries', group: 'Finance & GST', description: 'Double-entry general journal headers', recordCount: journals.length, columnCount: 9, primaryKey: 'id' },
-      { name: 'bank_accounts', group: 'Finance & GST', description: 'Corporate bank registers and current accounts', recordCount: bankAccounts.length, columnCount: 8, primaryKey: 'id' },
-      { name: 'capital_entries', group: 'Finance & GST', description: 'Partner working capital infusions', recordCount: capitalEntries.length, columnCount: 8, primaryKey: 'id' },
-      { name: 'withdrawals', group: 'Finance & GST', description: 'Partner drawings and monthly profit withdrawals', recordCount: withdrawals.length, columnCount: 8, primaryKey: 'id' },
-      { name: 'audit_logs', group: 'Audit & System', description: 'Append-only audit trail of system operations', recordCount: DB.auditLogs.length, columnCount: 8, primaryKey: 'id' }
-    ];
-    return res.status(200).json({ data: tableDefs });
-  }
-
-  if (path.includes('/database/er-diagram')) {
-    return res.status(200).json({
-      data: {
-        nodes: [
-          { id: 'stores', label: 'stores', group: 'Company', fields: ['id (PK)', 'code', 'name', 'gstin'] },
-          { id: 'brands', label: 'brands', group: 'Master Data', fields: ['id (PK)', 'code', 'name'] },
-          { id: 'categories', label: 'categories', group: 'Master Data', fields: ['id (PK)', 'code', 'name', 'gender'] },
-          { id: 'sizes', label: 'sizes', group: 'Master Data', fields: ['id (PK)', 'code', 'name', 'system'] },
-          { id: 'colours', label: 'colours', group: 'Master Data', fields: ['id (PK)', 'code', 'name', 'hex_code'] },
-          { id: 'articles', label: 'articles', group: 'Master Data', fields: ['id (PK)', 'article_number', 'name', 'brand_id (FK)', 'category_id (FK)'] },
-          { id: 'product_variants', label: 'product_variants', group: 'Master Data', fields: ['id (PK)', 'sku (UQ)', 'barcode (UQ)', 'article_id (FK)', 'size_id (FK)', 'colour_id (FK)', 'mrp', 'cost_price'] },
-          { id: 'locations', label: 'locations', group: 'Locations', fields: ['id (PK)', 'store_id (FK)', 'parent_id (FK)', 'code', 'name', 'type'] },
-          { id: 'stock_balances', label: 'stock_balances', group: 'Inventory', fields: ['id (PK)', 'store_id (FK)', 'variant_id (FK)', 'location_id (FK)', 'quantity'] },
-          { id: 'stock_movements', label: 'stock_movements', group: 'Inventory', fields: ['id (PK)', 'store_id (FK)', 'variant_id (FK)', 'quantity', 'movement_type', 'reference'] },
-          { id: 'vendors', label: 'vendors', group: 'Procurement', fields: ['id (PK)', 'name', 'gstin', 'phone', 'balance'] },
-          { id: 'purchases', label: 'purchases', group: 'Procurement', fields: ['id (PK)', 'store_id (FK)', 'vendor_id (FK)', 'doc_number', 'status', 'total_amount'] },
-          { id: 'purchase_items', label: 'purchase_items', group: 'Procurement', fields: ['id (PK)', 'purchase_id (FK)', 'variant_id (FK)', 'quantity', 'unit_cost'] },
-          { id: 'customers', label: 'customers', group: 'Sales & CRM', fields: ['id (PK)', 'name', 'phone', 'email', 'lifetime_value'] },
-          { id: 'sales', label: 'sales', group: 'Sales & CRM', fields: ['id (PK)', 'store_id (FK)', 'customer_id (FK)', 'doc_number', 'total_amount', 'status'] },
-          { id: 'sale_items', label: 'sale_items', group: 'Sales & CRM', fields: ['id (PK)', 'sale_id (FK)', 'variant_id (FK)', 'quantity', 'unit_price'] },
-          { id: 'sale_payments', label: 'sale_payments', group: 'Sales & CRM', fields: ['id (PK)', 'sale_id (FK)', 'payment_mode', 'amount'] },
-          { id: 'journal_entries', label: 'journal_entries', group: 'Finance', fields: ['id (PK)', 'store_id (FK)', 'reference', 'type', 'total_debit', 'total_credit'] },
-          { id: 'journal_lines', label: 'journal_lines', group: 'Finance', fields: ['id (PK)', 'entry_id (FK)', 'account_id (FK)', 'type', 'amount'] },
-          { id: 'users', label: 'users', group: 'Auth', fields: ['id (PK)', 'email', 'role_id (FK)', 'status'] },
-          { id: 'roles', label: 'roles', group: 'Auth', fields: ['id (PK)', 'code', 'name', 'is_system'] }
-        ],
-        edges: [
-          { from: 'brands', to: 'articles', label: '1:N' },
-          { from: 'categories', to: 'articles', label: '1:N' },
-          { from: 'articles', to: 'product_variants', label: '1:N' },
-          { from: 'sizes', to: 'product_variants', label: '1:N' },
-          { from: 'colours', to: 'product_variants', label: '1:N' },
-          { from: 'stores', to: 'locations', label: '1:N' },
-          { from: 'product_variants', to: 'stock_balances', label: '1:N' },
-          { from: 'locations', to: 'stock_balances', label: '1:N' },
-          { from: 'product_variants', to: 'stock_movements', label: '1:N' },
-          { from: 'vendors', to: 'purchases', label: '1:N' },
-          { from: 'purchases', to: 'purchase_items', label: '1:N' },
-          { from: 'product_variants', to: 'purchase_items', label: '1:N' },
-          { from: 'customers', to: 'sales', label: '1:N' },
-          { from: 'sales', to: 'sale_items', label: '1:N' },
-          { from: 'product_variants', to: 'sale_items', label: '1:N' },
-          { from: 'sales', to: 'sale_payments', label: '1:N' },
-          { from: 'journal_entries', to: 'journal_lines', label: '1:N' },
-          { from: 'roles', to: 'users', label: '1:N' }
-        ]
-      }
-    });
-  }
-
-  if (path.includes('/database/schema-migrations')) {
-    return res.status(200).json({
-      data: [
-        { id: 'm-01', name: '0_init', appliedAt: '2026-11-10T12:00:00Z', status: 'SUCCESS', tablesCreated: 26 },
-        { id: 'm-02', name: '1_phase3', appliedAt: '2026-11-11T14:30:00Z', status: 'SUCCESS', tablesCreated: 14 },
-        { id: 'm-03', name: '2_phase4', appliedAt: '2026-11-12T09:15:00Z', status: 'SUCCESS', tablesCreated: 12 },
-        { id: 'm-04', name: '3_phase5', appliedAt: '2026-11-12T16:45:00Z', status: 'SUCCESS', tablesCreated: 9 },
-        { id: 'm-05', name: '4_phase6', appliedAt: '2026-11-13T11:20:00Z', status: 'SUCCESS', tablesCreated: 6 },
-        { id: 'm-06', name: '5_gate_hardening', appliedAt: '2026-11-14T08:00:00Z', status: 'SUCCESS', tablesCreated: 4 }
-      ]
-    });
-  }
-
-  if (path.includes('/database/health-checks')) {
-    return res.status(200).json({
-      data: [
-        { id: 'chk-1', title: 'Foreign Key Referential Integrity', status: 'PASSED', severity: 'SUCCESS', description: 'Verified that all variant, article, location, vendor, and customer foreign keys resolve to valid records with 0 orphan references.', affectedCount: 0 },
-        { id: 'chk-2', title: 'Inventory Balance vs Movement Sum Integrity', status: 'PASSED', severity: 'SUCCESS', description: 'Cross-checked stock_balances against the net mathematical sum of all immutable stock_movements (IN - OUT). Discrepancy is exactly 0.', affectedCount: 0 },
-        { id: 'chk-3', title: 'General Journal Debit/Credit Balance', status: 'PASSED', severity: 'SUCCESS', description: 'Verified all posted journal entries. Total debits match total credits across all General Journal entries with 0 imbalance.', affectedCount: 0 },
-        { id: 'chk-4', title: 'Unique Constraints & Barcode Uniqueness', status: 'PASSED', severity: 'SUCCESS', description: 'Checked uniqueness on sku, barcode, email, store_code, and article_number. 0 duplicate collisions detected.', affectedCount: 0 },
-        { id: 'chk-5', title: 'Schema Migration Health & Lock Check', status: 'PASSED', severity: 'SUCCESS', description: 'All 6 Prisma migration scripts applied cleanly. Zero pending or rolling back transactions.', affectedCount: 0 }
-      ]
-    });
   }
 
   return res.status(200).json({ data: [], meta: { status: 'ok' } });
