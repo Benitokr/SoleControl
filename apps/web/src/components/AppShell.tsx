@@ -51,6 +51,7 @@ const NAV: NavGroup[] = [
   { title: 'Insight & Control', items: [
     { label: 'Reports & Analytics', icon: <BarChart3 size={18} strokeWidth={1.5} />, to: '/reports' },
     { label: 'Notifications & Audit', icon: <ScrollText size={18} strokeWidth={1.5} />, to: '/audit' },
+    { label: 'Database Explorer', icon: <Database size={18} strokeWidth={1.5} />, to: '/database' },
   ]},
 ]
 

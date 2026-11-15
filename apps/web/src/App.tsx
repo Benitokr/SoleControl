@@ -27,6 +27,7 @@ import { TransfersPage } from './pages/TransfersPage'
 import { DisplayStockPage } from './pages/DisplayStockPage'
 import { AgeingPage } from './pages/AgeingPage'
 import { DamagedGoodsPage } from './pages/DamagedGoodsPage'
+import { DatabasePage } from './pages/DatabasePage'
 
 class ErrorBoundary extends Component<{ children: ReactNode }, { hasError: boolean; error: Error | null }> {
   constructor(props: { children: ReactNode }) {
@@ -117,6 +118,7 @@ export default function App() {
           <Route path="reports" element={<ReportsPage />} />
           <Route path="audit" element={<AuditPage />} />
           <Route path="integrations" element={<IntegrationsPage />} />
+          <Route path="database" element={<DatabasePage />} />
           <Route path="*" element={<div className="p-8 text-center"><p className="text-2xl font-semibold mb-2">Page not found</p><a href="/dashboard" className="text-primary underline">Go to Dashboard</a></div>} />
         </Route>
       </Routes>

@@ -38,6 +38,7 @@ import { dashboardRoutes } from './modules/dashboard/routes.js';
 import { reportsRoutes } from './modules/reports/routes.js';
 import { alertRoutes } from './modules/alerts/routes.js';
 import { integrationsRoutes } from './modules/integrations/routes.js';
+import { databaseRoutes } from './modules/database/routes.js';
 import cron from 'node-cron';
 
 export const app = express();
@@ -87,6 +88,7 @@ app.use('/api/v1/dashboard', dashboardRoutes);
 app.use('/api/v1/reports', reportsRoutes);
 app.use('/api/v1/alerts', alertRoutes);
 app.use('/api/v1/integrations', integrationsRoutes);
+app.use('/api/v1/database', databaseRoutes);
 
 app.get('/api/health', (_req, res) => res.json({ status: 'ok', ts: new Date().toISOString() }));
 app.use((_req, res) => res.status(404).json({ error: { code: 'NOT_FOUND', message: 'Route not found' } }));
