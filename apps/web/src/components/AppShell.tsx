@@ -6,7 +6,8 @@ import {
   ArrowLeftRight, Hourglass, PackageX, Truck, HeartHandshake,
   BadgePercent, BookOpen, Wallet, Landmark, BarChart3, ScrollText,
   Plug, ChevronLeft, ChevronRight, Moon, Sun, Bell, LogOut, Search,
-  Plus, X, CheckCircle2, AlertTriangle, Info, ArrowUpRight, Check
+  Plus, X, CheckCircle2, AlertTriangle, Info, ArrowUpRight, Check,
+  Lightbulb, Activity
 } from 'lucide-react'
 import { useAuthStore } from '../store/authStore'
 import { useThemeStore } from '../store/themeStore'
@@ -17,22 +18,22 @@ type NavItem = { label: string; icon: React.ReactNode; to: string }
 type NavGroup = { title: string; items: NavItem[] }
 
 const NAV: NavGroup[] = [
-  { title: 'Overview', items: [{ label: 'Dashboard', icon: <LayoutDashboard size={18} strokeWidth={1.5} />, to: '/dashboard' }] },
-  { title: 'Setup', items: [
-    { label: 'Company Config', icon: <Building2 size={18} strokeWidth={1.5} />, to: '/company' },
-    { label: 'Master Data', icon: <Database size={18} strokeWidth={1.5} />, to: '/masters' },
-    { label: 'Rack & Location', icon: <Warehouse size={18} strokeWidth={1.5} />, to: '/locations' },
-    { label: 'Barcodes', icon: <ScanBarcode size={18} strokeWidth={1.5} />, to: '/barcodes' },
-    { label: 'Integrations', icon: <Plug size={18} strokeWidth={1.5} />, to: '/integrations' },
+  { title: 'Executive Overview', items: [
+    { label: 'Dashboard', icon: <LayoutDashboard size={18} strokeWidth={1.5} />, to: '/dashboard' }
   ]},
-  { title: 'Access', items: [
+  { title: 'Business Setup', items: [
+    { label: 'Company Configuration', icon: <Building2 size={18} strokeWidth={1.5} />, to: '/company' },
+    { label: 'Master Data', icon: <Database size={18} strokeWidth={1.5} />, to: '/masters' },
     { label: 'Users', icon: <Users size={18} strokeWidth={1.5} />, to: '/users' },
     { label: 'Roles & Permissions', icon: <ShieldCheck size={18} strokeWidth={1.5} />, to: '/roles' },
+    { label: 'Rack & Location', icon: <Warehouse size={18} strokeWidth={1.5} />, to: '/locations' },
+    { label: 'Integrations', icon: <Plug size={18} strokeWidth={1.5} />, to: '/integrations' },
   ]},
-  { title: 'Purchasing & Stock', items: [
+  { title: 'Retail Operations', items: [
     { label: 'Purchases', icon: <ReceiptText size={18} strokeWidth={1.5} />, to: '/purchases' },
     { label: 'Vendors', icon: <Truck size={18} strokeWidth={1.5} />, to: '/vendors' },
     { label: 'Inventory', icon: <Boxes size={18} strokeWidth={1.5} />, to: '/inventory' },
+    { label: 'Barcodes', icon: <ScanBarcode size={18} strokeWidth={1.5} />, to: '/barcodes' },
     { label: 'Display Stock', icon: <Store size={18} strokeWidth={1.5} />, to: '/display' },
     { label: 'Stock Transfers', icon: <ArrowLeftRight size={18} strokeWidth={1.5} />, to: '/transfers' },
     { label: 'Ageing & Clearance', icon: <Hourglass size={18} strokeWidth={1.5} />, to: '/ageing' },
@@ -40,7 +41,7 @@ const NAV: NavGroup[] = [
   ]},
   { title: 'Sales & Customers', items: [
     { label: 'Sales & POS', icon: <Receipt size={18} strokeWidth={1.5} />, to: '/sales' },
-    { label: 'Customers & CRM', icon: <HeartHandshake size={18} strokeWidth={1.5} />, to: '/customers' },
+    { label: 'Customer & CRM', icon: <HeartHandshake size={18} strokeWidth={1.5} />, to: '/customers' },
     { label: 'Offers & Discounts', icon: <BadgePercent size={18} strokeWidth={1.5} />, to: '/offers' },
   ]},
   { title: 'Finance', items: [
@@ -48,10 +49,14 @@ const NAV: NavGroup[] = [
     { label: 'Capital & Withdrawals', icon: <Wallet size={18} strokeWidth={1.5} />, to: '/capital' },
     { label: 'Bank & GST', icon: <Landmark size={18} strokeWidth={1.5} />, to: '/bank-gst' },
   ]},
-  { title: 'Insight & Control', items: [
+  { title: 'Intelligence & Reports', items: [
     { label: 'Reports & Analytics', icon: <BarChart3 size={18} strokeWidth={1.5} />, to: '/reports' },
-    { label: 'Notifications & Audit', icon: <ScrollText size={18} strokeWidth={1.5} />, to: '/audit' },
+    { label: 'Business Insights', icon: <Lightbulb size={18} strokeWidth={1.5} />, to: '/insights' },
+  ]},
+  { title: 'System & Control', items: [
     { label: 'Database Explorer', icon: <Database size={18} strokeWidth={1.5} />, to: '/database' },
+    { label: 'Notifications & Audit', icon: <ScrollText size={18} strokeWidth={1.5} />, to: '/audit' },
+    { label: 'System Health', icon: <Activity size={18} strokeWidth={1.5} />, to: '/system-health' },
   ]},
 ]
 
