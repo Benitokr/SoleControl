@@ -7,7 +7,7 @@ import {
   BadgePercent, BookOpen, Wallet, Landmark, BarChart3, ScrollText,
   Plug, ChevronLeft, ChevronRight, Moon, Sun, Bell, LogOut, Search,
   Plus, X, CheckCircle2, AlertTriangle, Info, ArrowUpRight, Check,
-  Lightbulb, Activity
+  Lightbulb, Activity, Command
 } from 'lucide-react'
 import { useAuthStore } from '../store/authStore'
 import { useThemeStore } from '../store/themeStore'
@@ -87,7 +87,7 @@ export function AppShell() {
     : Array.isArray((storeData as any)?.data)
     ? (storeData as any).data
     : []
-  const storeName = stores[0]?.name || 'Forty V Flagship (Coimbatore)'
+  const storeName = stores[0]?.name || 'Central Store (Flagship)'
 
   const unreadCount = notificationsList.filter(n => n.unread).length
 
@@ -136,12 +136,12 @@ export function AppShell() {
         {/* Logo */}
         <div className="flex items-center px-3 py-4 border-b" style={{ borderColor: 'var(--color-border)', minHeight: 56 }}>
           {collapsed
-            ? <div className="w-9 h-9 rounded-lg overflow-hidden bg-white flex items-center justify-center shadow-xs"><img src="/fortyv-logo.png" alt="FV" className="w-8 h-8 object-contain" /></div>
+            ? <div className="w-9 h-9 rounded-xl bg-indigo-600 flex items-center justify-center text-white shadow-md mx-auto"><Command size={18} strokeWidth={2.2} /></div>
             : <div className="flex items-center gap-2.5 overflow-hidden">
-                <div className="bg-white p-1 rounded-lg shadow-xs"><img src="/fortyv-logo.png" alt="Forty V" className="h-6 object-contain" /></div>
+                <div className="w-8 h-8 rounded-xl bg-indigo-600 flex items-center justify-center text-white shadow-md flex-shrink-0"><Command size={16} strokeWidth={2.2} /></div>
                 <div className="flex flex-col">
                   <span className="text-xs font-bold tracking-wider uppercase text-slate-800 dark:text-slate-100">SoleControl</span>
-                  <span className="text-[10px] font-mono text-indigo-500 font-semibold">Retail v2.0</span>
+                  <span className="text-[10px] font-mono text-indigo-500 font-semibold">Enterprise Retail OS</span>
                 </div>
               </div>
           }

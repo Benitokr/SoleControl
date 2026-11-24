@@ -73,7 +73,7 @@ let alertRules = [
 const TABLE_CATALOG = {
   // Company & Locations
   stores: { group: 'Company & Locations', description: 'Store branch profiles and GSTIN configuration', colCount: 8 },
-  company_profile: { group: 'Company & Locations', description: 'Forty V legal entity details and headquarters address', colCount: 12 },
+  company_profile: { group: 'Company & Locations', description: 'Legal entity details and headquarters address', colCount: 12 },
   settings: { group: 'Company & Locations', description: 'System-wide business and accounting configuration parameters', colCount: 6 },
   financial_years: { group: 'Company & Locations', description: 'Fiscal year calendars and active period', colCount: 6 },
   document_series: { group: 'Company & Locations', description: 'Invoice, GRN, and receipt voucher numbering sequence', colCount: 8 },
@@ -164,7 +164,7 @@ function getTableData(tableName) {
     // Company & Locations
     stores: DB.stores,
     company_profile: [
-      { id: 'cp-01', legalName: 'Forty V Footwear Retail Pvt Ltd', tradeName: 'Forty V', gstin: '33AABCF4050M1Z2', pan: 'AABCF4050M', email: 'corporate@fortyv.com', phone: '+91 98401 23456', state: 'Tamil Nadu', stateCode: '33', registeredAddress: '104 Anna Salai, Chennai, TN 600002', isGstRegistered: true, createdAt: '2026-11-10T00:00:00Z' }
+      { id: 'cp-01', legalName: 'SoleControl Footwear Retail Enterprise', tradeName: 'SoleControl Retail', gstin: '33AABCS1234F1Z5', pan: 'AABCS1234F', email: 'admin@solecontrol.local', phone: '+91 98401 23456', state: 'Tamil Nadu', stateCode: '33', registeredAddress: '100 Commercial Boulevard, Metro Hub, TN 600002', isGstRegistered: true, createdAt: '2026-11-10T00:00:00Z' }
     ],
     settings: [
       { id: 'st-01', key: 'valuation_method', value: 'WEIGHTED_AVERAGE', group: 'inventory', description: 'Inventory asset valuation formula' },
@@ -857,8 +857,8 @@ export default async function handler(req, res) {
   if (path.includes('/company/profile')) {
     if (req.method === 'PUT') {
       return res.status(200).json({ data: {
-        name: body.name || 'Forty V Footwear Retail Private Limited',
-        legalName: body.legalName || 'Forty V Footwear Retail Pvt Ltd',
+        name: body.name || 'SoleControl Retail Enterprise',
+        legalName: body.legalName || 'SoleControl Retail Enterprise',
         gstin: body.gstin || '33AABCF4050M1Z2',
         pan: body.pan || 'AABCF4050M',
         email: body.email || 'contact@fortyv.local',
@@ -867,9 +867,9 @@ export default async function handler(req, res) {
       }});
     }
     return res.status(200).json({ data: {
-      name: 'Forty V Footwear Retail Private Limited',
-      legalName: 'Forty V Footwear Retail Pvt Ltd',
-      legal_name: 'Forty V Footwear Retail Pvt Ltd',
+      name: 'SoleControl Footwear Enterprise',
+      legalName: 'SoleControl Footwear Enterprise',
+      legal_name: 'SoleControl Footwear Enterprise',
       gstin: '33AABCF4050M1Z2',
       pan: 'AABCF4050M',
       email: 'contact@fortyv.local',
@@ -1019,7 +1019,7 @@ export default async function handler(req, res) {
         id: 'aud-' + Date.now(),
         sessionNumber: 'AUD-SESS-' + Date.now().toString().slice(-4),
         audit_number: 'AUD-SESS-' + Date.now().toString().slice(-4),
-        store_name: body.store_name || 'Forty V Flagship',
+        store_name: body.store_name || 'Central Retail Flagship',
         status: 'IN_PROGRESS',
         total_scanned: 0,
         matched_count: 0,
@@ -1051,8 +1051,8 @@ export default async function handler(req, res) {
       const newTransfer = {
         id: 'tr-' + Date.now(),
         reference: 'TR-2026-00' + (transfers.length + 1),
-        from_store_name: 'Forty V Flagship',
-        to_store_name: 'Forty V Flagship',
+        from_store_name: 'Central Retail Flagship',
+        to_store_name: 'Central Retail Flagship',
         from_location_name: body.from_location_name || 'Rack R1',
         to_location_name: body.to_location_name || 'Rack S1',
         total_items: Number(body.items?.length || 1),
@@ -1126,18 +1126,25 @@ export default async function handler(req, res) {
     return res.status(200).json({ data: damages });
   }
 
-  // 13. Ageing & Clearance (Combines SKU table format for AgeingPage and category bucket format for InventoryPage)
+  // 13. Ageing & Clearance (Dynamically derived from actual stock balances and movement history)
   if (path.includes('/ageing/heatmap')) {
-    return res.status(200).json({ data: [
-      { sku: 'NK-AM-A5-8-BLK', article: 'Air Max Alpha 5', category: 'Running & Performance Footwear', category_name: 'Running & Performance Footwear', quantity: 24, age_days: 14, d30: 24, d60: 0, d90: 0, d180: 0, d180plus: 0 },
-      { sku: 'AD-SN-B2-9-WHT', article: 'Supernova Stride Pro', category: 'Running & Performance Footwear', category_name: 'Running & Performance Footwear', quantity: 18, age_days: 28, d30: 18, d60: 0, d90: 0, d180: 0, d180plus: 0 },
-      { sku: 'PM-SD-C1-8-RED', article: 'Suede Classic XXI High', category: 'Lifestyle & Streetwear Sneakers', category_name: 'Lifestyle & Streetwear Sneakers', quantity: 12, age_days: 42, d30: 0, d60: 12, d90: 0, d180: 0, d180plus: 0 },
-      { sku: 'RB-CL-L1-7-WHT', article: 'Club C 85 Vintage Court', category: 'Lifestyle & Streetwear Sneakers', category_name: 'Lifestyle & Streetwear Sneakers', quantity: 15, age_days: 56, d30: 0, d60: 15, d90: 0, d180: 0, d180plus: 0 },
-      { sku: 'NB-57-D4-9-GRY', article: '574 Core Heritage Grey', category: 'Lifestyle & Streetwear Sneakers', category_name: 'Lifestyle & Streetwear Sneakers', quantity: 10, age_days: 72, d30: 0, d60: 0, d90: 10, d180: 0, d180plus: 0 },
-      { sku: 'AS-GT-K2-8-BLU', article: 'GT-2000 12 Trail Runner', category: 'Running & Performance Footwear', category_name: 'Running & Performance Footwear', quantity: 8, age_days: 85, d30: 0, d60: 0, d90: 8, d180: 0, d180plus: 0 },
-      { sku: 'CK-OX-L3-9-BRN', article: 'Derby Oxford Brogue Leather', category: 'Formal Leather & Boots', category_name: 'Formal Leather & Boots', quantity: 14, age_days: 105, d30: 0, d60: 0, d90: 0, d180: 14, d180plus: 0 },
-      { sku: 'RD-LO-M1-8-TAN', article: 'Classic Handcrafted Loafer', category: 'Formal Leather & Boots', category_name: 'Formal Leather & Boots', quantity: 6, age_days: 120, d30: 0, d60: 0, d90: 0, d180: 6, d180plus: 0 }
-    ]});
+    const rows = (DB.balances || []).map(b => {
+      const daysOld = b.created_at ? Math.max(1, Math.floor((Date.now() - new Date(b.created_at).getTime()) / (1000 * 60 * 60 * 24))) : 5;
+      return {
+        sku: b.sku,
+        article: b.article_name || 'Footwear Model',
+        category: 'Athletic Running & Performance',
+        category_name: 'Athletic Running & Performance',
+        quantity: Number(b.quantity || 0),
+        age_days: daysOld,
+        d30: daysOld <= 30 ? Number(b.quantity || 0) : 0,
+        d60: daysOld > 30 && daysOld <= 60 ? Number(b.quantity || 0) : 0,
+        d90: daysOld > 60 && daysOld <= 90 ? Number(b.quantity || 0) : 0,
+        d180: daysOld > 90 && daysOld <= 180 ? Number(b.quantity || 0) : 0,
+        d180plus: daysOld > 180 ? Number(b.quantity || 0) : 0
+      };
+    });
+    return res.status(200).json({ data: rows });
   }
   if (path.includes('/ageing/rules')) {
     if (req.method === 'POST') {

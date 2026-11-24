@@ -66,14 +66,8 @@ export function BarcodesPage() {
     ? (stockItems as any).data
     : []
 
-  // Resolve preview item
-  const previewItem = stockList.find((v: any) => v.sku === selectedSku) || {
-    sku: 'NK-AM-A5-8-BLK',
-    article_name: 'Air Max Pulse Retro',
-    size_label: 'UK 8',
-    colour_name: 'Midnight Black',
-    selling_price: 8999
-  }
+  // Resolve preview item (null when no stock items available)
+  const previewItem = stockList.find((v: any) => v.sku === selectedSku) || (stockList.length > 0 ? stockList[0] : null)
 
   const handleQueueSubmit = (e: React.FormEvent) => {
     e.preventDefault()
@@ -135,47 +129,54 @@ export function BarcodesPage() {
             </div>
 
             {/* Label Card */}
-            <div className="mx-auto max-w-sm rounded-xl border-2 border-dashed p-5 bg-white text-slate-900 shadow-md space-y-3 font-sans">
-              {showBrand && (
-                <div className="flex items-center justify-between border-b pb-2">
-                  <span className="text-xs font-black tracking-widest uppercase">FORTY V FOOTWEAR</span>
-                  <span className="text-[10px] font-mono font-bold">GENUINE RETAIL</span>
-                </div>
-              )}
+            {previewItem ? (
+              <div className="mx-auto max-w-sm rounded-xl border-2 border-dashed p-5 bg-white text-slate-900 shadow-md space-y-3 font-sans">
+                {showBrand && (
+                  <div className="flex items-center justify-between border-b pb-2">
+                    <span className="text-xs font-black tracking-widest uppercase">FOOTWEAR RETAIL</span>
+                    <span className="text-[10px] font-mono font-bold">GENUINE ARTICLE</span>
+                  </div>
+                )}
 
-              <div>
-                <div className="font-extrabold text-sm tracking-tight">{previewItem.article_name || 'Air Max Pulse Retro'}</div>
-                {showSize && (
-                  <div className="text-xs font-semibold text-slate-700 flex gap-2 mt-0.5">
-                    <span>Size: <strong>{previewItem.size_label || previewItem.size || 'UK 8'}</strong></span>
-                    <span>·</span>
-                    <span>Colour: <strong>{previewItem.colour_name || previewItem.colour || 'Midnight Black'}</strong></span>
+                <div>
+                  <div className="font-extrabold text-sm tracking-tight">{previewItem.article_name || previewItem.article || 'Footwear Model'}</div>
+                  {showSize && (
+                    <div className="text-xs font-semibold text-slate-700 flex gap-2 mt-0.5">
+                      <span>Size: <strong>{previewItem.size_label || previewItem.size || 'UK 8'}</strong></span>
+                      <span>·</span>
+                      <span>Colour: <strong>{previewItem.colour_name || previewItem.colour || 'Standard'}</strong></span>
+                    </div>
+                  )}
+                </div>
+
+                {/* Barcode Graphic Simulation */}
+                <div className="space-y-1 text-center py-1">
+                  <div className="h-10 w-full flex items-center justify-between px-2 bg-slate-100 rounded">
+                    {[3,1,2,1,4,1,2,3,1,2,1,3,2,1,4,1,2,1,3,1,2,3,1,4,2,1,3,1,2,4,1,2].map((w, idx) => (
+                      <span key={idx} className="bg-slate-900 h-8 inline-block" style={{ width: `${w}px` }} />
+                    ))}
+                  </div>
+                  <div className="font-mono text-[11px] font-bold tracking-widest text-slate-800">
+                    {previewItem.sku}
+                  </div>
+                </div>
+
+                {showMrp && (
+                  <div className="border-t pt-2 flex items-center justify-between font-mono">
+                    <span className="text-[10px] uppercase font-bold text-slate-500">M.R.P. (Incl. of Taxes):</span>
+                    <span className="text-sm font-black text-slate-950">
+                      {fmt(Number(previewItem.selling_price || 0))}
+                    </span>
                   </div>
                 )}
               </div>
-
-              {/* Barcode Graphic Simulation */}
-              <div className="space-y-1 text-center py-1">
-                <div className="h-10 w-full flex items-center justify-between px-2 bg-slate-100 rounded">
-                  {/* Repeated vertical barcode stripes */}
-                  {[3,1,2,1,4,1,2,3,1,2,1,3,2,1,4,1,2,1,3,1,2,3,1,4,2,1,3,1,2,4,1,2].map((w, idx) => (
-                    <span key={idx} className="bg-slate-900 h-8 inline-block" style={{ width: `${w}px` }} />
-                  ))}
-                </div>
-                <div className="font-mono text-[11px] font-bold tracking-widest text-slate-800">
-                  {previewItem.sku}
-                </div>
+            ) : (
+              <div className="mx-auto max-w-sm rounded-xl border-2 border-dashed p-8 bg-slate-50 dark:bg-slate-900/50 text-center space-y-2">
+                <ScanBarcode size={32} className="mx-auto text-slate-400 opacity-60" />
+                <p className="text-xs font-semibold text-slate-600 dark:text-slate-300">No Footwear Variant Selected</p>
+                <p className="text-[11px] text-slate-400">Inward stock or select an article from the inventory vault to render a live barcode preview.</p>
               </div>
-
-              {showMrp && (
-                <div className="border-t pt-2 flex items-center justify-between font-mono">
-                  <span className="text-[10px] uppercase font-bold text-slate-500">M.R.P. (Incl. of Taxes):</span>
-                  <span className="text-sm font-black text-slate-950">
-                    {fmt(Number(previewItem.selling_price || 8999))}
-                  </span>
-                </div>
-              )}
-            </div>
+            )}
           </div>
 
           {/* Toggles */}
@@ -191,7 +192,7 @@ export function BarcodesPage() {
             </label>
             <label className="flex items-center gap-1.5 cursor-pointer">
               <input type="checkbox" checked={showBrand} onChange={e => setShowBrand(e.target.checked)} className="rounded" />
-              <span>Show Forty V Header</span>
+              <span>Show Retail Brand Header</span>
             </label>
           </div>
         </div>

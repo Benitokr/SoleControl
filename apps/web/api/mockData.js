@@ -220,7 +220,7 @@ export const DB = {
     {
       "id": "addac467-9344-4786-9a92-1b5855402c25",
       "code": "STORE-01",
-      "name": "Forty V Flagship - Coimbatore",
+      "name": "Central Retail Flagship",
       "address": "155 Balaji Nagar, CBE - 46",
       "gstin": "33AABCF4050M1Z2",
       "isActive": true,

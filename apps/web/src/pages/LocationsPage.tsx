@@ -110,7 +110,7 @@ export function LocationsPage() {
           <div>
             <div className="flex items-center justify-between mb-4">
               <span className="text-xs font-bold uppercase tracking-wider text-slate-400">Store Layout Topology</span>
-              <span className="text-[11px] font-mono text-indigo-500 font-semibold">Forty V Flagship</span>
+              <span className="text-[11px] font-mono text-indigo-500 font-semibold">Central Flagship</span>
             </div>
 
             {isLoading && <div className="py-12 text-center text-sm" style={{ color: 'var(--color-muted)' }}>Loading store map…</div>}

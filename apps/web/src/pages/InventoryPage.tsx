@@ -19,7 +19,7 @@ export function InventoryPage() {
   const [adjReason, setAdjReason] = useState('Physical audit cycle discrepancy')
 
   // Audit form state
-  const [auditStoreName, setAuditStoreName] = useState('Forty V Flagship (Coimbatore)')
+  const [auditStoreName, setAuditStoreName] = useState('Central Warehouse')
 
   const stock = useQuery({
     queryKey: ['inventory-stock'],
@@ -82,8 +82,8 @@ export function InventoryPage() {
   )
 
   const totalStockUnits = stockList.reduce((acc, s) => acc + (s.quantity ?? s.qty ?? 0), 0)
-  const totalCostVal = stockList.reduce((acc, s) => acc + (Number(s.costValue ?? (s.quantity * (s.cost_price || 2400))) || 0), 0)
-  const totalMrpVal = stockList.reduce((acc, s) => acc + (Number(s.mrpValue ?? (s.quantity * (s.selling_price || 4999))) || 0), 0)
+  const totalCostVal = stockList.reduce((acc, s) => acc + (Number(s.costValue ?? ((s.quantity ?? 0) * Number(s.cost_price || s.costPrice || 0))) || 0), 0)
+  const totalMrpVal = stockList.reduce((acc, s) => acc + (Number(s.mrpValue ?? ((s.quantity ?? 0) * Number(s.selling_price || s.mrp || 0))) || 0), 0)
 
   const handleAdjSubmit = (e: React.FormEvent) => {
     e.preventDefault()
@@ -164,14 +164,14 @@ export function InventoryPage() {
         <div className="p-5 rounded-xl border flex flex-col justify-between" style={{ background: 'var(--color-surface)', borderColor: 'var(--color-border)' }}>
           <span className="text-xs font-semibold uppercase tracking-wider text-indigo-600 dark:text-indigo-400">Total Cost Valuation</span>
           <span className="text-2xl font-bold font-mono mt-2 text-indigo-600 dark:text-indigo-400">
-            {fmt(totalCostVal || 373000)}
+            {fmt(totalCostVal)}
           </span>
           <span className="text-xs mt-1" style={{ color: 'var(--color-muted)' }}>Weighted average cost valuation</span>
         </div>
         <div className="p-5 rounded-xl border flex flex-col justify-between" style={{ background: 'var(--color-surface)', borderColor: 'var(--color-border)' }}>
           <span className="text-xs font-semibold uppercase tracking-wider text-emerald-600 dark:text-emerald-400">Total Retail MRP Value</span>
           <span className="text-2xl font-bold font-mono mt-2 text-emerald-600 dark:text-emerald-400">
-            {fmt(totalMrpVal || 785000)}
+            {fmt(totalMrpVal)}
           </span>
           <span className="text-xs mt-1" style={{ color: 'var(--color-muted)' }}>Gross retail shelf valuation</span>
         </div>
@@ -326,7 +326,7 @@ export function InventoryPage() {
                         {a.sessionNumber ?? a.audit_number ?? a.id.substring(0, 8)}
                       </td>
                       <td className="px-5 py-3.5 text-xs font-medium" style={{ color: 'var(--color-text)' }}>
-                        {a.store_name ?? 'Forty V Flagship'}
+                        {a.store_name ?? 'Central Warehouse'}
                       </td>
                       <td className="px-5 py-3.5 text-right font-mono font-bold text-xs" style={{ color: 'var(--color-text)' }}>
                         {a.total_scanned ?? 640} pairs

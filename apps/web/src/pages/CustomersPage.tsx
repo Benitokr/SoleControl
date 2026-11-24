@@ -246,7 +246,7 @@ export function CustomersPage() {
                   <CheckCircle2 size={14} className="text-emerald-500" /> WhatsApp Campaign Subscribed
                 </div>
                 <p className="text-slate-500">
-                  Automated sales receipts and promotional season alerts dispatched via Forty V WhatsApp Business API integration.
+                  Automated sales receipts and promotional season alerts dispatched via integrated WhatsApp Business API.
                 </p>
               </div>
             </div>

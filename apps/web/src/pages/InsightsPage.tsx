@@ -125,7 +125,7 @@ export function InsightsPage() {
       metricLabel: 'Ledger vs Physical Stock',
       explanation: 'Automated database integrity check confirmed that the net sum of all stock_movements equals stock_balances with 0 variance across all 642 units.',
       impact: 'Audit-ready state for statutory tax and external auditor inspection.',
-      entityName: 'Forty V Flagship Inventory Vault',
+      entityName: 'Central Warehouse Inventory Vault',
       entityType: 'System Audit',
       actionLabel: 'Open Database Explorer',
       actionRoute: '/database',

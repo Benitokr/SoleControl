@@ -238,7 +238,7 @@ export function CompanyConfigPage() {
                 <input
                   type="text"
                   required
-                  placeholder="e.g. Forty V Express - RS Puram"
+                  placeholder="e.g. Retail Express - Downtown"
                   value={storeName}
                   onChange={e => setStoreName(e.target.value)}
                   className="w-full px-3 py-2 rounded-xl border text-sm outline-none"
