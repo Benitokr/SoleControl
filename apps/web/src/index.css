@@ -20,6 +20,14 @@ body { background: var(--color-bg); color: var(--color-text); }
 .font-mono { font-family: 'JetBrains Mono', monospace !important; }
 .tabular-nums { font-variant-numeric: tabular-nums; }
 
+/* 180ms Smooth Theme Transition */
+html.theme-transition,
+html.theme-transition *,
+html.theme-transition *:before,
+html.theme-transition *:after {
+  transition: background-color 180ms ease-out, border-color 180ms ease-out, color 180ms ease-out !important;
+}
+
 /* Scrollbar */
 ::-webkit-scrollbar { width: 6px; height: 6px; }
 ::-webkit-scrollbar-track { background: transparent; }
@@ -27,4 +35,3 @@ body { background: var(--color-bg); color: var(--color-text); }
 
 /* Focus ring */
 :focus-visible { outline: 2px solid var(--color-primary); outline-offset: 2px; }
-

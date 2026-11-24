@@ -49,53 +49,18 @@ let damages = [...DB.damages];
 let purchases = [...DB.purchases];
 let sales = [...DB.sales];
 let accounts = [...DB.accounts];
-let journals = [
-  { id: 'jv-1', reference: 'JV-2026-001', type: 'PURCHASE', status: 'POSTED', total_debit: 143360.00, total_credit: 143360.00, notes: 'Purchase invoice entry PB-2026-001 Nike India', posted_at: new Date(Date.now() - 15 * 86400000).toISOString(), lines: [{ code: '1300', name: 'Inventory Asset', type: 'DEBIT', amount: 128000 }, { code: '2210', name: 'Input CGST 6%', type: 'DEBIT', amount: 7680 }, { code: '2220', name: 'Input SGST 6%', type: 'DEBIT', amount: 7680 }, { code: '2100', name: 'Trade Payables - Nike India', type: 'CREDIT', amount: 143360 }] },
-  { id: 'jv-2', reference: 'JV-2026-002', type: 'CAPITAL', status: 'POSTED', total_debit: 500000.00, total_credit: 500000.00, notes: 'Initial Retail Working Capital Infusion Forty V', posted_at: new Date(Date.now() - 30 * 86400000).toISOString(), lines: [{ code: '1110', name: 'HDFC Corporate Current A/c', type: 'DEBIT', amount: 500000 }, { code: '3000', name: 'Partner Equity Capital', type: 'CREDIT', amount: 500000 }] }
-];
+let journals = [];
 let bankAccounts = [...DB.bankAccounts];
 let bankLines = [...DB.bankLines];
-let capitalEntries = [
-  {
-    id: 'cap-01',
-    storeId: 'addac467-9344-4786-9a92-1b5855402c25',
-    type: 'CAPITAL_IN',
-    amount: 500000.00,
-    description: 'Initial Working Capital & Equity Infusion - Forty V Flagship',
-    reference: 'UTR-HDFC-991244',
-    status: 'APPROVED',
-    createdAt: new Date(Date.now() - 30 * 86400000).toISOString(),
-    created_at: new Date(Date.now() - 30 * 86400000).toISOString()
-  }
-];
-let withdrawals = [
-  {
-    id: 'w-01',
-    storeId: 'addac467-9344-4786-9a92-1b5855402c25',
-    amount: 25000.00,
-    description: 'Partner Drawings - Monthly Remuneration Advance',
-    drawn_by: 'Managing Partner',
-    status: 'APPROVED',
-    createdAt: new Date(Date.now() - 7 * 86400000).toISOString(),
-    created_at: new Date(Date.now() - 7 * 86400000).toISOString()
-  }
-];
-let adjustments = [
-  { id: 'adj-01', docNumber: 'ADJ-2026-001', reference: 'ADJ-2026-001', variant_sku: 'NK-AM-A5-8-BLK', article_name: 'Air Max Pulse Retro', quantity_change: 2, reason: 'Physical cycle discrepancy audit correction', status: 'POSTED', createdAt: new Date(Date.now() - 4 * 86400000).toISOString(), created_at: new Date(Date.now() - 4 * 86400000).toISOString() },
-  { id: 'adj-02', docNumber: 'ADJ-2026-002', reference: 'ADJ-2026-002', variant_sku: 'AD-SN-B2-9-WHT', article_name: 'Supernova Stride Pro', quantity_change: -1, reason: 'Damaged in display shelf transfer', status: 'POSTED', createdAt: new Date(Date.now() - 2 * 86400000).toISOString(), created_at: new Date(Date.now() - 2 * 86400000).toISOString() }
-];
-let audits = [
-  { id: 'aud-01', sessionNumber: 'AUD-NOV-2026', audit_number: 'AUD-NOV-2026', store_name: 'Forty V Flagship', status: 'COMPLETED', total_scanned: 640, matched_count: 638, discrepancy_count: 2, createdAt: new Date(Date.now() - 10 * 86400000).toISOString(), started_at: new Date(Date.now() - 10 * 86400000).toISOString() },
-  { id: 'aud-02', sessionNumber: 'AUD-OCT-2026', audit_number: 'AUD-OCT-2026', store_name: 'Forty V Flagship', status: 'COMPLETED', total_scanned: 590, matched_count: 590, discrepancy_count: 0, createdAt: new Date(Date.now() - 40 * 86400000).toISOString(), started_at: new Date(Date.now() - 40 * 86400000).toISOString() }
-];
+let capitalEntries = [];
+let withdrawals = [];
+let adjustments = [];
+let audits = [];
 let ageingRules = [
   { id: 'ar-1', category_name: 'Running & Performance', threshold_days: 90, discount_pct: 25, label: 'Running Clearance 90d+', is_active: true },
   { id: 'ar-2', category_name: 'Formal Leather', threshold_days: 100, discount_pct: 30, label: 'Formal Off-Season Clearance', is_active: true }
 ];
-let barcodeQueue = [
-  { id: 'bq-1', sku: 'NK-AM-A5-8-BLK', article_name: 'Air Max Pulse Retro', size: 'UK 8', colour: 'Midnight Black', mrp: 8999, copies: 12, quantity: 12, status: 'PENDING', createdAt: new Date().toISOString(), created_at: new Date().toISOString() },
-  { id: 'bq-2', sku: 'AD-SN-B2-9-WHT', article_name: 'Supernova Stride Pro', size: 'UK 9', colour: 'Cloud White', mrp: 7499, copies: 18, quantity: 18, status: 'PRINTED', createdAt: new Date(Date.now() - 86400000).toISOString(), created_at: new Date(Date.now() - 86400000).toISOString() }
-];
+let barcodeQueue = [];
 
 let alertRules = [
   { id: 'ar-1', name: 'Low Stock Velocity Threshold', condition: 'STOCK_QTY < 5 AND 30D_SALES > 10', threshold: '5 units', severity: 'WARNING', isActive: true, is_active: true },
@@ -463,145 +428,133 @@ export default async function handler(req, res) {
 
   // 2. Dashboard & Intelligent Analytics
   if (path.includes('/dashboard/kpis')) {
+    const todayStr = new Date().toISOString().split('T')[0];
+    const todaySalesArr = sales.filter(s => (s.sale_date || s.created_at || '').startsWith(todayStr));
+    const todaySalesTotal = todaySalesArr.reduce((sum, s) => sum + Number(s.total_amount || 0), 0);
+    const todayTransCount = todaySalesArr.length;
+    
+    const totalStockUnits = (DB.balances || []).reduce((sum, b) => sum + Number(b.quantity || 0), 0);
+    const damagedUnits = damages.reduce((sum, d) => sum + Number(d.quantity || 0), 0);
+    const displayUnits = displays.reduce((sum, d) => sum + Number(d.quantity || 0), 0);
+
+    const pendingPurchasesArr = purchases.filter(p => p.status === 'DRAFT' || p.status === 'PENDING');
+    const pendingPurchasesVal = pendingPurchasesArr.reduce((sum, p) => sum + Number(p.total_amount || 0), 0);
+    
+    const vendorPayables = (DB.vendors || []).reduce((sum, v) => sum + Number(v.balance || 0), 0);
+    const customerReceivables = (DB.customers || []).reduce((sum, c) => sum + Number(c.balance || 0), 0);
+    const totalSalesRev = sales.reduce((sum, s) => sum + Number(s.total_amount || 0), 0);
+    const totalCostVal = (DB.balances || []).reduce((sum, b) => sum + (Number(b.quantity || 0) * Number(b.cost_price || 0)), 0);
+    const totalMrpVal = (DB.balances || []).reduce((sum, b) => sum + (Number(b.quantity || 0) * Number(b.selling_price || 0)), 0);
+
     return res.status(200).json({
       data: {
-        todaySales: 24997.00,
-        salesComparisonPct: 14.2,
-        todayTransactions: 3,
-        completedTransactions: 3,
+        todaySales: todaySalesTotal,
+        salesComparisonPct: 0,
+        todayTransactions: todayTransCount,
+        completedTransactions: todayTransCount,
         returnedTransactions: 0,
         cancelledTransactions: 0,
-        totalStock: 642,
-        availableStock: 580,
-        displayStock: 38,
-        damagedStock: 24,
-        pendingPurchases: 1,
-        pendingPurchasesValue: 143360.00,
-        oldestPendingDays: 3,
-        vendorOutstanding: 274400.00,
-        customerOutstanding: 14998.00,
-        inventoryValuation: 373000.00,
-        inventoryMrpValue: 688400.00,
-        grossMarginPct: 42.8,
-        netRevenue: 168490.00,
-        netExpenses: 78200.00
+        totalStock: totalStockUnits,
+        availableStock: Math.max(0, totalStockUnits - displayUnits - damagedUnits),
+        displayStock: displayUnits,
+        damagedStock: damagedUnits,
+        pendingPurchases: pendingPurchasesArr.length,
+        pendingPurchasesValue: pendingPurchasesVal,
+        oldestPendingDays: 0,
+        vendorOutstanding: vendorPayables,
+        customerOutstanding: customerReceivables,
+        inventoryValuation: totalCostVal,
+        inventoryMrpValue: totalMrpVal,
+        grossMarginPct: totalSalesRev > 0 ? 42.5 : 0,
+        netRevenue: totalSalesRev,
+        netExpenses: 0
       }
     });
   }
 
   if (path.includes('/dashboard/analytics')) {
+    // Generate dynamic 7-day trend from sales
+    const days = [];
+    for (let i = 6; i >= 0; i--) {
+      const d = new Date(Date.now() - i * 86400000);
+      const dStr = d.toISOString().split('T')[0];
+      const dayLabel = d.toLocaleDateString('en-IN', { day: 'numeric', month: 'short' });
+      const daySales = sales.filter(s => (s.sale_date || s.created_at || '').startsWith(dStr));
+      const dayAmt = daySales.reduce((sum, s) => sum + Number(s.total_amount || 0), 0);
+      days.push({ date: dayLabel, amount: dayAmt, transactions: daySales.length });
+    }
+
+    const totalPurchasesVal = purchases.reduce((sum, p) => sum + Number(p.total_amount || 0), 0);
+    const totalSalesVal = sales.reduce((sum, s) => sum + Number(s.total_amount || 0), 0);
+
+    // Dynamic payment modes
+    const modeCounts = {};
+    sales.forEach(s => {
+      const m = s.payment_mode || 'UPI';
+      modeCounts[m] = (modeCounts[m] || 0) + Number(s.total_amount || 0);
+    });
+    const paymentModes = Object.entries(modeCounts).map(([mode, amount]) => ({
+      mode,
+      amount,
+      pct: totalSalesVal > 0 ? Math.round((amount / totalSalesVal) * 100) : 100,
+      color: mode === 'UPI' ? '#4F46E5' : mode === 'CARD' ? '#059669' : '#D97706'
+    }));
+
+    // Dynamic low stock
+    const lowStock = (DB.balances || [])
+      .filter(b => (b.quantity || 0) < 5)
+      .map(b => ({
+        sku: b.sku,
+        article: b.article_name || 'Footwear Model',
+        size: b.size_label || 'UK 8',
+        colour: b.colour_name || 'Black',
+        qty: b.quantity || 0,
+        urgency: (b.quantity || 0) <= 2 ? 'HIGH' : 'MEDIUM'
+      }));
+
     return res.status(200).json({
       data: {
-        salesTrend7d: [
-          { date: '9 Nov', amount: 18450, transactions: 2 },
-          { date: '10 Nov', amount: 22100, transactions: 3 },
-          { date: '11 Nov', amount: 27800, transactions: 4 },
-          { date: '12 Nov', amount: 19500, transactions: 2 },
-          { date: '13 Nov', amount: 31200, transactions: 5 },
-          { date: '14 Nov', amount: 24300, transactions: 3 },
-          { date: '15 Nov', amount: 24997, transactions: 3 }
-        ],
+        salesTrend7d: days,
         purchaseVsSales: {
-          totalPurchases: 373000.00,
-          totalSales: 168490.00,
-          grossProfit: 72110.00,
-          grossMargin: 42.8
+          totalPurchases: totalPurchasesVal,
+          totalSales: totalSalesVal,
+          grossProfit: Math.max(0, totalSalesVal - totalPurchasesVal * 0.6),
+          grossMargin: totalSalesVal > 0 ? 40 : 0
         },
-        salesByPaymentMode: [
-          { mode: 'UPI / QR', amount: 107833.00, pct: 64, color: '#4F46E5' },
-          { mode: 'Credit/Debit Card', amount: 37068.00, pct: 22, color: '#059669' },
-          { mode: 'Cash', amount: 23589.00, pct: 14, color: '#D97706' }
-        ],
-        topBrands: [
-          { brand: 'Nike', revenue: 64800, units: 14, share: 38.5 },
-          { brand: 'Adidas', revenue: 47250, units: 11, share: 28.0 },
-          { brand: 'Puma', revenue: 31800, units: 8, share: 18.9 },
-          { brand: 'Skechers', revenue: 24640, units: 7, share: 14.6 }
-        ],
-        topCategories: [
-          { category: 'Running & Performance', units: 28, revenue: 98400 },
-          { category: 'Lifestyle & Streetwear', units: 18, revenue: 54900 },
-          { category: 'Formal Leather & Boots', units: 8, revenue: 15190 }
-        ],
-        topArticles: [
-          { name: 'Air Max Pulse Retro', brand: 'Nike', unitsSold: 9, revenue: 44991 },
-          { name: 'Supernova Stride Pro', brand: 'Adidas', unitsSold: 7, revenue: 34293 },
-          { name: 'Suede Classic XXI', brand: 'Puma', unitsSold: 6, revenue: 23994 }
-        ],
-        lowStockVariants: [
-          { sku: 'NK-AM-A5-8-BLK', article: 'Air Max Alpha 5', size: 'UK 8', colour: 'Midnight Black', qty: 2, reorderLevel: 5, urgency: 'HIGH' },
-          { sku: 'AD-SN-B2-9-WHT', article: 'Supernova Stride Pro', size: 'UK 9', colour: 'Cloud White', qty: 3, reorderLevel: 5, urgency: 'MEDIUM' }
-        ],
-        slowMovingInventory: [
-          { sku: 'CK-OX-L3-9-BRN', article: 'Derby Oxford Brogue Leather', ageDays: 105, qty: 14, capitalLocked: 34986 },
-          { sku: 'RD-LO-M1-8-TAN', article: 'Classic Handcrafted Loafer', ageDays: 120, qty: 6, capitalLocked: 16800 }
-        ]
+        salesByPaymentMode: paymentModes,
+        topBrands: [],
+        topCategories: [],
+        topArticles: [],
+        lowStockVariants: lowStock,
+        slowMovingInventory: []
       }
     });
   }
 
   if (path.includes('/dashboard/insights')) {
-    return res.status(200).json({
-      data: [
-        {
-          id: 'ins-1',
-          type: 'size_shortage',
-          title: 'Fast-Moving Size Shortage Detected',
-          message: 'UK 8 & 9 Running footwear has only 5 units remaining on Rack R1 with high velocity (12 pairs/week run rate).',
-          severity: 'danger',
-          actionText: 'Order Inventory',
-          actionRoute: '/purchases'
-        },
-        {
-          id: 'ins-2',
-          type: 'purchase_review',
-          title: 'Inward Bill Pending Finalization',
-          message: 'Purchase bill PB-2026-002 from Adidas India (₹1,31,040) is awaiting Super Admin GRN verification and stock entry.',
-          severity: 'warning',
-          actionText: 'Review Bill',
-          actionRoute: '/purchases'
-        },
-        {
-          id: 'ins-3',
-          type: 'deadstock_alert',
-          title: '14 Units Exceeded 90-Day Ageing Threshold',
-          message: 'Formal Leather Derby Oxfords locked ₹34,986 in working capital over 105 days. Automated clearance discount suggested.',
-          severity: 'warning',
-          actionText: 'Simulate Clearance',
-          actionRoute: '/offers'
-        },
-        {
-          id: 'ins-4',
-          type: 'reconciliation_status',
-          title: 'Ledger & Inventory Integrity Verified',
-          message: 'Mathematical reconciliation check passed: sum of all stock movements matches stock balances with 0 variance.',
-          severity: 'info',
-          actionText: 'Inspect Database',
-          actionRoute: '/database'
-        },
-        {
-          id: 'ins-5',
-          type: 'vendor_payable',
-          title: 'Vendor Trade Payable Due in 3 Days',
-          message: 'Nike India Operations Pvt Ltd payment of ₹1,43,360 is due on 18 Nov 2026 under 30-day net supplier credit terms.',
-          severity: 'info',
-          actionText: 'View Statement',
-          actionRoute: '/vendors'
-        }
-      ]
-    });
+    const list = [];
+    if (purchases.some(p => p.status === 'DRAFT')) {
+      list.push({
+        id: 'ins-draft',
+        type: 'purchase_review',
+        title: 'Draft Purchase Orders Pending GRN Verification',
+        message: 'You have draft purchase consignments awaiting final review and stock entry.',
+        severity: 'warning',
+        actionText: 'Review Purchases',
+        actionRoute: '/purchases'
+      });
+    }
+    return res.status(200).json({ data: list });
   }
+
   if (path.includes('/dashboard/recent-sales')) {
-    return res.status(200).json({ data: [
-      { id: 'sl-1', doc_number: 'INV-2026-001', docNumber: 'INV-2026-001', customer_name: 'Rahul Sharma', customerName: 'Rahul Sharma', total_amount: 8999.00, totalAmount: 8999.00, payment_mode: 'UPI', paymentMode: 'UPI', sale_date: new Date().toISOString(), createdAt: new Date().toISOString() },
-      { id: 'sl-2', doc_number: 'INV-2026-002', docNumber: 'INV-2026-002', customer_name: 'Priya Sundaram', customerName: 'Priya Sundaram', total_amount: 14998.00, totalAmount: 14998.00, payment_mode: 'CARD', paymentMode: 'CARD', sale_date: new Date(Date.now() - 3600000).toISOString(), createdAt: new Date(Date.now() - 3600000).toISOString() },
-      { id: 'sl-3', doc_number: 'INV-2026-003', docNumber: 'INV-2026-003', customer_name: 'Karthik Raja', customerName: 'Karthik Raja', total_amount: 999.00, totalAmount: 999.00, payment_mode: 'CASH', paymentMode: 'CASH', sale_date: new Date(Date.now() - 7200000).toISOString(), createdAt: new Date(Date.now() - 7200000).toISOString() }
-    ]});
+    return res.status(200).json({ data: sales.slice(0, 5) });
   }
+
   if (path.includes('/dashboard/targets')) {
+    const totalRev = sales.reduce((sum, s) => sum + Number(s.total_amount || 0), 0);
     return res.status(200).json({ data: [
-      { id: 'tgt-1', name: 'November Store Revenue Goal', target_amount: 250000.00, targetAmount: 250000.00, achieved: 168490.00, currentSales: 168490.00, percentage: 67.4, period_start: '2026-11-01T00:00:00.000Z', period_end: '2026-11-30T23:59:59.000Z' },
-      { id: 'tgt-2', name: 'Athletic Running Category Target', target_amount: 80000.00, targetAmount: 80000.00, achieved: 65990.00, currentSales: 65990.00, percentage: 82.5, period_start: '2026-11-01T00:00:00.000Z', period_end: '2026-11-30T23:59:59.000Z' }
+      { id: 'tgt-1', name: 'Store Monthly Revenue Target', target_amount: 250000.00, targetAmount: 250000.00, achieved: totalRev, currentSales: totalRev, percentage: Math.min(100, Math.round((totalRev / 250000) * 100)), period_start: '2026-11-01T00:00:00.000Z', period_end: '2026-11-30T23:59:59.000Z' }
     ]});
   }
 
@@ -1208,26 +1161,108 @@ export default async function handler(req, res) {
       if (path.includes('/finalise')) {
         const id = path.split('/purchases/')[1]?.split('/')[0];
         const p = purchases.find(item => item.id === id);
-        if (p) p.status = 'FINALISED';
+        if (p) {
+          p.status = 'FINALISED';
+          // Inward items to inventory balances
+          if (Array.isArray(p.items)) {
+            p.items.forEach(item => {
+              const sku = item.sku || `${(item.article_name || 'SHOE').slice(0, 3).toUpperCase()}-${item.size || 'UK8'}-${item.colour || 'BLK'}`;
+              let v = (DB.variants || []).find(x => x.sku === sku);
+              if (!v) {
+                v = {
+                  id: 'var-' + Date.now() + Math.random().toString().slice(2, 6),
+                  sku,
+                  article_name: item.article_name || 'Footwear Model',
+                  size_label: item.size || 'UK 8',
+                  colour_name: item.colour || 'Triple Black',
+                  cost_price: Number(item.cost_price || 2000),
+                  mrp: Number(item.mrp || 4999),
+                  selling_price: Number(item.selling_price || item.mrp || 4499),
+                  is_active: true,
+                  created_at: new Date().toISOString()
+                };
+                DB.variants.push(v);
+              }
+              let b = (DB.balances || []).find(x => x.sku === sku);
+              if (!b) {
+                b = {
+                  id: 'bal-' + Date.now() + Math.random().toString().slice(2, 6),
+                  sku,
+                  article_name: v.article_name,
+                  size_label: v.size_label,
+                  colour_name: v.colour_name,
+                  quantity: 0,
+                  cost_price: v.cost_price,
+                  selling_price: v.selling_price
+                };
+                DB.balances.push(b);
+              }
+              b.quantity += Number(item.quantity || 1);
+            });
+          }
+        }
         return res.status(200).json({ data: p || { id, status: 'FINALISED' } });
       }
+
+      const vendorObj = (DB.vendors || []).find(v => v.id === body.vendorId) || { name: body.vendorName || 'Direct Supplier Consignment' };
+      const items = Array.isArray(body.items) ? body.items : [];
       const newP = {
         id: 'pb-' + Date.now(),
-        doc_number: 'PB-2026-00' + (purchases.length + 1),
+        doc_number: 'PB-' + new Date().getFullYear() + '-' + String(purchases.length + 1).padStart(3, '0'),
         bill_number: body.billNumber || 'BILL-' + Date.now().toString().slice(-6),
-        vendor_id: body.vendorId,
-        vendor: { name: 'Nike India Operations Pvt Ltd' },
-        vendor_name: 'Nike India Operations Pvt Ltd',
-        total_amount: Number(body.totalAmount || 74990.00),
-        tax_amount: Number(body.taxAmount || 8998.80),
-        status: 'DRAFT',
+        vendor_id: body.vendorId || 'direct-vendor',
+        vendor: { name: vendorObj.name },
+        vendor_name: vendorObj.name,
+        total_amount: Number(body.totalAmount || 0),
+        tax_amount: Number(body.taxAmount || 0),
+        status: body.status || 'DRAFT',
         class: body.purchaseClass || 'CLASS_A',
         purchase_class: body.purchaseClass || 'CLASS_A',
-        bill_date: new Date().toISOString(),
+        bill_date: body.invoiceDate || new Date().toISOString(),
+        inward_date: body.inwardDate || new Date().toISOString(),
         created_at: new Date().toISOString(),
-        items: []
+        items: items
       };
       purchases.unshift(newP);
+
+      if (newP.status === 'FINAL' || newP.status === 'FINALISED') {
+        newP.status = 'FINALISED';
+        items.forEach(item => {
+          const sku = item.sku || `${(item.article_name || 'SHOE').slice(0, 3).toUpperCase()}-${item.size || 'UK8'}-${item.colour || 'BLK'}`;
+          let v = (DB.variants || []).find(x => x.sku === sku);
+          if (!v) {
+            v = {
+              id: 'var-' + Date.now() + Math.random().toString().slice(2, 6),
+              sku,
+              article_name: item.article_name || 'Footwear Model',
+              size_label: item.size || 'UK 8',
+              colour_name: item.colour || 'Triple Black',
+              cost_price: Number(item.cost_price || 2000),
+              mrp: Number(item.mrp || 4999),
+              selling_price: Number(item.selling_price || item.mrp || 4499),
+              is_active: true,
+              created_at: new Date().toISOString()
+            };
+            DB.variants.push(v);
+          }
+          let b = (DB.balances || []).find(x => x.sku === sku);
+          if (!b) {
+            b = {
+              id: 'bal-' + Date.now() + Math.random().toString().slice(2, 6),
+              sku,
+              article_name: v.article_name,
+              size_label: v.size_label,
+              colour_name: v.colour_name,
+              quantity: 0,
+              cost_price: v.cost_price,
+              selling_price: v.selling_price
+            };
+            DB.balances.push(b);
+          }
+          b.quantity += Number(item.quantity || 1);
+        });
+      }
+
       return res.status(201).json({ data: newP });
     }
     return res.status(200).json({ data: purchases, meta: { total: purchases.length } });

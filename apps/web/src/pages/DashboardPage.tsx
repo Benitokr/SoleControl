@@ -233,7 +233,7 @@ export function DashboardPage() {
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         <KpiCard
           label="Today's Sales Revenue"
-          value={loadingKpis ? '...' : fmt(kpisData?.todaySales || 24997)}
+          value={loadingKpis ? '...' : fmt(Number(kpisData?.todaySales || 0))}
           badge="+14.2%"
           badgeType="positive"
           sub="vs previous weekday"
@@ -242,7 +242,7 @@ export function DashboardPage() {
         />
         <KpiCard
           label="Sales Transactions"
-          value={loadingKpis ? '...' : (kpisData?.todayTransactions ?? 3)}
+          value={loadingKpis ? '...' : (kpisData?.todayTransactions ?? 0)}
           badge="100% Cleared"
           badgeType="positive"
           sub="3 completed · 0 returned"
@@ -251,7 +251,7 @@ export function DashboardPage() {
         />
         <KpiCard
           label="Total Inventory Units"
-          value={loadingKpis ? '...' : (kpisData?.totalStock?.toLocaleString('en-IN') ?? '642')}
+          value={loadingKpis ? '...' : (Number(kpisData?.totalStock || 0).toLocaleString('en-IN'))}
           badge="Stock On Hand"
           badgeType="neutral"
           sub="580 active · 38 display · 24 defect"
@@ -260,7 +260,7 @@ export function DashboardPage() {
         />
         <KpiCard
           label="Pending Purchases"
-          value={loadingKpis ? '...' : (kpisData?.pendingPurchases ?? 1)}
+          value={loadingKpis ? '...' : (kpisData?.pendingPurchases ?? 0)}
           badge="₹1,43,360"
           badgeType="neutral"
           sub="Draft bills awaiting final GRN"
@@ -270,7 +270,7 @@ export function DashboardPage() {
 
         <KpiCard
           label="Inventory Valuation"
-          value={loadingKpis ? '...' : fmt(kpisData?.inventoryValuation || 373000)}
+          value={loadingKpis ? '...' : fmt(Number(kpisData?.inventoryValuation || 0))}
           badge="Weighted Avg"
           badgeType="neutral"
           sub="Retail MRP: ₹6,88,400"
@@ -279,7 +279,7 @@ export function DashboardPage() {
         />
         <KpiCard
           label="Vendor Payables"
-          value={loadingKpis ? '...' : fmt(kpisData?.vendorOutstanding || 274400)}
+          value={loadingKpis ? '...' : fmt(Number(kpisData?.vendorOutstanding || 0))}
           badge="6 Suppliers"
           badgeType="neutral"
           sub="₹1,43,360 due in 3 days"
@@ -288,7 +288,7 @@ export function DashboardPage() {
         />
         <KpiCard
           label="Customer Receivables"
-          value={loadingKpis ? '...' : fmt(kpisData?.customerOutstanding || 14998)}
+          value={loadingKpis ? '...' : fmt(Number(kpisData?.customerOutstanding || 0))}
           badge="Credit Sales"
           badgeType="neutral"
           sub="2 accounts with credit line"
@@ -297,7 +297,7 @@ export function DashboardPage() {
         />
         <KpiCard
           label="Net Operating Margin"
-          value={loadingKpis ? '...' : `${kpisData?.grossMarginPct || 42.8}%`}
+          value={loadingKpis ? '...' : `${Number(kpisData?.grossMarginPct || 0).toFixed(1)}%`}
           badge="+2.4% MoM"
           badgeType="positive"
           sub="₹72,110 gross trading profit"

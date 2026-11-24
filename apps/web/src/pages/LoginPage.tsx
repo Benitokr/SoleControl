@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Eye, EyeOff, ShieldCheck, ArrowRight, Sparkles, Lock, Mail } from 'lucide-react'
+import { Eye, EyeOff, ShieldCheck, ArrowRight, Sparkles, Lock, Mail, Command, Layers } from 'lucide-react'
 import { useAuthStore } from '../store/authStore'
 import { api } from '../lib/api'
 
@@ -44,31 +44,34 @@ export function LoginPage() {
     <div className="flex min-h-screen" style={{ background: 'var(--color-bg)' }}>
       {/* Left brand hero panel */}
       <div className="hidden lg:flex flex-col justify-between p-12 w-1/2 relative overflow-hidden" 
-           style={{ background: 'linear-gradient(135deg, #1E1B4B 0%, #312E81 35%, #4338CA 70%, #0284C7 100%)' }}>
+           style={{ background: 'linear-gradient(135deg, #0F172A 0%, #1E1B4B 40%, #312E81 75%, #4338CA 100%)' }}>
         {/* Decorative background glow rings */}
-        <div className="absolute -top-24 -left-24 w-96 h-96 bg-indigo-400/20 rounded-full blur-3xl pointer-events-none" />
-        <div className="absolute -bottom-24 -right-24 w-96 h-96 bg-sky-400/20 rounded-full blur-3xl pointer-events-none" />
+        <div className="absolute -top-24 -left-24 w-96 h-96 bg-indigo-500/15 rounded-full blur-3xl pointer-events-none" />
+        <div className="absolute -bottom-24 -right-24 w-96 h-96 bg-sky-500/15 rounded-full blur-3xl pointer-events-none" />
 
         <div className="relative z-10">
-          <div className="bg-white/10 backdrop-blur-md border border-white/20 inline-flex items-center gap-3 px-3 py-2 rounded-2xl mb-8 shadow-xl">
-            <img src="/fortyv-logo.png" alt="Forty V" className="h-8 object-contain" />
-            <span className="text-white text-xs font-semibold tracking-wider uppercase border-l border-white/20 pl-3">
-              Forty V Retail Suite
+          <div className="bg-white/10 backdrop-blur-md border border-white/20 inline-flex items-center gap-2.5 px-3.5 py-2 rounded-2xl mb-8 shadow-xl">
+            <div className="w-8 h-8 rounded-xl bg-indigo-600 flex items-center justify-center text-white shadow-md">
+              <Command size={18} strokeWidth={2.2} />
+            </div>
+            <span className="text-white text-xs font-bold tracking-wider uppercase">
+              SoleControl
             </span>
           </div>
 
           <h1 className="text-4xl font-bold text-white tracking-tight leading-tight mb-4">
-            SoleControl <span className="text-sky-300 font-light text-2xl">2.0</span>
+            Enterprise Footwear <br />
+            <span className="text-indigo-300 font-light text-3xl">Retail Operating System</span>
           </h1>
           <p className="text-white/80 text-base leading-relaxed max-w-lg mb-8">
-            Enterprise footwear retail management engine. Precision inventory, barcode generation, multi-store transfer orchestration, automated GST compliance, and real-time financial ledgers.
+            High-precision retail management platform engineered for footwear enterprises. Real-time multi-location inventory, automated barcode generation, GST Class A/B separation, and double-entry financial controls.
           </p>
 
           <div className="grid grid-cols-2 gap-4 max-w-lg">
             {[
-              ['Dynamic Size × Colour Matrix', 'Lightning-fast matrix bill entries & bulk SKU variant generation'],
-              ['Smart Double-Entry Ledger', 'Balanced general journal with append-only reversal integrity'],
-              ['Multi-Store Transfer & Map', 'Visual Floor → Rack → Shelf explorer with stock density heatmap'],
+              ['Dynamic Size × Colour Matrix', 'Rapid matrix bill inward & bulk SKU variant generation'],
+              ['Smart Double-Entry Ledger', 'Balanced general journal with append-only audit trail'],
+              ['Store Map & Rack Explorer', 'Visual Floor → Rack → Shelf explorer with stock density heatmap'],
               ['Statutory Tax & Compliance', 'Automated GST Class A/B isolation & instant return reconciliation']
             ].map(([t, d]) => (
               <div key={t} className="bg-white/10 backdrop-blur border border-white/10 rounded-2xl p-4 shadow-sm hover:bg-white/15 transition-colors">
@@ -82,7 +85,7 @@ export function LoginPage() {
         </div>
 
         <div className="relative z-10 flex items-center justify-between text-white/50 text-xs border-t border-white/10 pt-6">
-          <span>Powered by Forty V · Super Admin Console</span>
+          <span>SoleControl Retail Management Platform · Super Admin</span>
           <span className="flex items-center gap-1.5 text-white/70">
             <ShieldCheck size={14} className="text-emerald-400" /> SSL / AES-256 Secured
           </span>
@@ -94,7 +97,9 @@ export function LoginPage() {
         <div className="w-full max-w-md space-y-6">
           {/* Mobile Header */}
           <div className="lg:hidden flex items-center gap-2 mb-4">
-            <img src="/fortyv-logo.png" alt="Forty V" className="h-8" />
+            <div className="w-8 h-8 rounded-xl bg-indigo-600 flex items-center justify-center text-white shadow-md">
+              <Command size={18} strokeWidth={2.2} />
+            </div>
             <span className="font-bold text-lg" style={{ color: 'var(--color-text)' }}>SoleControl</span>
           </div>
 
@@ -104,7 +109,7 @@ export function LoginPage() {
               Sign In
             </h2>
             <p className="text-sm mt-1" style={{ color: 'var(--color-muted)' }}>
-              Enter your credentials to access the Forty V retail management console
+              Enter your credentials to access the Super Admin control console
             </p>
           </div>
 
@@ -128,7 +133,7 @@ export function LoginPage() {
                   value={email}
                   onChange={e => setEmail(e.target.value)}
                   required
-                  placeholder="admin@fortyv.local"
+                  placeholder="admin@domain.local"
                   className={inpClass}
                   style={inpStyle}
                 />
@@ -162,34 +167,45 @@ export function LoginPage() {
               </div>
             </div>
 
+            <div className="flex items-center justify-between text-xs pt-1">
+              <label className="flex items-center gap-2 cursor-pointer" style={{ color: 'var(--color-muted)' }}>
+                <input type="checkbox" defaultChecked className="rounded border-gray-300 text-indigo-600 focus:ring-indigo-500" />
+                <span>Keep me signed in</span>
+              </label>
+              <button
+                type="button"
+                onClick={handleDemoFill}
+                className="font-semibold text-indigo-600 dark:text-indigo-400 hover:underline"
+              >
+                Use Super Admin Demo
+              </button>
+            </div>
+
             <button
               type="submit"
               disabled={loading}
-              className="w-full py-3 px-4 rounded-xl text-sm font-semibold text-white shadow-lg shadow-indigo-500/25 transition-all hover:shadow-indigo-500/40 active:scale-[0.99] disabled:opacity-50 flex items-center justify-center gap-2"
+              className="w-full py-2.5 px-4 rounded-xl text-sm font-semibold text-white shadow-sm flex items-center justify-center gap-2 transition-all hover:opacity-95 disabled:opacity-50"
               style={{ background: 'var(--color-primary)' }}
             >
               {loading ? (
-                <span>Verifying credentials…</span>
+                <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
               ) : (
                 <>
-                  <span>Sign In</span>
+                  <span>Sign In to Super Admin</span>
                   <ArrowRight size={16} />
                 </>
               )}
             </button>
           </form>
 
-          {/* Quick Demo Fill Helper */}
-          <div className="pt-2 text-center">
-            <button
-              type="button"
-              onClick={handleDemoFill}
-              className="inline-flex items-center gap-1.5 text-xs font-semibold py-1.5 px-3 rounded-lg border transition-colors hover:border-indigo-400"
-              style={{ borderColor: 'var(--color-border)', color: 'var(--color-muted)', background: 'var(--color-surface)' }}
-            >
-              <Sparkles size={13} className="text-indigo-500" />
-              Fill Super Admin (ChangeMe@123)
-            </button>
+          {/* Security footnote */}
+          <div className="p-3.5 rounded-xl border text-xs space-y-1" style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)', color: 'var(--color-muted)' }}>
+            <div className="font-semibold text-slate-700 dark:text-slate-300 flex items-center gap-1.5">
+              <Lock size={12} className="text-emerald-500" /> Authorized Super Admin Access Only
+            </div>
+            <p>
+              Session activity and mutations are cryptographically signed and recorded to the immutable system audit log.
+            </p>
           </div>
         </div>
       </div>
