@@ -70,9 +70,15 @@ export function UsersPage() {
     setTimeout(() => setResetSuccessMsg(''), 4000)
   }
 
-  const users = (data?.data ?? []).filter(u =>
-    u.name.toLowerCase().includes(search.toLowerCase()) ||
-    u.email.toLowerCase().includes(search.toLowerCase())
+  const rawUsers: User[] = Array.isArray(data?.data)
+    ? data.data
+    : Array.isArray(data)
+    ? (data as any)
+    : []
+
+  const users = rawUsers.filter(u =>
+    (u?.name || '').toLowerCase().includes(search.toLowerCase()) ||
+    (u?.email || '').toLowerCase().includes(search.toLowerCase())
   )
 
   return (

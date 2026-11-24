@@ -66,13 +66,29 @@ export function SalesPage() {
     }
   })
 
-  const sales = (salesData?.data ?? []).filter(s => {
-    const doc = s.document_number || s.documentNumber || s.docNumber || ''
-    const cust = s.customer?.name || ''
+  const rawSales: Sale[] = Array.isArray(salesData?.data)
+    ? salesData.data
+    : Array.isArray(salesData)
+    ? (salesData as any)
+    : []
+
+  const sales = rawSales.filter(s => {
+    const doc = s?.document_number || s?.documentNumber || s?.docNumber || ''
+    const cust = s?.customer?.name || ''
     return doc.toLowerCase().includes(search.toLowerCase()) || cust.toLowerCase().includes(search.toLowerCase())
   })
 
-  const activeVariants = stockItems || []
+  const customerList: any[] = Array.isArray(customers)
+    ? customers
+    : Array.isArray((customers as any)?.data)
+    ? (customers as any).data
+    : []
+
+  const activeVariants: any[] = Array.isArray(stockItems)
+    ? stockItems
+    : Array.isArray((stockItems as any)?.data)
+    ? (stockItems as any).data
+    : []
   const activeVariant = activeVariants.find((v: any) => (v.variant_id || v.id) === (selectedVariantId || activeVariants[0]?.variant_id))
   const unitPrice = Number(activeVariant?.selling_price || activeVariant?.sellingPrice || 4899)
   const subtotal = unitPrice * quantity
@@ -280,7 +296,7 @@ export function SalesPage() {
                   style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }}
                 >
                   <option value="">Walk-in Retail Customer</option>
-                  {(customers || []).map((c: any) => (
+                  {customerList.map((c: any) => (
                     <option key={c.id} value={c.id}>{c.name} ({c.phone})</option>
                   ))}
                 </select>
@@ -294,7 +310,7 @@ export function SalesPage() {
                   className="w-full px-3 py-2 rounded-lg border text-sm outline-none"
                   style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }}
                 >
-                  {(activeVariants || []).map((v: any) => (
+                  {activeVariants.map((v: any) => (
                     <option key={v.variant_id || v.id} value={v.variant_id || v.id}>
                       {v.sku} - {v.article_name || 'Footwear'} ({v.size_name || ''} / {v.colour_name || ''}) - Price: {fmt(Number(v.selling_price || 4899))}
                     </option>

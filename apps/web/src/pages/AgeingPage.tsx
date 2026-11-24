@@ -21,6 +21,12 @@ export function AgeingPage() {
     queryFn: () => api.get('/ageing/rules').then(r => r.data?.data ?? []),
   })
 
+  const heatmapList: any[] = Array.isArray(heatmap)
+    ? heatmap
+    : Array.isArray((heatmap as any)?.data)
+    ? (heatmap as any).data
+    : []
+
   const createRuleMutation = useMutation({
     mutationFn: (data: any) => api.post('/ageing/rules', data),
     onSuccess: () => {
@@ -43,10 +49,10 @@ export function AgeingPage() {
   }
 
   // Aggregate buckets
-  const b0_30 = heatmap?.filter((h: any) => (h.age_days || 0) <= 30) || []
-  const b31_60 = heatmap?.filter((h: any) => (h.age_days || 0) > 30 && (h.age_days || 0) <= 60) || []
-  const b61_90 = heatmap?.filter((h: any) => (h.age_days || 0) > 60 && (h.age_days || 0) <= 90) || []
-  const b90_plus = heatmap?.filter((h: any) => (h.age_days || 0) > 90) || []
+  const b0_30 = heatmapList.filter((h: any) => (h.age_days || 0) <= 30)
+  const b31_60 = heatmapList.filter((h: any) => (h.age_days || 0) > 30 && (h.age_days || 0) <= 60)
+  const b61_90 = heatmapList.filter((h: any) => (h.age_days || 0) > 60 && (h.age_days || 0) <= 90)
+  const b90_plus = heatmapList.filter((h: any) => (h.age_days || 0) > 90)
 
   return (
     <div className="p-6 space-y-6">
@@ -132,7 +138,10 @@ export function AgeingPage() {
                 </tr>
               </thead>
               <tbody className="divide-y" style={{ borderColor: 'var(--color-border)' }}>
-                {heatmap.map((row: any, i: number) => {
+                {heatmapList.length === 0 ? (
+                  <tr><td colSpan={5} className="py-8 text-center text-sm" style={{ color: 'var(--color-muted)' }}>No aged inventory detected</td></tr>
+                ) : (
+                  heatmapList.map((row: any, i: number) => {
                   const age = row.age_days || 0
                   return (
                     <tr key={i} className="hover:bg-slate-50/50 dark:hover:bg-slate-800/40 transition-colors">
@@ -160,7 +169,7 @@ export function AgeingPage() {
                       </td>
                     </tr>
                   )
-                })}
+                }))}
               </tbody>
             </table>
           </div>

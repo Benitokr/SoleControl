@@ -23,6 +23,18 @@ export function DamagedGoodsPage() {
     queryFn: () => api.get('/inventory/stock').then(r => r.data?.data ?? []),
   })
 
+  const damageList: any[] = Array.isArray(damages)
+    ? damages
+    : Array.isArray((damages as any)?.data)
+    ? (damages as any).data
+    : []
+
+  const variantList: any[] = Array.isArray(variants)
+    ? variants
+    : Array.isArray((variants as any)?.data)
+    ? (variants as any).data
+    : []
+
   const createMutation = useMutation({
     mutationFn: (data: any) => api.post('/damage', data),
     onSuccess: () => {
@@ -126,7 +138,7 @@ export function DamagedGoodsPage() {
 
         {isLoading ? (
           <div className="p-12 text-center text-sm" style={{ color: 'var(--color-muted)' }}>Loading damage logs…</div>
-        ) : (!damages || damages.length === 0) ? (
+        ) : damageList.length === 0 ? (
           <div className="p-12 text-center space-y-3">
             <PackageX size={36} className="mx-auto text-slate-300 dark:text-slate-600" />
             <div className="text-base font-semibold" style={{ color: 'var(--color-text)' }}>No damaged goods reported</div>
@@ -149,7 +161,7 @@ export function DamagedGoodsPage() {
                 </tr>
               </thead>
               <tbody className="divide-y" style={{ borderColor: 'var(--color-border)' }}>
-                {damages.map((d: any) => (
+                {damageList.map((d: any) => (
                   <tr key={d.id} className="hover:bg-slate-50/50 dark:hover:bg-slate-800/40 transition-colors">
                     <td className="px-5 py-3.5 font-mono text-xs font-semibold" style={{ color: 'var(--color-danger)' }}>
                       {String(d?.id || '').slice(0, 8).toUpperCase()}
@@ -225,7 +237,7 @@ export function DamagedGoodsPage() {
                   className="w-full px-3 py-2 rounded-lg border text-sm outline-none"
                   style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }}
                 >
-                  {(variants || []).map((v: any) => (
+                  {variantList.map((v: any) => (
                     <option key={v.variant_id || v.id} value={v.variant_id || v.id}>
                       {v.sku} - {v.article_name || 'Footwear'} ({v.size_name || ''}) - Stock: {v.quantity}
                     </option>

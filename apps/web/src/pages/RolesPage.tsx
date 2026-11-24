@@ -56,7 +56,11 @@ export function RolesPage() {
     queryFn: () => api.get('/roles').then(r => r.data),
   })
 
-  const roles = data?.data ?? []
+  const roles: Role[] = Array.isArray(data?.data)
+    ? data.data
+    : Array.isArray(data)
+    ? (data as any)
+    : []
 
   const handleOpenMatrix = (role: Role) => {
     setSelectedRole(role)

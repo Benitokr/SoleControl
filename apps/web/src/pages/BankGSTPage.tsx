@@ -60,7 +60,7 @@ export function BankGSTPage() {
     queryFn: () => api.get('/bank/accounts').then(r => r.data),
   })
 
-  const bankAccounts = Array.isArray(bankData?.data) ? bankData.data : []
+  const bankAccounts = Array.isArray(bankData?.data) ? bankData.data : (Array.isArray(bankData) ? (bankData as any) : [])
   const currentBankId = selectedBankId || bankAccounts[0]?.id
 
   const { data: statementData, isLoading: loadingStatement } = useQuery<{ data: StatementLine[] }>({
@@ -68,6 +68,12 @@ export function BankGSTPage() {
     queryFn: () => api.get(`/bank/accounts/${currentBankId}/statement`).then(r => r.data),
     enabled: !!currentBankId && activeTab === 'banks',
   })
+
+  const statementLines: StatementLine[] = Array.isArray(statementData?.data)
+    ? statementData.data
+    : Array.isArray(statementData)
+    ? (statementData as any)
+    : []
 
   const { data: gstData, isLoading: loadingGST } = useQuery<{ data: GSTTransaction[] }>({
     queryKey: ['gst-register'],
@@ -105,8 +111,8 @@ export function BankGSTPage() {
     },
   })
 
-  const gstList = Array.isArray(gstData?.data) ? gstData.data : []
-  const gstSummaries = Array.isArray(gstSummaryData?.data) ? gstSummaryData.data : []
+  const gstList = Array.isArray(gstData?.data) ? gstData.data : (Array.isArray(gstData) ? (gstData as any) : [])
+  const gstSummaries = Array.isArray(gstSummaryData?.data) ? gstSummaryData.data : (Array.isArray(gstSummaryData) ? (gstSummaryData as any) : [])
 
   return (
     <div className="p-6 space-y-4">
@@ -195,10 +201,10 @@ export function BankGSTPage() {
                   </div>
                   <div className="mt-4 flex justify-between items-end">
                     <span className="font-mono text-xs" style={{ color: 'var(--color-muted)' }}>
-                      •••• {String(b.accountNumber || (b as any).account_number || '0000').slice(-4)}
+                      •••• {String(b?.accountNumber ?? (b as any)?.account_number ?? '0000').slice(-4)}
                     </span>
                     <span className="font-mono text-lg font-bold tabular-nums" style={{ color: 'var(--color-primary)' }}>
-                      ₹{parseFloat(String(b.balance ?? (b as any).current_balance ?? (b as any).opening_balance ?? 0)).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                      ₹{parseFloat(String(b?.balance ?? (b as any)?.current_balance ?? (b as any)?.opening_balance ?? 0)).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
                     </span>
                   </div>
                 </div>
@@ -230,13 +236,13 @@ export function BankGSTPage() {
                   </tr>
                 </thead>
                 <tbody>
-                  {(!Array.isArray(statementData?.data) || statementData.data.length === 0) ? (
+                  {statementLines.length === 0 ? (
                     <tr><td colSpan={7} className="py-8 text-center" style={{ color: 'var(--color-muted)' }}>No statement transactions found</td></tr>
                   ) : (
-                    statementData.data.map(line => (
+                    statementLines.map(line => (
                       <tr key={line.id} className="hover:bg-opacity-50" style={{ borderBottom: '1px solid var(--color-border)' }}>
                         <td className="px-4 py-3 text-xs" style={{ color: 'var(--color-muted)' }}>
-                          {new Date(line.transaction_date).toLocaleDateString('en-IN')}
+                          {line?.transaction_date ? new Date(line.transaction_date).toLocaleDateString('en-IN') : '—'}
                         </td>
                         <td className="px-4 py-3 font-medium text-xs" style={{ color: 'var(--color-text)' }}>{line.description || '—'}</td>
                         <td className="px-4 py-3 text-right font-mono tabular-nums text-red-500">
@@ -313,7 +319,7 @@ export function BankGSTPage() {
                   gstList.map(item => (
                     <tr key={item.id} className="hover:bg-opacity-50" style={{ borderBottom: '1px solid var(--color-border)' }}>
                       <td className="px-4 py-3 text-xs" style={{ color: 'var(--color-muted)' }}>
-                        {new Date(item.transaction_date).toLocaleDateString('en-IN')}
+                        {item?.transaction_date ? new Date(item.transaction_date).toLocaleDateString('en-IN') : '—'}
                       </td>
                       <td className="px-4 py-3">
                         <span

@@ -49,7 +49,11 @@ export function ReportsPage() {
     },
   })
 
-  const rows = (reportData || []) as any[]
+  const rows: any[] = Array.isArray(reportData)
+    ? reportData
+    : Array.isArray((reportData as any)?.data)
+    ? (reportData as any).data
+    : []
 
   // Handle Export
   const handleExport = () => {

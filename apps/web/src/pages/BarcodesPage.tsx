@@ -54,8 +54,17 @@ export function BarcodesPage() {
     }
   })
 
-  const jobs = queueData?.data ?? []
-  const stockList = stockItems || []
+  const jobs: BarcodeJob[] = Array.isArray(queueData?.data)
+    ? queueData.data
+    : Array.isArray(queueData)
+    ? (queueData as any)
+    : []
+
+  const stockList: any[] = Array.isArray(stockItems)
+    ? stockItems
+    : Array.isArray((stockItems as any)?.data)
+    ? (stockItems as any).data
+    : []
 
   // Resolve preview item
   const previewItem = stockList.find((v: any) => v.sku === selectedSku) || {

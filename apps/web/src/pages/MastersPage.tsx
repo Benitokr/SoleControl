@@ -34,9 +34,14 @@ export function MastersPage() {
 
   const queries: Record<Tab, typeof brands> = { brands, categories, sizes, colours, articles }
   const q = queries[tab]
-  const rows: any[] = ((q.data as any) ?? []).filter((r: any) =>
-    (r.name ?? '').toLowerCase().includes(search.toLowerCase()) ||
-    (r.code ?? '').toLowerCase().includes(search.toLowerCase())
+  const rawData: any[] = Array.isArray(q.data)
+    ? q.data
+    : Array.isArray((q.data as any)?.data)
+    ? (q.data as any).data
+    : []
+  const rows: any[] = rawData.filter((r: any) =>
+    (r?.name ?? '').toLowerCase().includes(search.toLowerCase()) ||
+    (r?.code ?? '').toLowerCase().includes(search.toLowerCase())
   )
 
   const createMasterMutation = useMutation({

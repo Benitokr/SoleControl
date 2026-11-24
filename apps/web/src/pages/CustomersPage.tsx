@@ -66,10 +66,16 @@ export function CustomersPage() {
     })
   }
 
-  const customers = (data?.data ?? []).filter(c =>
-    c.name.toLowerCase().includes(search.toLowerCase()) ||
-    (c.phone ?? '').includes(search) ||
-    (c.email ?? '').toLowerCase().includes(search.toLowerCase())
+  const rawCustomers: Customer[] = Array.isArray(data?.data)
+    ? data.data
+    : Array.isArray(data)
+    ? (data as any)
+    : []
+
+  const customers = rawCustomers.filter(c =>
+    (c?.name || '').toLowerCase().includes(search.toLowerCase()) ||
+    (c?.phone ?? '').includes(search) ||
+    (c?.email ?? '').toLowerCase().includes(search.toLowerCase())
   )
 
   return (

@@ -65,7 +65,31 @@ export function AuditPage() {
     onSuccess: () => qc.invalidateQueries({ queryKey: ['alerts', 'sessions'] }),
   })
 
-  const unreadCount = notifications.filter((n: any) => !n.isRead).length
+  const notifList: any[] = Array.isArray(notifications)
+    ? notifications
+    : Array.isArray((notifications as any)?.data)
+    ? (notifications as any).data
+    : []
+
+  const ruleList: any[] = Array.isArray(rules)
+    ? rules
+    : Array.isArray((rules as any)?.data)
+    ? (rules as any).data
+    : []
+
+  const logList: any[] = Array.isArray(auditLogs)
+    ? auditLogs
+    : Array.isArray((auditLogs as any)?.data)
+    ? (auditLogs as any).data
+    : []
+
+  const sessionList: any[] = Array.isArray(sessions)
+    ? sessions
+    : Array.isArray((sessions as any)?.data)
+    ? (sessions as any).data
+    : []
+
+  const unreadCount = notifList.filter((n: any) => !n.isRead).length
 
   const cardStyle = { background: 'var(--color-surface)', borderColor: 'var(--color-border)' }
 
@@ -145,16 +169,16 @@ export function AuditPage() {
         <div className="rounded-xl border overflow-hidden" style={cardStyle}>
           <div className="px-5 py-3.5 border-b flex items-center justify-between" style={{ borderColor: 'var(--color-border)' }}>
             <h2 className="text-sm font-semibold" style={{ color: 'var(--color-text)' }}>System Notifications</h2>
-            <span className="text-xs" style={{ color: 'var(--color-muted)' }}>{notifications.length} total</span>
+            <span className="text-xs" style={{ color: 'var(--color-muted)' }}>{notifList.length} total</span>
           </div>
 
           <div className="divide-y" style={{ borderColor: 'var(--color-border)' }}>
-            {notifications.length === 0 ? (
+            {notifList.length === 0 ? (
               <div className="p-8 text-center text-sm" style={{ color: 'var(--color-muted)' }}>
                 No notifications present
               </div>
             ) : (
-              notifications.map((n: any) => (
+              notifList.map((n: any) => (
                 <div
                   key={n.id}
                   className="p-4 flex items-start justify-between gap-4 transition-colors hover:opacity-95"
@@ -230,14 +254,14 @@ export function AuditPage() {
                 </tr>
               </thead>
               <tbody className="divide-y" style={{ borderColor: 'var(--color-border)' }}>
-                {rules.length === 0 ? (
+                {ruleList.length === 0 ? (
                   <tr>
                     <td colSpan={5} className="p-8 text-center text-sm" style={{ color: 'var(--color-muted)' }}>
                       No alert rules configured
                     </td>
                   </tr>
                 ) : (
-                  rules.map((r: any) => (
+                  ruleList.map((r: any) => (
                     <tr key={r.id} className="hover:opacity-90">
                       <td className="px-4 py-3 font-medium">{r.name}</td>
                       <td className="px-4 py-3 font-mono text-xs">{r.condition}</td>
@@ -326,14 +350,14 @@ export function AuditPage() {
                         Loading audit log trail...
                       </td>
                     </tr>
-                  ) : auditLogs.length === 0 ? (
+                  ) : logList.length === 0 ? (
                     <tr>
                       <td colSpan={6} className="p-8 text-center text-sm" style={{ color: 'var(--color-muted)' }}>
                         No audit events found
                       </td>
                     </tr>
                   ) : (
-                    auditLogs.map((log: any) => {
+                    logList.map((log: any) => {
                       const isExpanded = expandedLogId === log.id
                       const hasChanges = Boolean(log.old_data || log.new_data || log.changes)
 
@@ -459,14 +483,14 @@ export function AuditPage() {
                 </tr>
               </thead>
               <tbody className="divide-y" style={{ borderColor: 'var(--color-border)' }}>
-                {sessions.length === 0 ? (
+                {sessionList.length === 0 ? (
                   <tr>
                     <td colSpan={6} className="p-8 text-center text-sm" style={{ color: 'var(--color-muted)' }}>
                       No active user sessions recorded
                     </td>
                   </tr>
                 ) : (
-                  sessions.map((s: any) => {
+                  sessionList.map((s: any) => {
                     const isRevoked = Boolean(s.revoked_at || s.revokedAt)
 
                     return (

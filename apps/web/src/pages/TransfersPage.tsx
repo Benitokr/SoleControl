@@ -29,6 +29,24 @@ export function TransfersPage() {
     queryFn: () => api.get('/inventory/stock').then(r => r.data?.data ?? []),
   })
 
+  const transferList: any[] = Array.isArray(transfers)
+    ? transfers
+    : Array.isArray((transfers as any)?.data)
+    ? (transfers as any).data
+    : []
+
+  const storeList: any[] = Array.isArray(stores)
+    ? stores
+    : Array.isArray((stores as any)?.data)
+    ? (stores as any).data
+    : []
+
+  const variantList: any[] = Array.isArray(variants)
+    ? variants
+    : Array.isArray((variants as any)?.data)
+    ? (variants as any).data
+    : []
+
   const createMutation = useMutation({
     mutationFn: (data: any) => api.post('/transfers', data),
     onSuccess: () => {
@@ -102,20 +120,20 @@ export function TransfersPage() {
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
         <div className="p-5 rounded-xl border flex flex-col justify-between" style={{ background: 'var(--color-surface)', borderColor: 'var(--color-border)' }}>
           <span className="text-xs font-semibold uppercase tracking-wider" style={{ color: 'var(--color-muted)' }}>Total Consignments</span>
-          <span className="text-2xl font-bold font-mono mt-2" style={{ color: 'var(--color-text)' }}>{transfers?.length || 0}</span>
+          <span className="text-2xl font-bold font-mono mt-2" style={{ color: 'var(--color-text)' }}>{transferList.length}</span>
           <span className="text-xs mt-1" style={{ color: 'var(--color-muted)' }}>Recorded transfers in system</span>
         </div>
         <div className="p-5 rounded-xl border flex flex-col justify-between" style={{ background: 'var(--color-surface)', borderColor: 'var(--color-border)' }}>
           <span className="text-xs font-semibold uppercase tracking-wider text-amber-600 dark:text-amber-400">Pending Approvals</span>
           <span className="text-2xl font-bold font-mono mt-2 text-amber-600 dark:text-amber-400">
-            {transfers?.filter((t: any) => t.status === 'REQUESTED').length || 0}
+            {transferList.filter((t: any) => t.status === 'REQUESTED').length}
           </span>
           <span className="text-xs mt-1" style={{ color: 'var(--color-muted)' }}>Awaiting warehouse authorization</span>
         </div>
         <div className="p-5 rounded-xl border flex flex-col justify-between" style={{ background: 'var(--color-surface)', borderColor: 'var(--color-border)' }}>
           <span className="text-xs font-semibold uppercase tracking-wider text-emerald-600 dark:text-emerald-400">Completed Deliveries</span>
           <span className="text-2xl font-bold font-mono mt-2 text-emerald-600 dark:text-emerald-400">
-            {transfers?.filter((t: any) => t.status === 'RECEIVED').length || 0}
+            {transferList.filter((t: any) => t.status === 'RECEIVED').length}
           </span>
           <span className="text-xs mt-1" style={{ color: 'var(--color-muted)' }}>Successfully received & verified</span>
         </div>
@@ -129,7 +147,7 @@ export function TransfersPage() {
 
         {isLoading ? (
           <div className="p-12 text-center text-sm" style={{ color: 'var(--color-muted)' }}>Loading transfer records…</div>
-        ) : (!transfers || transfers.length === 0) ? (
+        ) : transferList.length === 0 ? (
           <div className="p-12 text-center space-y-3">
             <ArrowLeftRight size={36} className="mx-auto text-slate-300 dark:text-slate-600" />
             <div className="text-base font-semibold" style={{ color: 'var(--color-text)' }}>No stock transfers found</div>
@@ -152,7 +170,7 @@ export function TransfersPage() {
                 </tr>
               </thead>
               <tbody className="divide-y" style={{ borderColor: 'var(--color-border)' }}>
-                {transfers.map((t: any) => (
+                {transferList.map((t: any) => (
                   <tr key={t.id} className="hover:bg-slate-50/50 dark:hover:bg-slate-800/40 transition-colors">
                     <td className="px-5 py-3.5 font-mono text-xs font-semibold" style={{ color: 'var(--color-primary)' }}>
                       {String(t?.id || '').slice(0, 8).toUpperCase()}
@@ -229,7 +247,7 @@ export function TransfersPage() {
                   className="w-full px-3 py-2 rounded-lg border text-sm outline-none"
                   style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }}
                 >
-                  {(variants || []).map((v: any) => (
+                  {variantList.map((v: any) => (
                     <option key={v.variant_id || v.id} value={v.variant_id || v.id}>
                       {v.sku} - {v.article_name || 'Footwear'} ({v.size_name || ''} / {v.colour_name || ''}) - Stock: {v.quantity}
                     </option>

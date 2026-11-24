@@ -73,14 +73,30 @@ export function PurchasesPage() {
     }
   })
 
-  const purchases = (purchasesData?.data ?? []).filter(p => {
-    const num = p.docNumber || p.document_number || p.billNumber || p.bill_number || ''
-    const vName = p.vendor?.name || ''
+  const rawPurchases: Purchase[] = Array.isArray(purchasesData?.data)
+    ? purchasesData.data
+    : Array.isArray(purchasesData)
+    ? (purchasesData as any)
+    : []
+
+  const purchases = rawPurchases.filter(p => {
+    const num = p?.docNumber || p?.document_number || p?.billNumber || p?.bill_number || ''
+    const vName = p?.vendor?.name || ''
     return num.toLowerCase().includes(search.toLowerCase()) || vName.toLowerCase().includes(search.toLowerCase())
   })
 
   // Matrix articles
-  const availableVariants = stockItems || []
+  const availableVariants: any[] = Array.isArray(stockItems)
+    ? stockItems
+    : Array.isArray((stockItems as any)?.data)
+    ? (stockItems as any).data
+    : []
+
+  const vendorList: any[] = Array.isArray(vendors)
+    ? vendors
+    : Array.isArray((vendors as any)?.data)
+    ? (vendors as any).data
+    : []
 
   // Compute live matrix totals
   let totalPairs = 0
@@ -99,10 +115,10 @@ export function PurchasesPage() {
   const handleCreateSubmit = (e: React.FormEvent) => {
     e.preventDefault()
     setFormError('')
-    if (!vendorId && vendors?.length) {
-      setVendorId(vendors[0].id)
+    if (!vendorId && vendorList.length) {
+      setVendorId(vendorList[0].id)
     }
-    const resolvedVendorId = vendorId || vendors?.[0]?.id
+    const resolvedVendorId = vendorId || vendorList[0]?.id
     if (!resolvedVendorId) {
       setFormError('Please select a supplier / vendor.')
       return
@@ -366,7 +382,7 @@ export function PurchasesPage() {
                       className="w-full px-3 py-2 rounded-lg border text-sm outline-none"
                       style={{ background: 'var(--color-surface)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }}
                     >
-                      {(vendors || []).map((v: any) => (
+                      {vendorList.map((v: any) => (
                         <option key={v.id} value={v.id}>{v.name}</option>
                       ))}
                     </select>

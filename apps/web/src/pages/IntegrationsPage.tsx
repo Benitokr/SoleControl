@@ -479,12 +479,12 @@ export function IntegrationsPage() {
                   Loading logs…
                 </div>
               )}
-              {!logsLoading && (logsData?.data || []).length === 0 && (
+              {!logsLoading && (Array.isArray(logsData?.data) ? logsData.data : (Array.isArray(logsData) ? (logsData as any) : [])).length === 0 && (
                 <div className="py-8 text-center text-xs" style={{ color: 'var(--color-muted)' }}>
                   No log entries recorded for this provider yet.
                 </div>
               )}
-              {logsData?.data?.map((log) => (
+              {(Array.isArray(logsData?.data) ? logsData.data : (Array.isArray(logsData) ? (logsData as any) : [])).map((log: any) => (
                 <div
                   key={log.id}
                   className="p-3 rounded-lg text-xs flex items-start justify-between gap-3"

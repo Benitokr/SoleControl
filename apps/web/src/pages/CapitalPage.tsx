@@ -77,8 +77,17 @@ export function CapitalPage() {
     },
   })
 
-  const entries = capitalData?.data || []
-  const withdrawals = withdrawalsData?.data || []
+  const entries: CapitalEntry[] = Array.isArray(capitalData?.data)
+    ? capitalData.data
+    : Array.isArray(capitalData)
+    ? (capitalData as any)
+    : []
+
+  const withdrawals: Withdrawal[] = Array.isArray(withdrawalsData?.data)
+    ? withdrawalsData.data
+    : Array.isArray(withdrawalsData)
+    ? (withdrawalsData as any)
+    : []
 
   // Metrics
   const totalCapitalIn = entries

@@ -69,7 +69,11 @@ export function InventoryPage() {
     }
   })
 
-  const stockList = (stock.data as any[] ?? [])
+  const stockList: any[] = Array.isArray(stock.data)
+    ? stock.data
+    : Array.isArray((stock.data as any)?.data)
+    ? (stock.data as any).data
+    : []
   const filteredStock = stockList.filter(s =>
     (s.sku ?? '').toLowerCase().includes(search.toLowerCase()) ||
     (s.articleName ?? s.article_name ?? s.article ?? '').toLowerCase().includes(search.toLowerCase()) ||

@@ -172,8 +172,17 @@ export function AccountingPage() {
     },
   })
 
-  const accounts = accountsData?.data || []
-  const journals = journalsData?.data || []
+  const accounts: Account[] = Array.isArray(accountsData?.data)
+    ? accountsData.data
+    : Array.isArray(accountsData)
+    ? (accountsData as any)
+    : []
+
+  const journals: JournalEntry[] = Array.isArray(journalsData?.data)
+    ? journalsData.data
+    : Array.isArray(journalsData)
+    ? (journalsData as any)
+    : []
 
   const totalJournalDebit = journalForm.lines
     .filter(l => l.type === 'DEBIT')
@@ -324,7 +333,7 @@ export function AccountingPage() {
                   </tr>
                 </thead>
                 <tbody>
-                  {(trialData?.data || []).map((row, idx) => (
+                  {(Array.isArray(trialData?.data) ? trialData.data : (Array.isArray(trialData) ? (trialData as any) : [])).map((row, idx) => (
                     <tr key={idx} className="hover:bg-opacity-50" style={{ borderBottom: '1px solid var(--color-border)' }}>
                       <td className="px-4 py-3 font-mono text-xs font-semibold" style={{ color: 'var(--color-primary)' }}>{row.code}</td>
                       <td className="px-4 py-3 font-medium" style={{ color: 'var(--color-text)' }}>{row.name}</td>
@@ -568,10 +577,10 @@ export function AccountingPage() {
                 </tr>
               </thead>
               <tbody>
-                {(cashbookData?.data || []).map((row, i) => (
+                {(Array.isArray(cashbookData?.data) ? cashbookData.data : (Array.isArray(cashbookData) ? (cashbookData as any) : [])).map((row, i) => (
                   <tr key={i} className="hover:bg-opacity-50" style={{ borderBottom: '1px solid var(--color-border)' }}>
                     <td className="px-4 py-3 text-xs" style={{ color: 'var(--color-muted)' }}>
-                      {new Date(row.posted_at).toLocaleDateString('en-IN')}
+                      {row?.posted_at ? new Date(row.posted_at).toLocaleDateString('en-IN') : '—'}
                     </td>
                     <td className="px-4 py-3 font-mono text-xs font-semibold" style={{ color: 'var(--color-primary)' }}>{row.reference}</td>
                     <td className="px-4 py-3 text-sm">{row.description || '—'}</td>

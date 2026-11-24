@@ -165,15 +165,26 @@ export function DashboardPage() {
     queryFn: () => api.get('/dashboard/targets').then((r) => r.data?.data || []),
   })
 
-  const insightsList = Array.isArray(insightsData) ? insightsData : []
-  const recentSalesList = Array.isArray(recentSales) ? recentSales : []
-  const targetsList = Array.isArray(targets)
-    ? targets
-    : (targets && typeof targets === 'object' && ('targetAmount' in targets || 'target_amount' in targets || 'currentSales' in targets)
+  const insightsList = Array.isArray(insightsData)
+    ? insightsData
+    : Array.isArray((insightsData as any)?.data)
+    ? (insightsData as any).data
+    : []
+
+  const recentSalesList = Array.isArray(recentSales)
+    ? recentSales
+    : Array.isArray((recentSales as any)?.data)
+    ? (recentSales as any).data
+    : []
+
+  const rawTargets = Array.isArray((targets as any)?.data) ? (targets as any).data : targets
+  const targetsList = Array.isArray(rawTargets)
+    ? rawTargets
+    : (rawTargets && typeof rawTargets === 'object' && ('targetAmount' in rawTargets || 'target_amount' in rawTargets || 'currentSales' in rawTargets)
         ? [{
             name: 'November Store Revenue Goal',
-            target_amount: (targets as any).targetAmount || (targets as any).target_amount || 250000,
-            achieved: (targets as any).currentSales || (targets as any).achieved || 168490,
+            target_amount: (rawTargets as any).targetAmount || (rawTargets as any).target_amount || 250000,
+            achieved: (rawTargets as any).currentSales || (rawTargets as any).achieved || 168490,
             period_start: '2026-11-01',
             period_end: '2026-11-30'
           }]
@@ -308,7 +319,7 @@ export function DashboardPage() {
             </Link>
           </div>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-            {insightsList.slice(0, 4).map((item: any, i: number) => (
+            {(Array.isArray(insightsList) ? insightsList : []).slice(0, 4).map((item: any, i: number) => (
               <ActionableInsightCard key={item.id || i} item={item} />
             ))}
           </div>
@@ -517,7 +528,7 @@ export function DashboardPage() {
                 No sales recorded yet
               </div>
             ) : (
-              recentSalesList.map((s: any, idx: number) => (
+              (Array.isArray(recentSalesList) ? recentSalesList : []).map((s: any, idx: number) => (
                 <div key={idx} className="px-5 py-3.5 flex items-center justify-between hover:opacity-90 transition-opacity">
                   <div className="space-y-0.5">
                     <div className="text-sm font-semibold font-mono" style={{ color: 'var(--color-text)' }}>
@@ -554,7 +565,7 @@ export function DashboardPage() {
                 No active sales targets configured
               </div>
             ) : (
-              targetsList.map((t: any, idx: number) => {
+              (Array.isArray(targetsList) ? targetsList : []).map((t: any, idx: number) => {
                 const targetVal = Number(t.target_amount || t.targetAmount || t.target || 0)
                 const achievedVal = Number(t.achieved || t.currentSales || 0)
                 const pct = targetVal > 0 ? Math.round((achievedVal / targetVal) * 100) : 0

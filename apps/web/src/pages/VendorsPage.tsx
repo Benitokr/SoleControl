@@ -66,10 +66,16 @@ export function VendorsPage() {
     })
   }
 
-  const vendors = (data?.data ?? []).filter(v =>
-    v.name.toLowerCase().includes(search.toLowerCase()) ||
-    (v.phone ?? '').includes(search) ||
-    (v.gstin ?? '').toLowerCase().includes(search.toLowerCase())
+  const rawVendors: Vendor[] = Array.isArray(data?.data)
+    ? data.data
+    : Array.isArray(data)
+    ? (data as any)
+    : []
+
+  const vendors = rawVendors.filter(v =>
+    (v?.name || '').toLowerCase().includes(search.toLowerCase()) ||
+    (v?.phone ?? '').includes(search) ||
+    (v?.gstin ?? '').toLowerCase().includes(search.toLowerCase())
   )
 
   return (

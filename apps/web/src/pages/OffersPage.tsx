@@ -38,8 +38,14 @@ export function OffersPage() {
     queryFn: () => api.get('/offers').then(r => r.data),
   })
 
-  const offers = (data?.data ?? []).filter(o =>
-    o.name.toLowerCase().includes(search.toLowerCase())
+  const rawOffers: Offer[] = Array.isArray(data?.data)
+    ? data.data
+    : Array.isArray(data)
+    ? (data as any)
+    : []
+
+  const offers = rawOffers.filter(o =>
+    (o?.name || '').toLowerCase().includes(search.toLowerCase())
   )
 
   const toggle = useMutation({

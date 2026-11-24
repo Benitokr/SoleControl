@@ -82,7 +82,11 @@ export function AppShell() {
     queryKey: ['stores'],
     queryFn: () => api.get('/company/stores').then(r => r.data.data).catch(() => []),
   })
-  const stores: any[] = storeData || []
+  const stores: any[] = Array.isArray(storeData)
+    ? storeData
+    : Array.isArray((storeData as any)?.data)
+    ? (storeData as any).data
+    : []
   const storeName = stores[0]?.name || 'Forty V Flagship (Coimbatore)'
 
   const unreadCount = notificationsList.filter(n => n.unread).length

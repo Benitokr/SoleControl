@@ -89,7 +89,7 @@ export function DatabasePage() {
 
   // Consistent count reconciliation: synchronize pagination total with table record count
   const currentTableMeta = tables.find(t => t.name === selectedTable)
-  if (pagination.total === 0 && currentTableMeta?.recordCount > 0 && records.length > 0) {
+  if (pagination.total === 0 && currentTableMeta && (currentTableMeta.recordCount || 0) > 0 && records.length > 0) {
     pagination.total = currentTableMeta.recordCount
   } else if (records.length > 0 && pagination.total === 0) {
     pagination.total = records.length

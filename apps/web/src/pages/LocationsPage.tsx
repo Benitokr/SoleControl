@@ -31,8 +31,17 @@ export function LocationsPage() {
     queryFn: () => api.get('/inventory/stock').then(r => r.data?.data ?? []),
   })
 
-  const nodes = treeData?.data ?? []
-  const stockList = stockItems || []
+  const nodes: LocationNode[] = Array.isArray(treeData?.data)
+    ? treeData.data
+    : Array.isArray(treeData)
+    ? (treeData as any)
+    : []
+
+  const stockList: any[] = Array.isArray(stockItems)
+    ? stockItems
+    : Array.isArray((stockItems as any)?.data)
+    ? (stockItems as any).data
+    : []
 
   // Mocked variants filtered by rack
   const rackStock = stockList.filter((_, idx) => idx % 2 === 0).slice(0, 6)
@@ -74,7 +83,7 @@ export function LocationsPage() {
             )}
           </div>
         </div>
-        {node.children?.map(child => <TreeNode key={child.id} node={child} depth={depth + 1} />)}
+        {Array.isArray(node.children) && node.children.map(child => <TreeNode key={child.id} node={child} depth={depth + 1} />)}
       </div>
     )
   }

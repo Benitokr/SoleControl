@@ -146,7 +146,7 @@ export function SystemHealthPage() {
           Automated Integrity & Reconciliation Audits
         </h2>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-xs">
-          {(healthChecks || []).map((chk: any) => (
+          {(Array.isArray(healthChecks) ? healthChecks : (Array.isArray((healthChecks as any)?.data) ? (healthChecks as any).data : [])).map((chk: any) => (
             <div
               key={chk.id}
               className="p-3.5 rounded-lg border bg-slate-50/50 dark:bg-slate-900/50 space-y-1.5"

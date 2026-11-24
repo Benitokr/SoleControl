@@ -24,6 +24,18 @@ export function DisplayStockPage() {
     queryFn: () => api.get('/inventory/stock').then(r => r.data?.data ?? []),
   })
 
+  const allocationList: any[] = Array.isArray(allocations)
+    ? allocations
+    : Array.isArray((allocations as any)?.data)
+    ? (allocations as any).data
+    : []
+
+  const variantList: any[] = Array.isArray(variants)
+    ? variants
+    : Array.isArray((variants as any)?.data)
+    ? (variants as any).data
+    : []
+
   const allocateMutation = useMutation({
     mutationFn: (data: any) => api.post('/display/allocate', data),
     onSuccess: () => {
@@ -109,7 +121,7 @@ export function DisplayStockPage() {
 
         {isLoading ? (
           <div className="p-12 text-center text-sm" style={{ color: 'var(--color-muted)' }}>Loading display allocations…</div>
-        ) : (!allocations || allocations.length === 0) ? (
+        ) : allocationList.length === 0 ? (
           <div className="p-12 text-center space-y-3">
             <Store size={36} className="mx-auto text-slate-300 dark:text-slate-600" />
             <div className="text-base font-semibold" style={{ color: 'var(--color-text)' }}>No display items allocated yet</div>
@@ -133,7 +145,7 @@ export function DisplayStockPage() {
                 </tr>
               </thead>
               <tbody className="divide-y" style={{ borderColor: 'var(--color-border)' }}>
-                {allocations.map((a: any) => (
+                {allocationList.map((a: any) => (
                   <tr key={a.id} className="hover:bg-slate-50/50 dark:hover:bg-slate-800/40 transition-colors">
                     <td className="px-5 py-3.5 font-mono text-xs font-semibold" style={{ color: 'var(--color-primary)' }}>
                       {String(a?.id || '').slice(0, 8).toUpperCase()}
@@ -200,7 +212,7 @@ export function DisplayStockPage() {
                   className="w-full px-3 py-2 rounded-lg border text-sm outline-none"
                   style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }}
                 >
-                  {(variants || []).map((v: any) => (
+                  {variantList.map((v: any) => (
                     <option key={v.variant_id || v.id} value={v.variant_id || v.id}>
                       {v.sku} - {v.article_name || 'Footwear'} ({v.size_name || ''}) - Available: {v.quantity}
                     </option>
