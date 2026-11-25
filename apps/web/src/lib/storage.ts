@@ -24,6 +24,7 @@ const STORAGE_KEYS = {
   OFFERS: 'solecontrol_offers_v2',
   ADJUSTMENTS: 'solecontrol_adjustments_v2',
   STOCK: 'solecontrol_stock_v2',
+  USERS: 'solecontrol_users_v2',
 }
 
 const DEFAULT_NOTIFICATIONS: SystemNotification[] = [
@@ -141,6 +142,23 @@ export const PurchaseStorage = {
     }
     list.unshift(item)
     setLocal(STORAGE_KEYS.PURCHASES, list)
+
+    // Automatically register purchased SKUs into local StockStorage
+    const items = purchase.items || purchase.line_items || []
+    if (Array.isArray(items)) {
+      items.forEach((line: any) => {
+        if (line.sku) {
+          StockStorage.adjust(line.sku, Number(line.quantity) || 1, {
+            articleName: line.articleName || line.article_name || 'Footwear Model',
+            cost_price: Number(line.costPrice || line.cost_price || 2400),
+            selling_price: Number(line.sellingPrice || line.selling_price || line.mrp || 4999),
+            size: line.size || 'UK 8',
+            colour: line.colour || 'Black'
+          })
+        }
+      })
+    }
+
     return list
   },
 
@@ -333,13 +351,14 @@ export const StockStorage = {
 
   adjust(sku: string, qtyChange: number, extra?: any): any[] {
     const list = this.getAll()
-    const existing = list.find(s => s.sku === sku)
+    const cleanSku = (sku || '').trim().toUpperCase()
+    const existing = list.find(s => (s.sku || '').toUpperCase() === cleanSku)
     if (existing) {
       existing.quantity = Math.max(0, (Number(existing.quantity) || 0) + qtyChange)
     } else {
       list.unshift({
         id: 'stk-' + Date.now(),
-        sku,
+        sku: cleanSku,
         articleName: extra?.articleName || extra?.article_name || 'Footwear Model',
         article_name: extra?.articleName || extra?.article_name || 'Footwear Model',
         size: extra?.size || 'UK 8',
@@ -352,6 +371,96 @@ export const StockStorage = {
     }
     setLocal(STORAGE_KEYS.STOCK, list)
     return list
+  },
+
+  mergeWith(serverStock: any[]): any[] {
+    const raw = Array.isArray(serverStock)
+      ? serverStock
+      : Array.isArray((serverStock as any)?.data)
+      ? (serverStock as any).data
+      : []
+    const local = this.getAll()
+    const map = new Map<string, any>()
+    raw.forEach((s: any) => {
+      if (s?.sku) map.set(s.sku.toUpperCase(), { ...s })
+    })
+    local.forEach((s: any) => {
+      if (s?.sku) {
+        const key = s.sku.toUpperCase()
+        if (map.has(key)) {
+          map.get(key).quantity = s.quantity
+        } else {
+          map.set(key, s)
+        }
+      }
+    })
+    return Array.from(map.values())
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Users Storage
+// ---------------------------------------------------------------------------
+export const UserStorage = {
+  getAll(): any[] {
+    return getLocal<any[]>(STORAGE_KEYS.USERS, [])
+  },
+
+  add(user: any): any[] {
+    const list = this.getAll()
+    const item = {
+      ...user,
+      id: user.id || ('usr-' + Date.now().toString().slice(-4)),
+      isActive: user.isActive ?? true,
+      role: typeof user.role === 'object' ? user.role : { name: user.roleName || user.role || 'Sales Executive' },
+      role_name: user.roleName || (typeof user.role === 'object' ? user.role?.name : user.role) || 'Sales Executive',
+      lastLoginAt: user.lastLoginAt || new Date().toISOString()
+    }
+    list.unshift(item)
+    setLocal(STORAGE_KEYS.USERS, list)
+    return list
+  },
+
+  mergeWith(serverUsers: any[]): any[] {
+    const raw = Array.isArray(serverUsers) ? serverUsers : Array.isArray((serverUsers as any)?.data) ? (serverUsers as any).data : []
+    const local = this.getAll()
+    const map = new Map<string, any>()
+    raw.forEach((u: any) => map.set(u.id || u.email, u))
+    local.forEach((u: any) => map.set(u.id || u.email, u))
+    return Array.from(map.values())
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Master Data Storage
+// ---------------------------------------------------------------------------
+export const MasterStorage = {
+  getAll(tab: string): any[] {
+    const key = `solecontrol_masters_${tab}_v2`
+    return getLocal<any[]>(key, [])
+  },
+
+  add(tab: string, item: any): any[] {
+    const key = `solecontrol_masters_${tab}_v2`
+    const list = getLocal<any[]>(key, [])
+    const newItem = {
+      ...item,
+      id: item.id || (`${tab.slice(0, 3)}-` + Date.now().toString().slice(-4)),
+      isActive: true,
+      is_active: true
+    }
+    list.unshift(newItem)
+    setLocal(key, list)
+    return list
+  },
+
+  mergeWith(tab: string, serverData: any[]): any[] {
+    const raw = Array.isArray(serverData) ? serverData : Array.isArray((serverData as any)?.data) ? (serverData as any).data : []
+    const local = this.getAll(tab)
+    const map = new Map<string, any>()
+    raw.forEach((d: any) => map.set(d.id || d.name || d.code, d))
+    local.forEach((d: any) => map.set(d.id || d.name || d.code, d))
+    return Array.from(map.values())
   }
 }
 

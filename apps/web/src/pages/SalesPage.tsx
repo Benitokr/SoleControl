@@ -3,7 +3,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { Receipt, Plus, Search, Eye, CheckCircle2, Clock, X, ShoppingBag, CreditCard, QrCode, Banknote } from 'lucide-react'
 import { api, fmt } from '../lib/api'
 import { format } from 'date-fns'
-import { SalesStorage } from '../lib/storage'
+import { SalesStorage, StockStorage } from '../lib/storage'
 
 interface Sale {
   id: string
@@ -101,8 +101,8 @@ export function SalesPage() {
   const serverSales: Sale[] = Array.isArray(salesData?.data)
     ? salesData.data
     : Array.isArray(salesData)
-    ? (salesData as any)
-    : []
+      ? (salesData as any)
+      : []
 
   const localSales = SalesStorage.getAll()
   const rawSales: Sale[] = [
@@ -119,14 +119,10 @@ export function SalesPage() {
   const customerList: any[] = Array.isArray(customers)
     ? customers
     : Array.isArray((customers as any)?.data)
-    ? (customers as any).data
-    : []
+      ? (customers as any).data
+      : []
 
-  const activeVariants: any[] = Array.isArray(stockItems)
-    ? stockItems
-    : Array.isArray((stockItems as any)?.data)
-    ? (stockItems as any).data
-    : []
+  const activeVariants: any[] = StockStorage.mergeWith(stockItems || [])
   const activeVariant = activeVariants.find((v: any) => (v.variant_id || v.id) === (selectedVariantId || activeVariants[0]?.variant_id))
   const unitPrice = Number(activeVariant?.selling_price || activeVariant?.sellingPrice || 4899)
   const subtotal = unitPrice * quantity
@@ -306,8 +302,8 @@ export function SalesPage() {
       {showModal && (
         <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4">
           <div className="w-full max-w-lg rounded-2xl shadow-2xl border p-6 space-y-4 animate-in fade-in"
-               style={{ background: 'var(--color-surface)', borderColor: 'var(--color-border)' }}>
-            
+            style={{ background: 'var(--color-surface)', borderColor: 'var(--color-border)' }}>
+
             <div className="flex items-center justify-between border-b pb-3" style={{ borderColor: 'var(--color-border)' }}>
               <div>
                 <h3 className="font-bold text-lg" style={{ color: 'var(--color-text)' }}>New Counter Sale & POS Invoice</h3>
@@ -462,7 +458,7 @@ export function SalesPage() {
       {selectedSale && (
         <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-sm flex justify-end">
           <div className="w-full max-w-md h-full shadow-2xl p-6 flex flex-col justify-between overflow-y-auto animate-in slide-in-from-right"
-               style={{ background: 'var(--color-surface)' }}>
+            style={{ background: 'var(--color-surface)' }}>
             <div className="space-y-5">
               <div className="flex items-center justify-between border-b pb-3" style={{ borderColor: 'var(--color-border)' }}>
                 <div>

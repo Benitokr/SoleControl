@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { ScanBarcode, Printer, Plus, Eye, X, CheckCircle2, Sliders, Layers } from 'lucide-react'
 import { api, fmt } from '../lib/api'
+import { StockStorage } from '../lib/storage'
 
 interface BarcodeJob {
   id: string
@@ -60,11 +61,7 @@ export function BarcodesPage() {
     ? (queueData as any)
     : []
 
-  const stockList: any[] = Array.isArray(stockItems)
-    ? stockItems
-    : Array.isArray((stockItems as any)?.data)
-    ? (stockItems as any).data
-    : []
+  const stockList: any[] = StockStorage.mergeWith(stockItems || [])
 
   // Resolve preview item (null when no stock items available)
   const previewItem = stockList.find((v: any) => v.sku === selectedSku) || (stockList.length > 0 ? stockList[0] : null)

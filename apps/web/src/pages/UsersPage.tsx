@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { Users, Plus, CheckCircle, XCircle, Search, KeyRound, Shield, X, Check } from 'lucide-react'
 import { api } from '../lib/api'
+import { UserStorage } from '../lib/storage'
 
 interface User {
   id: string
@@ -56,13 +57,24 @@ export function UsersPage() {
       return
     }
     setFormError('')
+    const newUserObj = {
+      id: 'usr-' + Date.now(),
+      name: newName.trim(),
+      email: newEmail.trim().toLowerCase(),
+      role: { name: newRole.replace(/_/g, ' ') },
+      role_name: newRole.replace(/_/g, ' '),
+      isActive: true,
+      lastLoginAt: new Date().toISOString()
+    }
+    UserStorage.add(newUserObj)
     createUserMutation.mutate({
-      name: newName,
-      email: newEmail,
+      name: newName.trim(),
+      email: newEmail.trim().toLowerCase(),
       roleName: newRole,
       password: newPassword,
       isActive: true
     })
+    setShowAddModal(false)
   }
 
   const handleResetPassword = (u: User) => {
@@ -70,11 +82,13 @@ export function UsersPage() {
     setTimeout(() => setResetSuccessMsg(''), 4000)
   }
 
-  const rawUsers: User[] = Array.isArray(data?.data)
-    ? data.data
-    : Array.isArray(data)
-    ? (data as any)
-    : []
+  const rawUsers: User[] = UserStorage.mergeWith(
+    Array.isArray(data?.data)
+      ? data.data
+      : Array.isArray(data)
+      ? (data as any)
+      : []
+  )
 
   const users = rawUsers.filter(u =>
     (u?.name || '').toLowerCase().includes(search.toLowerCase()) ||
@@ -181,7 +195,7 @@ export function UsersPage() {
                       <td className="px-5 py-3.5 text-xs font-mono text-slate-500">{u.email}</td>
                       <td className="px-5 py-3.5">
                         <span className="text-xs px-2.5 py-0.5 rounded-full font-semibold border"
-                              style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }}>
+                          style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }}>
                           {roleName}
                         </span>
                       </td>
@@ -233,7 +247,7 @@ export function UsersPage() {
       {showAddModal && (
         <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-sm flex items-center justify-center p-4">
           <div className="w-full max-w-md rounded-2xl p-6 shadow-2xl border space-y-4 animate-in fade-in"
-               style={{ background: 'var(--color-surface)', borderColor: 'var(--color-border)' }}>
+            style={{ background: 'var(--color-surface)', borderColor: 'var(--color-border)' }}>
             <div className="flex items-center justify-between border-b pb-3" style={{ borderColor: 'var(--color-border)' }}>
               <h3 className="font-bold text-lg" style={{ color: 'var(--color-text)' }}>Create Staff Account</h3>
               <button onClick={() => setShowAddModal(false)} className="p-1 hover:opacity-75"><X size={18} /></button>

@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { ArrowLeftRight, Plus, CheckCircle, Clock, Truck, ShieldAlert } from 'lucide-react'
 import { api } from '../lib/api'
+import { StockStorage } from '../lib/storage'
 import { TransferStorage } from '../lib/storage'
 import { format } from 'date-fns'
 
@@ -48,11 +49,7 @@ export function TransfersPage() {
     ? (stores as any).data
     : []
 
-  const variantList: any[] = Array.isArray(variants)
-    ? variants
-    : Array.isArray((variants as any)?.data)
-    ? (variants as any).data
-    : []
+  const variantList: any[] = StockStorage.mergeWith(variants || [])
 
   const createMutation = useMutation({
     mutationFn: async (data: any) => {

@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { Database, Plus, Search, X, CheckCircle2 } from 'lucide-react'
 import { api } from '../lib/api'
+import { MasterStorage } from '../lib/storage'
 
 type Tab = 'brands' | 'categories' | 'sizes' | 'colours' | 'articles'
 
@@ -34,11 +35,7 @@ export function MastersPage() {
 
   const queries: Record<Tab, typeof brands> = { brands, categories, sizes, colours, articles }
   const q = queries[tab]
-  const rawData: any[] = Array.isArray(q.data)
-    ? q.data
-    : Array.isArray((q.data as any)?.data)
-    ? (q.data as any).data
-    : []
+  const rawData: any[] = MasterStorage.mergeWith(tab, q.data || [])
   const rows: any[] = rawData.filter((r: any) =>
     (r?.name ?? '').toLowerCase().includes(search.toLowerCase()) ||
     (r?.code ?? '').toLowerCase().includes(search.toLowerCase())
@@ -64,13 +61,18 @@ export function MastersPage() {
       return
     }
     setFormError('')
-    createMasterMutation.mutate({
-      name,
-      code: code || name.toUpperCase().slice(0, 4),
+    const newMasterObj = {
+      name: name.trim(),
+      code: (code || name.toUpperCase().slice(0, 4)).trim(),
       hex,
       sortOrder: Number(sortOrder),
-      isActive: true
-    })
+      sort_order: Number(sortOrder),
+      isActive: true,
+      is_active: true
+    }
+    MasterStorage.add(tab, newMasterObj)
+    createMasterMutation.mutate(newMasterObj)
+    setShowAddModal(false)
   }
 
   return (

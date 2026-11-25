@@ -3,7 +3,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { PackageX, Plus, AlertTriangle, ShieldCheck, CheckCircle2, Eye } from 'lucide-react'
 import { api } from '../lib/api'
 import { format } from 'date-fns'
-import { DamagedGoodsStorage } from '../lib/storage'
+import { DamagedGoodsStorage, StockStorage } from '../lib/storage'
 
 export function DamagedGoodsPage() {
   const queryClient = useQueryClient()
@@ -36,11 +36,7 @@ export function DamagedGoodsPage() {
     ...serverDamages.filter((d: any) => !localDamages.some(ld => ld.id === d.id))
   ]
 
-  const variantList: any[] = Array.isArray(variants)
-    ? variants
-    : Array.isArray((variants as any)?.data)
-    ? (variants as any).data
-    : []
+  const variantList: any[] = StockStorage.mergeWith(variants || [])
 
   const createMutation = useMutation({
     mutationFn: async (data: any) => {

@@ -3,7 +3,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { Store, Plus, ArrowDownLeft, Boxes, CheckCircle2 } from 'lucide-react'
 import { api } from '../lib/api'
 import { format } from 'date-fns'
-import { DisplayStorage } from '../lib/storage'
+import { DisplayStorage, StockStorage } from '../lib/storage'
 
 export function DisplayStockPage() {
   const queryClient = useQueryClient()
@@ -28,8 +28,8 @@ export function DisplayStockPage() {
   const serverAllocations: any[] = Array.isArray(allocations)
     ? allocations
     : Array.isArray((allocations as any)?.data)
-    ? (allocations as any).data
-    : []
+      ? (allocations as any).data
+      : []
 
   const localAllocations = DisplayStorage.getAll()
   const allocationList: any[] = [
@@ -37,11 +37,7 @@ export function DisplayStockPage() {
     ...serverAllocations.filter((a: any) => !localAllocations.some(la => la.id === a.id))
   ]
 
-  const variantList: any[] = Array.isArray(variants)
-    ? variants
-    : Array.isArray((variants as any)?.data)
-    ? (variants as any).data
-    : []
+  const variantList: any[] = StockStorage.mergeWith(variants || [])
 
   const allocateMutation = useMutation({
     mutationFn: async (data: any) => {
