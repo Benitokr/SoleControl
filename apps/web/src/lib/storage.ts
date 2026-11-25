@@ -21,6 +21,9 @@ const STORAGE_KEYS = {
   CLEARANCE_RULES: 'solecontrol_clearance_rules_v2',
   DAMAGED_GOODS: 'solecontrol_damaged_goods_v2',
   DISPLAYS: 'solecontrol_displays_v2',
+  OFFERS: 'solecontrol_offers_v2',
+  ADJUSTMENTS: 'solecontrol_adjustments_v2',
+  STOCK: 'solecontrol_stock_v2',
 }
 
 const DEFAULT_NOTIFICATIONS: SystemNotification[] = [
@@ -270,3 +273,85 @@ export const DisplayStorage = {
     return list
   }
 }
+
+// ---------------------------------------------------------------------------
+// Offers Storage
+// ---------------------------------------------------------------------------
+export const OfferStorage = {
+  getAll(): any[] {
+    return getLocal<any[]>(STORAGE_KEYS.OFFERS, [])
+  },
+
+  add(offer: any): any[] {
+    const list = this.getAll()
+    const item = {
+      ...offer,
+      id: offer.id || ('off-' + Date.now().toString().slice(-4)),
+      isActive: offer.isActive ?? true,
+      validFrom: offer.validFrom || new Date().toISOString()
+    }
+    list.unshift(item)
+    setLocal(STORAGE_KEYS.OFFERS, list)
+    return list
+  },
+
+  toggle(id: string): any[] {
+    const list = this.getAll().map(o => o.id === id ? { ...o, isActive: !o.isActive } : o)
+    setLocal(STORAGE_KEYS.OFFERS, list)
+    return list
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Inventory Adjustments Storage
+// ---------------------------------------------------------------------------
+export const AdjustmentStorage = {
+  getAll(): any[] {
+    return getLocal<any[]>(STORAGE_KEYS.ADJUSTMENTS, [])
+  },
+
+  add(adj: any): any[] {
+    const list = this.getAll()
+    const item = {
+      ...adj,
+      id: adj.id || ('adj-' + Date.now().toString().slice(-4)),
+      adjusted_at: adj.adjusted_at || new Date().toISOString()
+    }
+    list.unshift(item)
+    setLocal(STORAGE_KEYS.ADJUSTMENTS, list)
+    return list
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Dynamic Stock Balances Storage
+// ---------------------------------------------------------------------------
+export const StockStorage = {
+  getAll(): any[] {
+    return getLocal<any[]>(STORAGE_KEYS.STOCK, [])
+  },
+
+  adjust(sku: string, qtyChange: number, extra?: any): any[] {
+    const list = this.getAll()
+    const existing = list.find(s => s.sku === sku)
+    if (existing) {
+      existing.quantity = Math.max(0, (Number(existing.quantity) || 0) + qtyChange)
+    } else {
+      list.unshift({
+        id: 'stk-' + Date.now(),
+        sku,
+        articleName: extra?.articleName || extra?.article_name || 'Footwear Model',
+        article_name: extra?.articleName || extra?.article_name || 'Footwear Model',
+        size: extra?.size || 'UK 8',
+        colour: extra?.colour || 'Black',
+        quantity: Math.max(0, qtyChange),
+        cost_price: 2400,
+        selling_price: 4999,
+        created_at: new Date().toISOString()
+      })
+    }
+    setLocal(STORAGE_KEYS.STOCK, list)
+    return list
+  }
+}
+

@@ -113,12 +113,17 @@ export function TransfersPage() {
   const handleCreate = (e: React.FormEvent) => {
     e.preventDefault()
     setFormError('')
+    const targetVariant = (variantId || variantList[0]?.variant_id || variantList[0]?.sku || '').trim()
+    if (!targetVariant) {
+      setFormError('Please enter or select a Footwear Variant / SKU.')
+      return
+    }
     const defaultStore = stores?.[0]?.id || 'STORE-01'
     const targetStore = toStoreId || defaultStore
     createMutation.mutate({
       fromStoreId: fromStoreId || defaultStore,
       toStoreId: targetStore,
-      items: [{ variantId: variantId || variants?.[0]?.variant_id, quantity: Number(quantity) }],
+      items: [{ variantId: targetVariant, quantity: Number(quantity) }],
       notes
     })
   }
@@ -280,19 +285,42 @@ export function TransfersPage() {
 
             <form onSubmit={handleCreate} className="space-y-4 text-sm">
               <div>
-                <label className="block text-xs font-semibold mb-1" style={{ color: 'var(--color-muted)' }}>Footwear Variant / SKU</label>
-                <select
+                <label className="block text-xs font-semibold mb-1" style={{ color: 'var(--color-muted)' }}>
+                  Footwear Variant / SKU
+                </label>
+                <input
+                  list="transfer-sku-list"
+                  type="text"
+                  required
+                  placeholder="Enter or select SKU (e.g. NI-AIR-8-BLK)"
                   value={variantId}
                   onChange={e => setVariantId(e.target.value)}
-                  className="w-full px-3 py-2 rounded-lg border text-sm outline-none"
+                  className="w-full px-3 py-2 rounded-lg border text-sm outline-none font-mono"
                   style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }}
-                >
+                />
+                <datalist id="transfer-sku-list">
                   {variantList.map((v: any) => (
-                    <option key={v.variant_id || v.id} value={v.variant_id || v.id}>
+                    <option key={v.sku || v.variant_id || v.id} value={v.sku || v.variant_id || v.id}>
                       {v.sku} - {v.article_name || 'Footwear'} ({v.size_name || ''} / {v.colour_name || ''}) - Stock: {v.quantity}
                     </option>
                   ))}
-                </select>
+                </datalist>
+                {variantList.length > 0 && (
+                  <div className="flex flex-wrap items-center gap-1.5 mt-1.5">
+                    <span className="text-[11px] text-slate-400">Available:</span>
+                    {variantList.slice(0, 5).map((v: any) => (
+                      <button
+                        key={v.sku || v.id}
+                        type="button"
+                        onClick={() => setVariantId(v.sku || v.id)}
+                        className="text-[11px] px-2 py-0.5 rounded border font-mono transition-colors hover:bg-slate-100 dark:hover:bg-slate-800"
+                        style={{ borderColor: 'var(--color-border)', color: 'var(--color-primary)' }}
+                      >
+                        {v.sku}
+                      </button>
+                    ))}
+                  </div>
+                )}
               </div>
 
               <div className="grid grid-cols-2 gap-3">

@@ -136,9 +136,9 @@ export function SalesPage() {
   const handleSaleSubmit = (e: React.FormEvent) => {
     e.preventDefault()
     setFormError('')
-    const varId = selectedVariantId || activeVariants[0]?.variant_id || activeVariants[0]?.id
+    const varId = (selectedVariantId || activeVariants[0]?.sku || activeVariants[0]?.variant_id || activeVariants[0]?.id || '').trim()
     if (!varId) {
-      setFormError('Please select a footwear variant from inventory.')
+      setFormError('Please select or enter a footwear variant SKU.')
       return
     }
 
@@ -341,19 +341,42 @@ export function SalesPage() {
               </div>
 
               <div>
-                <label className="block text-xs font-semibold mb-1" style={{ color: 'var(--color-muted)' }}>Footwear Variant</label>
-                <select
+                <label className="block text-xs font-semibold mb-1" style={{ color: 'var(--color-muted)' }}>
+                  Footwear Variant / SKU
+                </label>
+                <input
+                  list="sales-sku-options"
+                  type="text"
+                  required
+                  placeholder="Enter or select SKU (e.g. NI-AIR-8-BLK)"
                   value={selectedVariantId}
                   onChange={e => setSelectedVariantId(e.target.value)}
-                  className="w-full px-3 py-2 rounded-lg border text-sm outline-none"
+                  className="w-full px-3 py-2 rounded-lg border text-sm outline-none font-mono"
                   style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }}
-                >
+                />
+                <datalist id="sales-sku-options">
                   {activeVariants.map((v: any) => (
-                    <option key={v.variant_id || v.id} value={v.variant_id || v.id}>
+                    <option key={v.sku || v.variant_id || v.id} value={v.sku || v.variant_id || v.id}>
                       {v.sku} - {v.article_name || 'Footwear'} ({v.size_name || ''} / {v.colour_name || ''}) - Price: {fmt(Number(v.selling_price || 4899))}
                     </option>
                   ))}
-                </select>
+                </datalist>
+                {activeVariants.length > 0 && (
+                  <div className="flex flex-wrap items-center gap-1.5 mt-1.5">
+                    <span className="text-[11px] text-slate-400">Inventory:</span>
+                    {activeVariants.slice(0, 5).map((v: any) => (
+                      <button
+                        key={v.sku || v.id}
+                        type="button"
+                        onClick={() => setSelectedVariantId(v.sku || v.id)}
+                        className="text-[11px] px-2 py-0.5 rounded border font-mono transition-colors hover:bg-slate-100 dark:hover:bg-slate-800"
+                        style={{ borderColor: 'var(--color-border)', color: 'var(--color-primary)' }}
+                      >
+                        {v.sku}
+                      </button>
+                    ))}
+                  </div>
+                )}
               </div>
 
               <div className="grid grid-cols-2 gap-3">

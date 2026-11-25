@@ -230,18 +230,18 @@ export function DashboardPage() {
         <KpiCard
           label="Today's Sales Revenue"
           value={loadingKpis ? '...' : fmt(Number(kpisData?.todaySales || 0))}
-          badge="+14.2%"
+          badge={Number(kpisData?.todaySales || 0) > 0 ? 'Active' : undefined}
           badgeType="positive"
-          sub="vs previous weekday"
+          sub="Gross retail turnover"
           color="var(--color-primary)"
           icon={TrendingUp}
         />
         <KpiCard
           label="Sales Transactions"
           value={loadingKpis ? '...' : (kpisData?.todayTransactions ?? 0)}
-          badge="100% Cleared"
+          badge={(kpisData?.todayTransactions ?? 0) > 0 ? 'Verified' : undefined}
           badgeType="positive"
-          sub="3 completed · 0 returned"
+          sub={`${kpisData?.todayTransactions ?? 0} transactions logged`}
           color="var(--color-success)"
           icon={ShoppingBag}
         />
@@ -250,16 +250,16 @@ export function DashboardPage() {
           value={loadingKpis ? '...' : (Number(kpisData?.totalStock || 0).toLocaleString('en-IN'))}
           badge="Stock On Hand"
           badgeType="neutral"
-          sub="580 active · 38 display · 24 defect"
+          sub={`${Number(kpisData?.totalStock || 0)} pairs across inventory`}
           color="var(--color-text)"
           icon={Boxes}
         />
         <KpiCard
           label="Pending Purchases"
           value={loadingKpis ? '...' : (kpisData?.pendingPurchases ?? 0)}
-          badge="₹1,43,360"
+          badge={(kpisData?.pendingPurchases ?? 0) > 0 ? 'In Progress' : undefined}
           badgeType="neutral"
-          sub="Draft bills awaiting final GRN"
+          sub={`${kpisData?.pendingPurchases ?? 0} bills awaiting final GRN`}
           color="var(--color-warning)"
           icon={Clock}
         />
@@ -269,34 +269,34 @@ export function DashboardPage() {
           value={loadingKpis ? '...' : fmt(Number(kpisData?.inventoryValuation || 0))}
           badge="Weighted Avg"
           badgeType="neutral"
-          sub="Retail MRP: ₹6,88,400"
+          sub="Current warehouse balance"
           color="var(--color-primary)"
           icon={Boxes}
         />
         <KpiCard
           label="Vendor Payables"
           value={loadingKpis ? '...' : fmt(Number(kpisData?.vendorOutstanding || 0))}
-          badge="6 Suppliers"
+          badge={Number(kpisData?.vendorOutstanding || 0) > 0 ? 'Payable' : undefined}
           badgeType="neutral"
-          sub="₹1,43,360 due in 3 days"
+          sub="Payable to suppliers"
           color="var(--color-danger)"
           icon={Truck}
         />
         <KpiCard
           label="Customer Receivables"
           value={loadingKpis ? '...' : fmt(Number(kpisData?.customerOutstanding || 0))}
-          badge="Credit Sales"
+          badge={Number(kpisData?.customerOutstanding || 0) > 0 ? 'Receivable' : undefined}
           badgeType="neutral"
-          sub="2 accounts with credit line"
+          sub="Trade customer receivables"
           color="var(--color-warning)"
           icon={HeartHandshake}
         />
         <KpiCard
           label="Net Operating Margin"
           value={loadingKpis ? '...' : `${Number(kpisData?.grossMarginPct || 0).toFixed(1)}%`}
-          badge="+2.4% MoM"
+          badge={Number(kpisData?.grossMarginPct || 0) > 0 ? 'Profitable' : undefined}
           badgeType="positive"
-          sub="₹72,110 gross trading profit"
+          sub="Operating gross margin"
           color="var(--color-success)"
           icon={DollarSign}
         />

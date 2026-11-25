@@ -527,6 +527,19 @@ export default async function handler(req, res) {
         urgency: (b.quantity || 0) <= 2 ? 'HIGH' : 'MEDIUM'
       }));
 
+    // Dynamic top brands from actual recorded sales
+    const brandSales = {};
+    sales.forEach(s => {
+      (s.items || []).forEach(item => {
+        const b = item.brand_name || item.brand || 'Forty V Footwear';
+        brandSales[b] = (brandSales[b] || 0) + (Number(item.quantity) || 1);
+      });
+    });
+    const topBrands = Object.entries(brandSales)
+      .map(([brand, units]) => ({ brand, units, revenue: units * 4999 }))
+      .sort((a, b) => b.units - a.units)
+      .slice(0, 5);
+
     return res.status(200).json({
       data: {
         salesTrend7d: days,
@@ -537,7 +550,7 @@ export default async function handler(req, res) {
           grossMargin: totalSalesVal > 0 ? 40 : 0
         },
         salesByPaymentMode: paymentModes,
-        topBrands: [],
+        topBrands: topBrands,
         topCategories: [],
         topArticles: [],
         lowStockVariants: lowStock,
@@ -1011,19 +1024,45 @@ export default async function handler(req, res) {
   }
   if (path.includes('/inventory/adjustments')) {
     if (req.method === 'POST') {
+      const targetSku = (body.variantSku || body.sku || 'SKU-001').trim().toUpperCase();
+      const delta = Number(body.quantityChange ?? body.quantity ?? 1);
       const newAdj = {
         id: 'adj-' + Date.now(),
         docNumber: 'ADJ-2026-00' + (adjustments.length + 1),
         reference: 'ADJ-2026-00' + (adjustments.length + 1),
-        variant_sku: body.sku || 'NK-AM-A5-8-BLK',
-        article_name: body.article_name || 'Air Max Pulse Retro',
-        quantity_change: Number(body.quantity || 1),
+        variant_sku: targetSku,
+        variantSku: targetSku,
+        article_name: body.article_name || 'Footwear Model',
+        quantity_change: delta,
+        quantityChange: delta,
         reason: body.reason || 'Manual cycle discrepancy adjustment',
         status: 'POSTED',
         createdAt: new Date().toISOString(),
         created_at: new Date().toISOString()
       };
       adjustments.unshift(newAdj);
+
+      // Directly update or create balance in DB.balances
+      let existingBal = DB.balances.find(b => (b.sku || '').toUpperCase() === targetSku);
+      if (existingBal) {
+        existingBal.quantity = Math.max(0, (Number(existingBal.quantity) || 0) + delta);
+      } else {
+        const newBal = {
+          id: 'bal-' + Date.now(),
+          sku: targetSku,
+          article_name: body.article_name || 'Footwear Model',
+          articleName: body.article_name || 'Footwear Model',
+          quantity: Math.max(0, delta),
+          cost_price: 2400,
+          selling_price: 4999,
+          size: 'UK 8',
+          colour: 'Black',
+          created_at: new Date().toISOString()
+        };
+        DB.balances.unshift(newBal);
+        DB.variants.unshift(newBal);
+      }
+
       return res.status(201).json({ data: newAdj });
     }
     return res.status(200).json({ data: adjustments });

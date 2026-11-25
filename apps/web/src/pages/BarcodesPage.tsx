@@ -317,19 +317,42 @@ export function BarcodesPage() {
 
             <form onSubmit={handleQueueSubmit} className="space-y-4 text-sm">
               <div>
-                <label className="block text-xs font-semibold mb-1" style={{ color: 'var(--color-muted)' }}>Select Footwear Model / SKU</label>
-                <select
+                <label className="block text-xs font-semibold mb-1" style={{ color: 'var(--color-muted)' }}>
+                  Footwear Model / SKU
+                </label>
+                <input
+                  list="barcode-sku-options"
+                  type="text"
+                  required
+                  placeholder="Enter or select SKU (e.g. NI-AIR-8-BLK)"
                   value={selectedSku}
                   onChange={e => setSelectedSku(e.target.value)}
                   className="w-full px-3 py-2 rounded-xl border text-sm outline-none font-mono"
                   style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }}
-                >
+                />
+                <datalist id="barcode-sku-options">
                   {stockList.map((s: any) => (
                     <option key={s.sku} value={s.sku}>
                       {s.sku} - {s.article_name || 'Shoe'} ({s.size_label || s.size || ''})
                     </option>
                   ))}
-                </select>
+                </datalist>
+                {stockList.length > 0 && (
+                  <div className="flex flex-wrap items-center gap-1.5 mt-1.5">
+                    <span className="text-[11px] text-slate-400">Available:</span>
+                    {stockList.slice(0, 5).map((s: any) => (
+                      <button
+                        key={s.sku}
+                        type="button"
+                        onClick={() => setSelectedSku(s.sku)}
+                        className="text-[11px] px-2 py-0.5 rounded border font-mono transition-colors hover:bg-slate-100 dark:hover:bg-slate-800"
+                        style={{ borderColor: 'var(--color-border)', color: 'var(--color-primary)' }}
+                      >
+                        {s.sku}
+                      </button>
+                    ))}
+                  </div>
+                )}
               </div>
 
               <div>

@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { BadgePercent, Plus, Search, Sparkles, X, Calculator, Tag, CheckCircle2 } from 'lucide-react'
 import { api, fmt } from '../lib/api'
+import { OfferStorage } from '../lib/storage'
 
 interface Offer {
   id: string
@@ -44,14 +45,23 @@ export function OffersPage() {
     ? (data as any)
     : []
 
-  const offers = rawOffers.filter(o =>
+  const localOffers = OfferStorage.getAll()
+  const offerMap = new Map<string, Offer>()
+  rawOffers.forEach(o => offerMap.set(o.id, o))
+  localOffers.forEach(o => offerMap.set(o.id, o))
+  const mergedOffers = Array.from(offerMap.values())
+
+  const offers = mergedOffers.filter(o =>
     (o?.name || '').toLowerCase().includes(search.toLowerCase())
   )
 
   const toggle = useMutation({
-    mutationFn: (o: Offer) => o.isActive
-      ? api.post(`/offers/${o.id}/deactivate`)
-      : api.put(`/offers/${o.id}`, { isActive: true }),
+    mutationFn: (o: Offer) => {
+      OfferStorage.toggle(o.id)
+      return o.isActive
+        ? api.post(`/offers/${o.id}/deactivate`)
+        : api.put(`/offers/${o.id}`, { isActive: true })
+    },
     onSuccess: () => qc.invalidateQueries({ queryKey: ['offers'] }),
   })
 
@@ -75,15 +85,19 @@ export function OffersPage() {
       return
     }
     setFormError('')
-    createOfferMutation.mutate({
-      name,
+    const newOfferObj = {
+      id: 'off-' + Date.now(),
+      name: name.trim(),
       scopeType,
       discountType,
       discountValue: Number(discountValue),
       priority: Number(priority),
       validFrom: new Date().toISOString(),
       isActive: true
-    })
+    }
+    OfferStorage.add(newOfferObj)
+    createOfferMutation.mutate(newOfferObj)
+    setShowNewModal(false)
   }
 
   // Simulation calculation

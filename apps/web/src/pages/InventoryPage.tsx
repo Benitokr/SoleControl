@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { Boxes, Search, Plus, RotateCcw, CheckCircle2, AlertTriangle, X, ArrowUpRight } from 'lucide-react'
 import { api, fmt } from '../lib/api'
+import { StockStorage, AdjustmentStorage } from '../lib/storage'
 
 type Tab = 'stock' | 'adjustments' | 'audits' | 'heatmap'
 
@@ -69,11 +70,25 @@ export function InventoryPage() {
     }
   })
 
-  const stockList: any[] = Array.isArray(stock.data)
+  const rawStock: any[] = Array.isArray(stock.data)
     ? stock.data
     : Array.isArray((stock.data as any)?.data)
     ? (stock.data as any).data
     : []
+  
+  // Merge server stock with persistent local stock
+  const localStock = StockStorage.getAll()
+  const stockMap = new Map<string, any>()
+  rawStock.forEach(s => stockMap.set(s.sku, { ...s }))
+  localStock.forEach(s => {
+    if (stockMap.has(s.sku)) {
+      stockMap.get(s.sku).quantity = s.quantity
+    } else {
+      stockMap.set(s.sku, s)
+    }
+  })
+  const stockList: any[] = Array.from(stockMap.values())
+
   const filteredStock = stockList.filter(s =>
     (s.sku ?? '').toLowerCase().includes(search.toLowerCase()) ||
     (s.articleName ?? s.article_name ?? s.article ?? '').toLowerCase().includes(search.toLowerCase()) ||
@@ -88,10 +103,24 @@ export function InventoryPage() {
   const handleAdjSubmit = (e: React.FormEvent) => {
     e.preventDefault()
     setFormError('')
-    const targetSku = adjSku || stockList[0]?.sku || 'NK-AM-A5-8-BLK'
+    const targetSku = (adjSku || stockList[0]?.sku || '').trim().toUpperCase()
+    if (!targetSku) {
+      setFormError('Please enter or select a Footwear SKU.')
+      return
+    }
+    const delta = Number(adjQty)
+    StockStorage.adjust(targetSku, delta)
+    AdjustmentStorage.add({
+      variant_sku: targetSku,
+      variantSku: targetSku,
+      quantity_change: delta,
+      quantityChange: delta,
+      reason: adjReason,
+      adjusted_at: new Date().toISOString()
+    })
     createAdjustmentMutation.mutate({
       variantSku: targetSku,
-      quantityChange: Number(adjQty),
+      quantityChange: delta,
       reason: adjReason,
     })
   }
@@ -255,8 +284,15 @@ export function InventoryPage() {
           </div>
         )}
 
-        {tab === 'adjustments' && (
-          adjustments.isLoading ? <Spinner /> : adjustments.error ? <Err /> : (
+        {tab === 'adjustments' && (() => {
+          const rawAdj = Array.isArray(adjustments.data) ? adjustments.data : []
+          const localAdj = AdjustmentStorage.getAll()
+          const adjMap = new Map<string, any>()
+          rawAdj.forEach((a: any) => adjMap.set(a.id, a))
+          localAdj.forEach((a: any) => adjMap.set(a.id, a))
+          const adjList = Array.from(adjMap.values())
+
+          return adjustments.isLoading ? <Spinner /> : adjustments.error ? <Err /> : (
             <div className="overflow-x-auto">
               <table className="w-full text-sm">
                 <thead>
@@ -270,29 +306,29 @@ export function InventoryPage() {
                   </tr>
                 </thead>
                 <tbody className="divide-y" style={{ borderColor: 'var(--color-border)' }}>
-                  {(Array.isArray(adjustments.data) ? adjustments.data : []).length === 0 && (
+                  {adjList.length === 0 && (
                     <tr><td colSpan={6} className="py-12 text-center text-xs text-slate-400">No adjustments logged</td></tr>
                   )}
-                  {(Array.isArray(adjustments.data) ? adjustments.data : []).map((a: any) => (
+                  {adjList.map((a: any) => (
                     <tr key={a.id} className="hover:bg-slate-50/50 dark:hover:bg-slate-800/40 transition-colors">
                       <td className="px-5 py-3.5 font-mono text-xs font-bold text-indigo-600 dark:text-indigo-400">
-                        {a.docNumber ?? a.reference ?? a.id.substring(0, 8)}
+                        {a.docNumber ?? a.reference ?? a.id.substring(0, 8).toUpperCase()}
                       </td>
                       <td className="px-5 py-3.5 font-mono text-xs text-slate-600 dark:text-slate-300">
-                        {a.variant_sku || 'NK-AM-A5-8-BLK'}
+                        {a.variant_sku || a.variantSku || 'NK-AM-A5-8-BLK'}
                       </td>
                       <td className="px-5 py-3.5 text-right font-mono font-bold text-xs"
-                          style={{ color: (a.quantity_change ?? 0) >= 0 ? 'var(--color-success)' : 'var(--color-danger)' }}>
-                        {(a.quantity_change ?? 0) >= 0 ? `+${a.quantity_change}` : a.quantity_change}
+                          style={{ color: (a.quantity_change ?? a.quantityChange ?? 0) >= 0 ? 'var(--color-success)' : 'var(--color-danger)' }}>
+                        {(a.quantity_change ?? a.quantityChange ?? 0) >= 0 ? `+${a.quantity_change ?? a.quantityChange}` : (a.quantity_change ?? a.quantityChange)}
                       </td>
                       <td className="px-5 py-3.5 text-xs text-slate-500">{a.reason ?? '—'}</td>
                       <td className="px-5 py-3.5">
                         <span className="text-xs px-2.5 py-0.5 rounded-full font-semibold bg-emerald-100 text-emerald-700 dark:bg-emerald-950/50 dark:text-emerald-300">
-                          {a.status}
+                          {a.status || 'POSTED'}
                         </span>
                       </td>
                       <td className="px-5 py-3.5 text-xs text-slate-400 font-mono">
-                        {new Date(a.createdAt || a.created_at).toLocaleDateString('en-IN')}
+                        {a.createdAt || a.created_at || a.adjusted_at ? new Date(a.createdAt || a.created_at || a.adjusted_at).toLocaleDateString('en-IN') : 'Today'}
                       </td>
                     </tr>
                   ))}
@@ -300,7 +336,7 @@ export function InventoryPage() {
               </table>
             </div>
           )
-        )}
+        })()}
 
         {tab === 'audits' && (
           audits.isLoading ? <Spinner /> : audits.error ? <Err /> : (
@@ -415,19 +451,42 @@ export function InventoryPage() {
 
             <form onSubmit={handleAdjSubmit} className="space-y-4 text-sm">
               <div>
-                <label className="block text-xs font-semibold mb-1" style={{ color: 'var(--color-muted)' }}>Select Footwear SKU</label>
-                <select
+                <label className="block text-xs font-semibold mb-1" style={{ color: 'var(--color-muted)' }}>
+                  Footwear SKU / Variant
+                </label>
+                <input
+                  list="stock-sku-options"
+                  type="text"
+                  required
+                  placeholder="Enter or select SKU (e.g. NI-AIR-8-BLK)"
                   value={adjSku}
                   onChange={e => setAdjSku(e.target.value)}
                   className="w-full px-3 py-2 rounded-xl border text-sm outline-none font-mono"
                   style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }}
-                >
+                />
+                <datalist id="stock-sku-options">
                   {stockList.map((s: any) => (
                     <option key={s.sku} value={s.sku}>
-                      {s.sku} - {s.article_name || s.article || 'Shoe'} (Current: {s.quantity ?? s.qty ?? 0})
+                      {s.sku} - {s.articleName || s.article_name || s.article || 'Shoe'} (Current: {s.quantity ?? s.qty ?? 0})
                     </option>
                   ))}
-                </select>
+                </datalist>
+                {stockList.length > 0 && (
+                  <div className="flex flex-wrap items-center gap-1.5 mt-1.5">
+                    <span className="text-[11px] text-slate-400">Available:</span>
+                    {stockList.slice(0, 5).map((s: any) => (
+                      <button
+                        key={s.sku}
+                        type="button"
+                        onClick={() => setAdjSku(s.sku)}
+                        className="text-[11px] px-2 py-0.5 rounded border font-mono transition-colors hover:bg-slate-100 dark:hover:bg-slate-800"
+                        style={{ borderColor: 'var(--color-border)', color: 'var(--color-primary)' }}
+                      >
+                        {s.sku}
+                      </button>
+                    ))}
+                  </div>
+                )}
               </div>
 
               <div>

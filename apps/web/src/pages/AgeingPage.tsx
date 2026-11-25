@@ -1,7 +1,8 @@
 import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { Hourglass, Flame, Tag, Plus, CheckCircle, Percent } from 'lucide-react'
+import { Hourglass, Flame, Tag, Plus, CheckCircle, Percent, ShieldCheck } from 'lucide-react'
 import { api, fmt } from '../lib/api'
+import { ClearanceRuleStorage } from '../lib/storage'
 
 export function AgeingPage() {
   const queryClient = useQueryClient()
@@ -20,6 +21,17 @@ export function AgeingPage() {
     queryKey: ['ageing-rules'],
     queryFn: () => api.get('/ageing/rules').then(r => r.data?.data ?? []),
   })
+
+  const rawRules: any[] = Array.isArray(rules)
+    ? rules
+    : Array.isArray((rules as any)?.data)
+    ? (rules as any).data
+    : []
+  const localRules = ClearanceRuleStorage.getAll()
+  const rulesMap = new Map<string, any>()
+  rawRules.forEach(r => rulesMap.set(r.id, r))
+  localRules.forEach(r => rulesMap.set(r.id, r))
+  const rulesList: any[] = Array.from(rulesMap.values())
 
   const heatmapList: any[] = Array.isArray(heatmap)
     ? heatmap
@@ -40,12 +52,26 @@ export function AgeingPage() {
 
   const handleCreateRule = (e: React.FormEvent) => {
     e.preventDefault()
+    if (!label.trim()) {
+      setFormError('Please enter a clearance rule label.')
+      return
+    }
     setFormError('')
+    const newRule = {
+      id: 'ar-' + Date.now(),
+      category_name: 'All Footwear Categories',
+      threshold_days: Number(thresholdDays),
+      discount_pct: Number(discountPct),
+      label: label.trim(),
+      is_active: true
+    }
+    ClearanceRuleStorage.add(newRule)
     createRuleMutation.mutate({
       thresholdDays: Number(thresholdDays),
       discountPct: Number(discountPct),
-      label
+      label: label.trim()
     })
+    setShowRuleModal(false)
   }
 
   // Aggregate buckets dynamically from real inventory
@@ -179,6 +205,74 @@ export function AgeingPage() {
             </table>
           </div>
         )}
+      </div>
+
+      {/* Configured Clearance Rules Table */}
+      <div className="rounded-xl border overflow-hidden shadow-sm" style={{ background: 'var(--color-surface)', borderColor: 'var(--color-border)' }}>
+        <div className="px-5 py-4 border-b flex items-center justify-between" style={{ borderColor: 'var(--color-border)' }}>
+          <div>
+            <h2 className="text-sm font-semibold flex items-center gap-2" style={{ color: 'var(--color-text)' }}>
+              <ShieldCheck size={16} className="text-indigo-600" /> Configured Clearance Pricing Rules
+            </h2>
+            <p className="text-xs text-slate-400 mt-0.5">Automated markdown policies applied to ageing inventory</p>
+          </div>
+          <button
+            onClick={() => setShowRuleModal(true)}
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold text-white shadow-xs"
+            style={{ background: 'var(--color-primary)' }}
+          >
+            <Plus size={14} /> New Rule
+          </button>
+        </div>
+
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="border-b text-xs uppercase tracking-wider text-slate-400" style={{ borderColor: 'var(--color-border)' }}>
+                <th className="px-5 py-3 text-left font-semibold">Rule Title</th>
+                <th className="px-5 py-3 text-left font-semibold">Category Scope</th>
+                <th className="px-5 py-3 text-left font-semibold">Age Threshold</th>
+                <th className="px-5 py-3 text-left font-semibold">Markdown Discount</th>
+                <th className="px-5 py-3 text-right font-semibold">Status</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y" style={{ borderColor: 'var(--color-border)' }}>
+              {rulesList.length === 0 ? (
+                <tr>
+                  <td colSpan={5} className="py-8 text-center text-xs text-slate-400">
+                    No clearance rules configured yet. Click "Configure Clearance Rule" above to create one.
+                  </td>
+                </tr>
+              ) : (
+                rulesList.map((r: any) => (
+                  <tr key={r.id} className="hover:bg-slate-50/50 dark:hover:bg-slate-800/40 transition-colors">
+                    <td className="px-5 py-3.5 font-semibold text-xs" style={{ color: 'var(--color-text)' }}>
+                      <div className="flex items-center gap-2">
+                        <Tag size={14} className="text-indigo-600" />
+                        <span>{r.label || 'Clearance Rule'}</span>
+                      </div>
+                    </td>
+                    <td className="px-5 py-3.5 text-xs text-slate-500">
+                      {r.category_name || 'All Categories'}
+                    </td>
+                    <td className="px-5 py-3.5 font-mono text-xs font-bold text-slate-700 dark:text-slate-200">
+                      {r.threshold_days || r.thresholdDays || 90}+ Days Old
+                    </td>
+                    <td className="px-5 py-3.5 font-mono font-bold text-xs text-rose-600 dark:text-rose-400">
+                      {r.discount_pct || r.discountPct || 20}% OFF
+                    </td>
+                    <td className="px-5 py-3.5 text-right">
+                      <span className="inline-flex items-center gap-1 text-xs px-2.5 py-0.5 rounded-full font-semibold bg-emerald-100 text-emerald-700 dark:bg-emerald-950/50 dark:text-emerald-300">
+                        <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
+                        Active
+                      </span>
+                    </td>
+                  </tr>
+                ))
+              )}
+            </tbody>
+          </table>
+        </div>
       </div>
 
       {/* Rules Modal */}
