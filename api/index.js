@@ -62,6 +62,11 @@ let ageingRules = [
 ];
 let barcodeQueue = [];
 
+let notifications = [
+  { id: 'alt-1', title: 'Low Stock Velocity Alert', message: 'Size UK 7 for Suede Classic XXI High is below safety threshold (2 pairs left)', severity: 'warning', isRead: false, is_read: false, createdAt: new Date().toISOString(), created_at: new Date().toISOString() },
+  { id: 'alt-2', title: 'GST Filing Reminder', message: 'GSTR-3B return filing window for October period is open', severity: 'info', isRead: false, is_read: false, createdAt: new Date(Date.now() - 86400000).toISOString(), created_at: new Date(Date.now() - 86400000).toISOString() }
+];
+
 let alertRules = [
   { id: 'ar-1', name: 'Low Stock Velocity Threshold', condition: 'STOCK_QTY < 5 AND 30D_SALES > 10', threshold: '5 units', severity: 'WARNING', isActive: true, is_active: true },
   { id: 'ar-2', name: 'Dead Stock 90+ Days Aging', condition: 'DAYS_SINCE_RECEIPT > 90', threshold: '90 days', severity: 'DANGER', isActive: true, is_active: true },
@@ -1579,13 +1584,50 @@ export default async function handler(req, res) {
     ]});
   }
   if (path.includes('/alerts')) {
-    if (req.method === 'POST' || req.method === 'DELETE') {
+    // 1. Mark specific alert as read: POST /alerts/:id/read
+    if (path.includes('/read') && req.method === 'POST') {
+      const match = path.match(/\/alerts\/([^/]+)\/read/);
+      const targetId = match ? match[1] : null;
+      if (targetId) {
+        notifications = notifications.map(n => n.id === targetId ? { ...n, isRead: true, is_read: true } : n);
+      } else {
+        notifications = notifications.map(n => ({ ...n, isRead: true, is_read: true }));
+      }
       return res.status(200).json({ data: { success: true } });
     }
-    return res.status(200).json({ data: [
-      { id: 'alt-1', title: 'Low Stock Velocity Alert', message: 'Size UK 7 for Suede Classic XXI High is below safety threshold (2 pairs left)', severity: 'warning', isRead: false, is_read: false, createdAt: new Date().toISOString(), created_at: new Date().toISOString() },
-      { id: 'alt-2', title: 'GST Filing Reminder', message: 'GSTR-3B return filing window for October period is open', severity: 'info', isRead: false, is_read: false, createdAt: new Date(Date.now() - 86400000).toISOString(), created_at: new Date(Date.now() - 86400000).toISOString() }
-    ]});
+
+    // 2. Delete specific alert: DELETE /alerts/:id
+    if (req.method === 'DELETE') {
+      const match = path.match(/\/alerts\/([^/?]+)/);
+      const targetId = match ? match[1] : null;
+      if (targetId) {
+        notifications = notifications.filter(n => n.id !== targetId);
+      }
+      return res.status(200).json({ data: { success: true } });
+    }
+
+    // 3. Create or mark all read: POST /alerts
+    if (req.method === 'POST') {
+      if (body && body.title) {
+        const newAlt = {
+          id: 'alt-' + Date.now(),
+          title: body.title,
+          message: body.message || '',
+          severity: body.severity || 'info',
+          isRead: false,
+          is_read: false,
+          createdAt: new Date().toISOString(),
+          created_at: new Date().toISOString()
+        };
+        notifications.unshift(newAlt);
+        return res.status(201).json({ data: newAlt });
+      }
+      notifications = notifications.map(n => ({ ...n, isRead: true, is_read: true }));
+      return res.status(200).json({ data: { success: true } });
+    }
+
+    // 4. List alerts: GET /alerts
+    return res.status(200).json({ data: notifications });
   }
 
   // 20. Integrations

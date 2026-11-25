@@ -48,11 +48,16 @@ export function AgeingPage() {
     })
   }
 
-  // Aggregate buckets
+  // Aggregate buckets dynamically from real inventory
   const b0_30 = heatmapList.filter((h: any) => (h.age_days || 0) <= 30)
   const b31_60 = heatmapList.filter((h: any) => (h.age_days || 0) > 30 && (h.age_days || 0) <= 60)
   const b61_90 = heatmapList.filter((h: any) => (h.age_days || 0) > 60 && (h.age_days || 0) <= 90)
   const b90_plus = heatmapList.filter((h: any) => (h.age_days || 0) > 90)
+
+  const q0_30 = b0_30.reduce((acc: number, curr: any) => acc + (Number(curr.quantity) || 0), 0)
+  const q31_60 = b31_60.reduce((acc: number, curr: any) => acc + (Number(curr.quantity) || 0), 0)
+  const q61_90 = b61_90.reduce((acc: number, curr: any) => acc + (Number(curr.quantity) || 0), 0)
+  const q90_plus = b90_plus.reduce((acc: number, curr: any) => acc + (Number(curr.quantity) || 0), 0)
 
   return (
     <div className="p-6 space-y-6">
@@ -79,28 +84,28 @@ export function AgeingPage() {
         <div className="p-5 rounded-xl border flex flex-col justify-between" style={{ background: 'var(--color-surface)', borderColor: 'var(--color-border)' }}>
           <span className="text-xs font-semibold uppercase tracking-wider text-emerald-600 dark:text-emerald-400">0 - 30 Days (Fresh)</span>
           <span className="text-2xl font-bold font-mono mt-2" style={{ color: 'var(--color-text)' }}>
-            {b0_30.reduce((acc: number, curr: any) => acc + (curr.quantity || 0), 0) || 726} pairs
+            {q0_30} pairs
           </span>
           <span className="text-xs mt-1" style={{ color: 'var(--color-muted)' }}>Fast moving / high demand</span>
         </div>
         <div className="p-5 rounded-xl border flex flex-col justify-between" style={{ background: 'var(--color-surface)', borderColor: 'var(--color-border)' }}>
           <span className="text-xs font-semibold uppercase tracking-wider text-sky-600 dark:text-sky-400">31 - 60 Days (Normal)</span>
           <span className="text-2xl font-bold font-mono mt-2" style={{ color: 'var(--color-text)' }}>
-            {b31_60.reduce((acc: number, curr: any) => acc + (curr.quantity || 0), 0) || 450} pairs
+            {q31_60} pairs
           </span>
           <span className="text-xs mt-1" style={{ color: 'var(--color-muted)' }}>Regular retail velocity</span>
         </div>
         <div className="p-5 rounded-xl border flex flex-col justify-between" style={{ background: 'var(--color-surface)', borderColor: 'var(--color-border)' }}>
           <span className="text-xs font-semibold uppercase tracking-wider text-amber-600 dark:text-amber-400">61 - 90 Days (Slow)</span>
           <span className="text-2xl font-bold font-mono mt-2 text-amber-600 dark:text-amber-400">
-            {b61_90.reduce((acc: number, curr: any) => acc + (curr.quantity || 0), 0) || 180} pairs
+            {q61_90} pairs
           </span>
           <span className="text-xs mt-1" style={{ color: 'var(--color-muted)' }}>Candidate for front promo</span>
         </div>
         <div className="p-5 rounded-xl border flex flex-col justify-between" style={{ background: 'var(--color-surface)', borderColor: 'var(--color-border)' }}>
           <span className="text-xs font-semibold uppercase tracking-wider text-rose-600 dark:text-rose-400">90+ Days (Stagnant)</span>
           <span className="text-2xl font-bold font-mono mt-2 text-rose-600 dark:text-rose-400">
-            {b90_plus.reduce((acc: number, curr: any) => acc + (curr.quantity || 0), 0) || 67} pairs
+            {q90_plus} pairs
           </span>
           <span className="text-xs mt-1" style={{ color: 'var(--color-muted)' }}>Recommended for clearance markdown</span>
         </div>

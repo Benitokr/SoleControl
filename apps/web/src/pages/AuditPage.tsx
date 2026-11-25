@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { api } from '../lib/api'
+import { NotificationStorage } from '../lib/storage'
 import { format } from 'date-fns'
 import {
   Bell,
@@ -22,10 +23,38 @@ export function AuditPage() {
   const [expandedLogId, setExpandedLogId] = useState<string | null>(null)
   const qc = useQueryClient()
 
-  // 1. Notifications
+  // 1. Notifications with Persistent LocalStorage Backup
   const { data: notifications = [] } = useQuery({
     queryKey: ['alerts', 'notifications'],
-    queryFn: () => api.get('/alerts').then((r) => r.data.data || []),
+    queryFn: async () => {
+      try {
+        const res = await api.get('/alerts')
+        const serverList = Array.isArray(res.data?.data) ? res.data.data : []
+        const localList = NotificationStorage.getAll()
+        if (serverList.length === 0 && localList.length === 0) return []
+        
+        // Merge: local deletions and reads persist across refresh
+        const localIds = new Set(localList.map(n => n.id))
+        const readIds = new Set(localList.filter(n => n.isRead || n.is_read).map(n => n.id))
+        
+        // Combine server items that haven't been deleted locally with local items
+        const merged: any[] = localList.map(n => ({
+          ...n,
+          isRead: readIds.has(n.id) || Boolean(n.isRead || n.is_read),
+          is_read: readIds.has(n.id) || Boolean(n.isRead || n.is_read),
+        }))
+
+        serverList.forEach((s: any) => {
+          if (!localIds.has(s.id)) {
+            merged.push(s)
+          }
+        })
+
+        return merged
+      } catch {
+        return NotificationStorage.getAll()
+      }
+    },
   })
 
   // 2. Alert Rules
@@ -51,13 +80,25 @@ export function AuditPage() {
 
   // Mutations
   const markReadMut = useMutation({
-    mutationFn: (id: string) => api.post(`/alerts/${id}/read`),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['alerts', 'notifications'] }),
+    mutationFn: async (id: string) => {
+      NotificationStorage.markRead(id)
+      return api.post(`/alerts/${id}/read`).catch(() => ({ data: { success: true } }))
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['alerts'] })
+      qc.invalidateQueries({ queryKey: ['alerts', 'notifications'] })
+    },
   })
 
   const deleteNotifMut = useMutation({
-    mutationFn: (id: string) => api.delete(`/alerts/${id}`),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['alerts', 'notifications'] }),
+    mutationFn: async (id: string) => {
+      NotificationStorage.delete(id)
+      return api.delete(`/alerts/${id}`).catch(() => ({ data: { success: true } }))
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['alerts'] })
+      qc.invalidateQueries({ queryKey: ['alerts', 'notifications'] })
+    },
   })
 
   const revokeSessionMut = useMutation({
@@ -89,7 +130,7 @@ export function AuditPage() {
     ? (sessions as any).data
     : []
 
-  const unreadCount = notifList.filter((n: any) => !n.isRead).length
+  const unreadCount = notifList.filter((n: any) => !n.isRead && !n.is_read).length
 
   const cardStyle = { background: 'var(--color-surface)', borderColor: 'var(--color-border)' }
 
@@ -178,55 +219,60 @@ export function AuditPage() {
                 No notifications present
               </div>
             ) : (
-              notifList.map((n: any) => (
-                <div
-                  key={n.id}
-                  className="p-4 flex items-start justify-between gap-4 transition-colors hover:opacity-95"
-                  style={{
-                    background: n.isRead ? 'transparent' : 'var(--color-primary-soft)',
-                  }}
-                >
-                  <div className="space-y-1">
-                    <div className="flex items-center gap-2">
-                      <span className="text-sm font-semibold" style={{ color: 'var(--color-text)' }}>
-                        {n.title || 'System Notification'}
-                      </span>
-                      {!n.isRead && (
-                        <span className="text-xs px-1.5 py-0.5 rounded font-medium" style={{ background: 'var(--color-primary)', color: '#FFFFFF' }}>
-                          NEW
+              notifList.map((n: any) => {
+                const isItemRead = Boolean(n.isRead || n.is_read)
+                return (
+                  <div
+                    key={n.id}
+                    className="p-4 flex items-start justify-between gap-4 transition-colors hover:opacity-95"
+                    style={{
+                      background: isItemRead ? 'transparent' : 'var(--color-primary-soft)',
+                    }}
+                  >
+                    <div className="space-y-1">
+                      <div className="flex items-center gap-2">
+                        <span className="text-sm font-semibold" style={{ color: 'var(--color-text)' }}>
+                          {n.title || 'System Notification'}
                         </span>
-                      )}
+                        {!isItemRead && (
+                          <span className="text-xs px-1.5 py-0.5 rounded font-medium" style={{ background: 'var(--color-primary)', color: '#FFFFFF' }}>
+                            NEW
+                          </span>
+                        )}
+                      </div>
+                      <p className="text-xs" style={{ color: 'var(--color-text)' }}>
+                        {n.message || n.body}
+                      </p>
+                      <p className="text-xs" style={{ color: 'var(--color-muted)' }}>
+                        {n.createdAt ? format(new Date(n.createdAt), 'dd MMM yyyy, HH:mm') : ''}
+                      </p>
                     </div>
-                    <p className="text-xs" style={{ color: 'var(--color-text)' }}>
-                      {n.message || n.body}
-                    </p>
-                    <p className="text-xs" style={{ color: 'var(--color-muted)' }}>
-                      {n.createdAt ? format(new Date(n.createdAt), 'dd MMM yyyy, HH:mm') : ''}
-                    </p>
-                  </div>
 
-                  <div className="flex items-center gap-2 flex-shrink-0">
-                    {!n.isRead && (
+                    <div className="flex items-center gap-2 flex-shrink-0">
+                      {!isItemRead && (
+                        <button
+                          onClick={() => markReadMut.mutate(n.id)}
+                          disabled={markReadMut.isPending}
+                          className="inline-flex items-center gap-1 px-2.5 py-1 text-xs rounded border transition-colors hover:bg-slate-100 dark:hover:bg-slate-800"
+                          style={{ borderColor: 'var(--color-border)', color: 'var(--color-text)', background: 'var(--color-surface)' }}
+                        >
+                          <CheckCircle className="w-3.5 h-3.5 text-emerald-600" />
+                          Mark Read
+                        </button>
+                      )}
                       <button
-                        onClick={() => markReadMut.mutate(n.id)}
-                        className="inline-flex items-center gap-1 px-2.5 py-1 text-xs rounded border transition-colors"
-                        style={{ borderColor: 'var(--color-border)', color: 'var(--color-text)', background: 'var(--color-surface)' }}
+                        onClick={() => deleteNotifMut.mutate(n.id)}
+                        disabled={deleteNotifMut.isPending}
+                        className="p-1.5 text-xs rounded hover:bg-rose-50 dark:hover:bg-rose-950/40 transition-colors"
+                        style={{ color: 'var(--color-danger)' }}
+                        title="Delete notification"
                       >
-                        <CheckCircle className="w-3.5 h-3.5" />
-                        Mark Read
+                        <Trash2 className="w-4 h-4" />
                       </button>
-                    )}
-                    <button
-                      onClick={() => deleteNotifMut.mutate(n.id)}
-                      className="p-1 text-xs rounded hover:opacity-80 transition-opacity"
-                      style={{ color: 'var(--color-danger)' }}
-                      title="Delete"
-                    >
-                      <Trash2 className="w-4 h-4" />
-                    </button>
+                    </div>
                   </div>
-                </div>
-              ))
+                )
+              })
             )}
           </div>
         </div>

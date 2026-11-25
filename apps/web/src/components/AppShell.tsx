@@ -13,6 +13,7 @@ import { useAuthStore } from '../store/authStore'
 import { useThemeStore } from '../store/themeStore'
 import { useQuery } from '@tanstack/react-query'
 import { api } from '../lib/api'
+import { NotificationStorage } from '../lib/storage'
 
 type NavItem = { label: string; icon: React.ReactNode; to: string }
 type NavGroup = { title: string; items: NavItem[] }
@@ -69,11 +70,13 @@ export function AppShell() {
   const [showCommandPalette, setShowCommandPalette] = useState(false)
   const [showQuickCreate, setShowQuickCreate] = useState(false)
   const [paletteQuery, setPaletteQuery] = useState('')
-  const [notificationsList, setNotificationsList] = useState([
-    { id: 'n1', title: 'Running Stock Clearance Alert', message: '3 footwear models reached 90+ days threshold', time: '10m ago', unread: true, severity: 'warning' },
-    { id: 'n2', title: 'New Vendor Bill Inward', message: 'Bill PB-2026-003 from Nike India awaits final review', time: '1h ago', unread: true, severity: 'info' },
-    { id: 'n3', title: 'GSTR-3B Tax Filing Window', message: 'Statutory monthly GST return cycle open', time: '4h ago', unread: false, severity: 'success' },
-  ])
+  const [notificationsList, setNotificationsList] = useState(() => {
+    const all = NotificationStorage.getAll()
+    return (Array.isArray(all) ? all : []).map(n => ({
+      ...n,
+      unread: !n.isRead && !n.is_read
+    }))
+  })
 
   const { user, logout } = useAuthStore()
   const { theme, toggle } = useThemeStore()
@@ -89,16 +92,11 @@ export function AppShell() {
   })
 
   useEffect(() => {
-    if (Array.isArray(alertsData) && alertsData.length > 0) {
-      setNotificationsList(alertsData.map((a: any, idx: number) => ({
-        id: a.id || `alt-${idx}`,
-        title: a.title || 'Operational Alert',
-        message: a.message || 'System notification',
-        time: 'Live',
-        unread: !a.isRead && !a.is_read,
-        severity: a.severity || 'info'
-      })))
-    }
+    const list = NotificationStorage.getAll()
+    setNotificationsList((Array.isArray(list) ? list : []).map(n => ({
+      ...n,
+      unread: !n.isRead && !n.is_read
+    })))
   }, [alertsData])
   const stores: any[] = Array.isArray(storeData)
     ? storeData
@@ -137,7 +135,9 @@ export function AppShell() {
   }
 
   const markAllNotificationsRead = () => {
-    setNotificationsList(prev => prev.map(n => ({ ...n, unread: false })))
+    NotificationStorage.markAllRead()
+    setNotificationsList(prev => prev.map(n => ({ ...n, unread: false, isRead: true, is_read: true })))
+    api.post('/alerts/read-all').catch(() => {})
   }
 
   const filteredPaletteItems = ALL_SEARCH_ITEMS.filter(item =>
@@ -331,7 +331,13 @@ export function AppShell() {
                   {notificationsList.map(n => (
                     <div
                       key={n.id}
-                      onClick={() => navigate('/audit')}
+                      onClick={() => {
+                        NotificationStorage.markRead(n.id)
+                        setNotificationsList(prev => prev.map(item => item.id === n.id ? { ...item, unread: false, isRead: true, is_read: true } : item))
+                        api.post(`/alerts/${n.id}/read`).catch(() => {})
+                        setShowNotifications(false)
+                        navigate('/audit')
+                      }}
                       className={`p-3.5 hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors cursor-pointer flex gap-3 ${n.unread ? 'bg-indigo-50/40 dark:bg-indigo-950/20' : ''}`}
                     >
                       <div className="mt-0.5">
