@@ -90,7 +90,7 @@ export function MastersPage() {
           className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-semibold text-white shadow-xs transition-all hover:opacity-95"
           style={{ background: 'var(--color-primary)' }}
         >
-          <Plus size={16} /> Add {tab.charAt(0).toUpperCase() + tab.slice(1, -1)}
+          <Plus size={16} /> Add {tab === 'categories' ? 'Category' : tab.charAt(0).toUpperCase() + tab.slice(1, -1)}
         </button>
       </div>
 
@@ -123,7 +123,9 @@ export function MastersPage() {
               style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }}
             />
           </div>
-          <span className="text-xs text-slate-400 font-mono">{rows.length} {tab} recorded</span>
+          <span className="text-xs text-slate-400 font-mono">
+            {rows.length} {rows.length === 1 ? (tab === 'categories' ? 'category' : tab.slice(0, -1)) : tab} recorded
+          </span>
         </div>
 
         {q.isLoading && <div className="py-12 text-center text-sm" style={{ color: 'var(--color-muted)' }}>Loading {tab}…</div>}
@@ -144,41 +146,60 @@ export function MastersPage() {
                   {tab === 'sizes' && <th className="text-left px-5 py-3 font-semibold">Sort Index</th>}
                   {tab === 'colours' && <th className="text-left px-5 py-3 font-semibold">Colour Swatch</th>}
                   <th className="text-left px-5 py-3 font-semibold">Status</th>
+                  <th className="text-right px-5 py-3 font-semibold">Actions</th>
                 </tr>
               </thead>
               <tbody className="divide-y" style={{ borderColor: 'var(--color-border)' }}>
                 {rows.length === 0 && (
-                  <tr><td colSpan={5} className="py-12 text-center text-xs text-slate-400">No {tab} found matching search</td></tr>
+                  <tr><td colSpan={6} className="py-12 text-center text-xs text-slate-400">No {tab} found matching search</td></tr>
                 )}
-                {rows.map((r: any) => (
-                  <tr key={r.id} className="hover:bg-slate-50/50 dark:hover:bg-slate-800/40 transition-colors">
-                    <td className="px-5 py-3.5 font-semibold text-xs" style={{ color: 'var(--color-text)' }}>{r.name}</td>
-                    {tab === 'articles' && (
-                      <>
-                        <td className="px-5 py-3.5 font-mono text-xs text-indigo-600 dark:text-indigo-400 font-bold">{r.code}</td>
-                        <td className="px-5 py-3.5 text-right font-mono text-xs text-slate-500 font-bold">{r._count?.variants ?? 8} variants</td>
-                      </>
-                    )}
-                    {tab === 'sizes' && (
-                      <td className="px-5 py-3.5 font-mono text-xs text-slate-500">Rank {r.sortOrder ?? 1}</td>
-                    )}
-                    {tab === 'colours' && (
+                {rows.map((r: any) => {
+                  const colorHex = r.hex || r.hex_code || '#4F46E5'
+                  const sortRank = r.sortOrder ?? r.sort_order ?? r.sequence ?? 1
+                  return (
+                    <tr key={r.id} className="hover:bg-slate-50/50 dark:hover:bg-slate-800/40 transition-colors">
+                      <td className="px-5 py-3.5 font-semibold text-xs" style={{ color: 'var(--color-text)' }}>{r.name}</td>
+                      {tab === 'articles' && (
+                        <>
+                          <td className="px-5 py-3.5 font-mono text-xs text-indigo-600 dark:text-indigo-400 font-bold">{r.code}</td>
+                          <td className="px-5 py-3.5 text-right font-mono text-xs text-slate-500 font-bold">{r._count?.variants ?? 8} variants</td>
+                        </>
+                      )}
+                      {tab === 'sizes' && (
+                        <td className="px-5 py-3.5 font-mono text-xs text-slate-500">Rank {sortRank}</td>
+                      )}
+                      {tab === 'colours' && (
+                        <td className="px-5 py-3.5">
+                          <span className="flex items-center gap-2">
+                            <span className="w-4 h-4 rounded-full border shadow-2xs" style={{ background: colorHex, borderColor: 'var(--color-border)' }} />
+                            <span className="font-mono text-xs text-slate-500">{colorHex}</span>
+                          </span>
+                        </td>
+                      )}
                       <td className="px-5 py-3.5">
-                        <span className="flex items-center gap-2">
-                          {r.hex && (
-                            <span className="w-4 h-4 rounded-full border shadow-2xs" style={{ background: r.hex, borderColor: 'var(--color-border)' }} />
-                          )}
-                          <span className="font-mono text-xs text-slate-500">{r.hex ?? '#000000'}</span>
+                        <span className="text-xs px-2.5 py-0.5 rounded-full font-semibold bg-emerald-100 text-emerald-700 dark:bg-emerald-950/50 dark:text-emerald-300">
+                          Active
                         </span>
                       </td>
-                    )}
-                    <td className="px-5 py-3.5">
-                      <span className="text-xs px-2.5 py-0.5 rounded-full font-semibold bg-emerald-100 text-emerald-700 dark:bg-emerald-950/50 dark:text-emerald-300">
-                        Active
-                      </span>
-                    </td>
-                  </tr>
-                ))}
+                      <td className="px-5 py-3.5 text-right">
+                        <div className="flex items-center justify-end gap-2">
+                          <button
+                            onClick={() => {
+                              const newName = prompt(`Edit ${tab.slice(0, -1)} name:`, r.name)
+                              if (newName && newName !== r.name) {
+                                api.put(`/masters/${tab}/${r.id}`, { name: newName }).then(() => qc.invalidateQueries({ queryKey: ['masters', tab] }))
+                              }
+                            }}
+                            className="text-xs px-2 py-1 rounded border hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
+                            style={{ borderColor: 'var(--color-border)', color: 'var(--color-text)' }}
+                          >
+                            Edit
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  )
+                })}
               </tbody>
             </table>
           </div>

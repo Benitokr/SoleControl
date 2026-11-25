@@ -18,7 +18,7 @@ export function LocationsPage() {
     name: 'Rack R1 (Running Wall)',
     code: 'RCK-01',
     type: 'RACK',
-    stock_count: 320
+    stock_count: 0
   })
 
   const { data: treeData, isLoading, error } = useQuery<{ data: LocationNode[] }>({
@@ -155,17 +155,26 @@ export function LocationsPage() {
 
               {/* Stock Density Indicator */}
               <div className="p-4 rounded-xl border space-y-2 bg-slate-50 dark:bg-slate-900" style={{ borderColor: 'var(--color-border)' }}>
-                <div className="flex justify-between text-xs font-semibold">
-                  <span className="text-slate-500">Rack Capacity Density:</span>
-                  <span className="font-mono text-emerald-600 dark:text-emerald-400 font-bold">84% Capacity</span>
-                </div>
-                <div className="w-full h-2 rounded-full overflow-hidden bg-slate-200 dark:bg-slate-800">
-                  <div className="h-full bg-emerald-500 rounded-full" style={{ width: '84%' }} />
-                </div>
-                <div className="flex justify-between text-[11px] font-mono text-slate-400">
-                  <span>Occupied: <strong>{selectedLocation.stock_count || 320} pairs</strong></span>
-                  <span>Maximum Capacity: <strong>380 pairs</strong></span>
-                </div>
+                {(() => {
+                  const occupiedPairs = rackStock.reduce((acc: number, curr: any) => acc + (Number(curr.quantity) || 0), 0)
+                  const maxCap = Math.max(occupiedPairs + 40, 100)
+                  const capPct = Math.min(100, Math.round((occupiedPairs / maxCap) * 100))
+                  return (
+                    <>
+                      <div className="flex justify-between text-xs font-semibold">
+                        <span className="text-slate-500">Rack Capacity Density:</span>
+                        <span className="font-mono text-emerald-600 dark:text-emerald-400 font-bold">{capPct}% Capacity</span>
+                      </div>
+                      <div className="w-full h-2 rounded-full overflow-hidden bg-slate-200 dark:bg-slate-800">
+                        <div className="h-full bg-emerald-500 rounded-full transition-all duration-500" style={{ width: `${capPct}%` }} />
+                      </div>
+                      <div className="flex justify-between text-[11px] font-mono text-slate-400">
+                        <span>Occupied: <strong>{occupiedPairs} pairs</strong></span>
+                        <span>Maximum Capacity: <strong>{maxCap} pairs</strong></span>
+                      </div>
+                    </>
+                  )
+                })()}
               </div>
 
               {/* Footwear on this Rack */}

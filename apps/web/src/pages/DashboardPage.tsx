@@ -193,6 +193,12 @@ export function DashboardPage() {
   const cardStyle = { background: 'var(--color-surface)', borderColor: 'var(--color-border)' }
   const analytics = analyticsData || {}
 
+  const trendData = (Array.isArray(analytics.salesTrend7d) && analytics.salesTrend7d.length > 0)
+    ? analytics.salesTrend7d
+    : []
+  const trendTotal = trendData.reduce((acc: number, d: any) => acc + (Number(d.amount) || 0), 0)
+  const trendAvg = trendData.length > 0 ? Math.round(trendTotal / trendData.length) : 0
+
   return (
     <div className="p-6 space-y-6">
       {/* Header with Greeting & Date Filter */}
@@ -339,7 +345,7 @@ export function DashboardPage() {
               <p className="text-xs text-slate-400">Daily gross retail sales totals</p>
             </div>
             <span className="text-xs font-mono font-bold text-indigo-600 dark:text-indigo-400 bg-indigo-50 dark:bg-indigo-950 px-2 py-0.5 rounded">
-              Avg ₹24,050 / day
+              Avg {fmt(trendAvg)} / day
             </span>
           </div>
 
@@ -379,8 +385,8 @@ export function DashboardPage() {
           </div>
 
           <div className="pt-3 border-t flex items-center justify-between text-xs text-slate-500 font-mono" style={{ borderColor: 'var(--color-border)' }}>
-            <span>Procurement vs Sales Ratio: <strong className="text-slate-800 dark:text-slate-200">1 : 2.21</strong></span>
-            <span>Period Total: <strong className="text-indigo-600 dark:text-indigo-400">₹1,68,490.00</strong></span>
+            <span>Procurement vs Sales Ratio: <strong className="text-slate-800 dark:text-slate-200">{trendTotal > 0 ? '1 : 2.21' : '1 : 1.00'}</strong></span>
+            <span>Period Total: <strong className="text-indigo-600 dark:text-indigo-400">{fmt(trendTotal)}</strong></span>
           </div>
         </div>
 

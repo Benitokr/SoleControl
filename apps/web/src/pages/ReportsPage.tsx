@@ -30,8 +30,11 @@ function exportCSV(filename: string, rows: any[], headers: string[]) {
 
 export function ReportsPage() {
   const [activeTab, setActiveTab] = useState<TabKey>('sales')
-  const [startDate, setStartDate] = useState('')
-  const [endDate, setEndDate] = useState('')
+  const [startDate, setStartDate] = useState(() => {
+    const d = new Date()
+    return new Date(d.getFullYear(), d.getMonth(), 1).toISOString().split('T')[0]
+  })
+  const [endDate, setEndDate] = useState(() => new Date().toISOString().split('T')[0])
   const [filterText, setFilterText] = useState('')
 
   // Query tab data
@@ -52,8 +55,8 @@ export function ReportsPage() {
   const rows: any[] = Array.isArray(reportData)
     ? reportData
     : Array.isArray((reportData as any)?.data)
-    ? (reportData as any).data
-    : []
+      ? (reportData as any).data
+      : []
 
   // Handle Export
   const handleExport = () => {
@@ -127,11 +130,10 @@ export function ReportsPage() {
               setActiveTab(tab.key)
               setFilterText('')
             }}
-            className={`px-4 py-2.5 text-sm font-medium border-b-2 transition-colors whitespace-nowrap ${
-              activeTab === tab.key
-                ? 'border-primary'
-                : 'border-transparent text-muted hover:text-text'
-            }`}
+            className={`px-4 py-2.5 text-sm font-medium border-b-2 transition-colors whitespace-nowrap ${activeTab === tab.key
+              ? 'border-primary'
+              : 'border-transparent text-muted hover:text-text'
+              }`}
             style={{
               borderColor: activeTab === tab.key ? 'var(--color-primary)' : 'transparent',
               color: activeTab === tab.key ? 'var(--color-primary)' : 'var(--color-muted)',

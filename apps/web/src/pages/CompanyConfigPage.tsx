@@ -141,25 +141,27 @@ export function CompanyConfigPage() {
       <div className="rounded-xl border p-6 shadow-xs" style={{ background: 'var(--color-surface)', borderColor: 'var(--color-border)' }}>
         {tab === 'profile' && (
           profile.isLoading ? <Spinner /> : profile.error ? <Err /> : (
-            <form onSubmit={handleProfileSubmit} className="space-y-4 max-w-xl">
-              {(['name', 'legalName', 'gstin', 'pan', 'email', 'phone', 'address'] as const).map(f => (
-                <div key={f}>
-                  <label className="block text-xs font-semibold mb-1 uppercase tracking-wider text-slate-500">
-                    {f === 'legalName' ? 'Legal Entity Name' : f.toUpperCase()}
-                  </label>
-                  <input
-                    value={formData[f] ?? ''}
-                    onChange={e => handleFieldChange(f, e.target.value)}
-                    className="w-full px-3.5 py-2.5 rounded-xl text-sm outline-none border transition-all focus:ring-2 focus:ring-indigo-500/20"
-                    style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }}
-                  />
-                </div>
-              ))}
+            <form onSubmit={handleProfileSubmit} className="space-y-5 max-w-3xl">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {(['name', 'legalName', 'gstin', 'pan', 'email', 'phone', 'address'] as const).map(f => (
+                  <div key={f} className={f === 'address' ? 'md:col-span-2' : ''}>
+                    <label className="block text-xs font-semibold mb-1 uppercase tracking-wider text-slate-500">
+                      {f === 'legalName' ? 'Legal Entity Name' : f === 'name' ? 'Company Display Name' : f.toUpperCase()}
+                    </label>
+                    <input
+                      value={formData[f] ?? ''}
+                      onChange={e => handleFieldChange(f, e.target.value)}
+                      className="w-full px-3.5 py-2.5 rounded-xl text-sm outline-none border transition-all focus:ring-2 focus:ring-indigo-500/20"
+                      style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }}
+                    />
+                  </div>
+                ))}
+              </div>
               <div className="pt-2">
                 <button
                   type="submit"
                   disabled={saveProfile.isPending}
-                  className="px-5 py-2.5 rounded-xl text-xs font-semibold text-white shadow-xs"
+                  className="px-5 py-2.5 rounded-xl text-xs font-semibold text-white shadow-xs transition-opacity hover:opacity-95"
                   style={{ background: 'var(--color-primary)' }}
                 >
                   {saveProfile.isPending ? 'Saving Profile…' : 'Save Company Profile'}

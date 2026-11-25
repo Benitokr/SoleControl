@@ -92,25 +92,38 @@ export function DisplayStockPage() {
 
       {/* KPI Cards */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-        <div className="p-5 rounded-xl border flex flex-col justify-between" style={{ background: 'var(--color-surface)', borderColor: 'var(--color-border)' }}>
-          <span className="text-xs font-semibold uppercase tracking-wider" style={{ color: 'var(--color-muted)' }}>Active Display Pairs</span>
-          <span className="text-2xl font-bold font-mono mt-2" style={{ color: 'var(--color-text)' }}>
-            {allocations?.filter((a: any) => a.status === 'ACTIVE').reduce((acc: number, curr: any) => acc + (curr.quantity || 1), 0) || 12}
-          </span>
-          <span className="text-xs mt-1" style={{ color: 'var(--color-muted)' }}>On customer display racks</span>
-        </div>
-        <div className="p-5 rounded-xl border flex flex-col justify-between" style={{ background: 'var(--color-surface)', borderColor: 'var(--color-border)' }}>
-          <span className="text-xs font-semibold uppercase tracking-wider text-indigo-600 dark:text-indigo-400">Allocated Models</span>
-          <span className="text-2xl font-bold font-mono mt-2 text-indigo-600 dark:text-indigo-400">
-            {allocations?.length || 6}
-          </span>
-          <span className="text-xs mt-1" style={{ color: 'var(--color-muted)' }}>Unique articles featured</span>
-        </div>
-        <div className="p-5 rounded-xl border flex flex-col justify-between" style={{ background: 'var(--color-surface)', borderColor: 'var(--color-border)' }}>
-          <span className="text-xs font-semibold uppercase tracking-wider text-emerald-600 dark:text-emerald-400">Showcase Compliance</span>
-          <span className="text-2xl font-bold font-mono mt-2 text-emerald-600 dark:text-emerald-400">100%</span>
-          <span className="text-xs mt-1" style={{ color: 'var(--color-muted)' }}>All displayed SKUs tagged & verified</span>
-        </div>
+        {(() => {
+          const activePairs = allocationList.filter((a: any) => a.status === 'ACTIVE').reduce((acc: number, curr: any) => acc + (Number(curr.quantity) || 1), 0)
+          const modelCount = allocationList.length
+          const compliancePct = modelCount > 0 ? 100 : 0
+          return (
+            <>
+              <div className="p-5 rounded-xl border flex flex-col justify-between" style={{ background: 'var(--color-surface)', borderColor: 'var(--color-border)' }}>
+                <span className="text-xs font-semibold uppercase tracking-wider" style={{ color: 'var(--color-muted)' }}>Active Display Pairs</span>
+                <span className="text-2xl font-bold font-mono mt-2" style={{ color: 'var(--color-text)' }}>
+                  {activePairs}
+                </span>
+                <span className="text-xs mt-1" style={{ color: 'var(--color-muted)' }}>On customer display racks</span>
+              </div>
+              <div className="p-5 rounded-xl border flex flex-col justify-between" style={{ background: 'var(--color-surface)', borderColor: 'var(--color-border)' }}>
+                <span className="text-xs font-semibold uppercase tracking-wider text-indigo-600 dark:text-indigo-400">Allocated Models</span>
+                <span className="text-2xl font-bold font-mono mt-2 text-indigo-600 dark:text-indigo-400">
+                  {modelCount}
+                </span>
+                <span className="text-xs mt-1" style={{ color: 'var(--color-muted)' }}>Unique articles featured</span>
+              </div>
+              <div className="p-5 rounded-xl border flex flex-col justify-between" style={{ background: 'var(--color-surface)', borderColor: 'var(--color-border)' }}>
+                <span className="text-xs font-semibold uppercase tracking-wider text-emerald-600 dark:text-emerald-400">Showcase Compliance</span>
+                <span className="text-2xl font-bold font-mono mt-2 text-emerald-600 dark:text-emerald-400">
+                  {compliancePct}%
+                </span>
+                <span className="text-xs mt-1" style={{ color: 'var(--color-muted)' }}>
+                  {compliancePct > 0 ? 'All displayed SKUs tagged & verified' : 'No display stock allocated'}
+                </span>
+              </div>
+            </>
+          )
+        })()}
       </div>
 
       {/* Allocations Table */}

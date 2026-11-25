@@ -87,7 +87,7 @@ export function OffersPage() {
   }
 
   // Simulation calculation
-  const activeOffer = offers.find(o => o.id === simSelectedOfferId) || offers.find(o => o.isActive) || offers[0]
+  const activeOffer = offers.find(o => o.id === simSelectedOfferId)
   let simDiscountAmount = 0
   if (activeOffer) {
     if (activeOffer.discountType === 'PERCENTAGE') {
@@ -376,6 +376,7 @@ export function OffersPage() {
                   className="w-full px-3 py-2 rounded-xl border text-sm outline-none font-medium"
                   style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }}
                 >
+                  <option value="">-- Choose an active offer scheme --</option>
                   {offers.map(o => (
                     <option key={o.id} value={o.id}>
                       {o.name} ({o.discountType === 'PERCENTAGE' ? `${o.discountValue}%` : `₹${o.discountValue}`})
@@ -385,25 +386,33 @@ export function OffersPage() {
               </div>
 
               {/* Simulation Result Card */}
-              <div className="p-4 rounded-xl border space-y-2.5 font-mono text-xs" style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)' }}>
-                <div className="flex justify-between text-slate-400">
-                  <span>Gross Invoice Total:</span>
-                  <span className="font-semibold text-slate-700 dark:text-slate-200">{fmt(simCartAmount)}</span>
-                </div>
-                <div className="flex justify-between text-emerald-600 dark:text-emerald-400 font-semibold">
-                  <span>Promotional Savings ({simSavingsPct}%):</span>
-                  <span>- {fmt(simDiscountAmount)}</span>
-                </div>
-                <div className="flex justify-between border-t pt-2.5 text-base font-bold text-indigo-600 dark:text-indigo-400" style={{ borderColor: 'var(--color-border)' }}>
-                  <span>Net Customer Payable:</span>
-                  <span>{fmt(simNetPayable)}</span>
-                </div>
-              </div>
+              {activeOffer ? (
+                <>
+                  <div className="p-4 rounded-xl border space-y-2.5 font-mono text-xs" style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)' }}>
+                    <div className="flex justify-between text-slate-400">
+                      <span>Gross Invoice Total:</span>
+                      <span className="font-semibold text-slate-700 dark:text-slate-200">{fmt(simCartAmount)}</span>
+                    </div>
+                    <div className="flex justify-between text-emerald-600 dark:text-emerald-400 font-semibold">
+                      <span>Promotional Savings ({simSavingsPct}%):</span>
+                      <span>- {fmt(simDiscountAmount)}</span>
+                    </div>
+                    <div className="flex justify-between border-t pt-2.5 text-base font-bold text-indigo-600 dark:text-indigo-400" style={{ borderColor: 'var(--color-border)' }}>
+                      <span>Net Customer Payable:</span>
+                      <span>{fmt(simNetPayable)}</span>
+                    </div>
+                  </div>
 
-              <div className="p-3 rounded-xl border flex items-center gap-2 text-xs text-slate-500" style={{ borderColor: 'var(--color-border)' }}>
-                <CheckCircle2 size={16} className="text-emerald-500 flex-shrink-0" />
-                <span>Simulation verified: rule applies correctly at counter checkout with automated journal entries.</span>
-              </div>
+                  <div className="p-3 rounded-xl border flex items-center gap-2 text-xs text-slate-500" style={{ borderColor: 'var(--color-border)' }}>
+                    <CheckCircle2 size={16} className="text-emerald-500 flex-shrink-0" />
+                    <span>Active scheme applied: rule validates correctly for counter billing.</span>
+                  </div>
+                </>
+              ) : (
+                <div className="p-6 rounded-xl border text-center text-xs text-slate-400" style={{ borderColor: 'var(--color-border)', background: 'var(--color-bg)' }}>
+                  Select an offer scheme above to simulate customer savings.
+                </div>
+              )}
             </div>
 
             <div className="pt-2 flex justify-end">

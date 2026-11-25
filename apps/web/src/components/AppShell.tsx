@@ -82,6 +82,24 @@ export function AppShell() {
     queryKey: ['stores'],
     queryFn: () => api.get('/company/stores').then(r => r.data.data).catch(() => []),
   })
+
+  const { data: alertsData } = useQuery({
+    queryKey: ['alerts'],
+    queryFn: () => api.get('/alerts').then(r => r.data?.data ?? []).catch(() => []),
+  })
+
+  useEffect(() => {
+    if (Array.isArray(alertsData) && alertsData.length > 0) {
+      setNotificationsList(alertsData.map((a: any, idx: number) => ({
+        id: a.id || `alt-${idx}`,
+        title: a.title || 'Operational Alert',
+        message: a.message || 'System notification',
+        time: 'Live',
+        unread: !a.isRead && !a.is_read,
+        severity: a.severity || 'info'
+      })))
+    }
+  }, [alertsData])
   const stores: any[] = Array.isArray(storeData)
     ? storeData
     : Array.isArray((storeData as any)?.data)

@@ -237,7 +237,9 @@ export function DatabasePage() {
               </div>
               <div className="p-3 rounded-lg border bg-slate-50/50 dark:bg-slate-900/50" style={{ borderColor: 'var(--color-border)' }}>
                 <span className="text-slate-400 block text-[11px] mb-1">Connection Host</span>
-                <span className="font-bold text-slate-800 dark:text-slate-200">{overview.host || 'Secure Connection Pooler'}</span>
+                <span className="font-bold text-slate-800 dark:text-slate-200">
+                  {overview.host && !overview.host.includes('neon.tech') ? overview.host : 'Protected Connection Pooler (SSL/TLS Enabled)'}
+                </span>
               </div>
               <div className="p-3 rounded-lg border bg-slate-50/50 dark:bg-slate-900/50" style={{ borderColor: 'var(--color-border)' }}>
                 <span className="text-slate-400 block text-[11px] mb-1">Prisma Schema State</span>
