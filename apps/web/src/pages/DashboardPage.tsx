@@ -178,17 +178,7 @@ export function DashboardPage() {
     : []
 
   const rawTargets = Array.isArray((targets as any)?.data) ? (targets as any).data : targets
-  const targetsList = Array.isArray(rawTargets)
-    ? rawTargets
-    : (rawTargets && typeof rawTargets === 'object' && ('targetAmount' in rawTargets || 'target_amount' in rawTargets || 'currentSales' in rawTargets)
-        ? [{
-            name: 'November Store Revenue Goal',
-            target_amount: (rawTargets as any).targetAmount || (rawTargets as any).target_amount || 250000,
-            achieved: (rawTargets as any).currentSales || (rawTargets as any).achieved || 168490,
-            period_start: '2026-11-01',
-            period_end: '2026-11-30'
-          }]
-        : [])
+  const targetsList = Array.isArray(rawTargets) ? rawTargets : []
 
   const cardStyle = { background: 'var(--color-surface)', borderColor: 'var(--color-border)' }
   const analytics = analyticsData || {}
@@ -350,39 +340,38 @@ export function DashboardPage() {
           </div>
 
           {/* Simple Clean Bar Chart Representation */}
-          <div className="pt-6 pb-2 grid grid-cols-7 gap-3 items-end h-44">
-            {(Array.isArray(analytics.salesTrend7d) && analytics.salesTrend7d.length > 0 ? analytics.salesTrend7d : [
-              { date: '9 Nov', amount: 18450 },
-              { date: '10 Nov', amount: 22100 },
-              { date: '11 Nov', amount: 27800 },
-              { date: '12 Nov', amount: 19500 },
-              { date: '13 Nov', amount: 31200 },
-              { date: '14 Nov', amount: 24300 },
-              { date: '15 Nov', amount: 24997 }
-            ]).map((d: any, idx: number) => {
-              const maxVal = 35000
-              const hPct = Math.min(Math.round((d.amount / maxVal) * 100), 100)
-              const isToday = idx === 6
-              return (
-                <div key={idx} className="flex flex-col items-center gap-1.5 h-full justify-end group">
-                  <div className="text-[10px] font-mono text-slate-400 opacity-0 group-hover:opacity-100 transition-opacity">
-                    ₹{Math.round(d.amount / 1000)}k
+          {trendData.length === 0 ? (
+            <div className="h-44 flex flex-col items-center justify-center text-xs text-slate-400 font-mono">
+              <BarChart3 size={28} className="text-slate-300 dark:text-slate-700 mb-2" />
+              No sales recorded for the selected period
+            </div>
+          ) : (
+            <div className="pt-6 pb-2 grid grid-cols-7 gap-3 items-end h-44">
+              {trendData.map((d: any, idx: number) => {
+                const maxVal = Math.max(...trendData.map((x: any) => Number(x.amount) || 0), 1000)
+                const hPct = Math.min(Math.round(((Number(d.amount) || 0) / maxVal) * 100), 100)
+                const isToday = idx === trendData.length - 1
+                return (
+                  <div key={idx} className="flex flex-col items-center gap-1.5 h-full justify-end group">
+                    <div className="text-[10px] font-mono text-slate-400 opacity-0 group-hover:opacity-100 transition-opacity">
+                      ₹{Math.round((Number(d.amount) || 0) / 1000)}k
+                    </div>
+                    <div className="w-full bg-slate-100 dark:bg-slate-800 rounded-t-lg overflow-hidden flex items-end h-28">
+                      <div
+                        className={`w-full rounded-t-lg transition-all duration-500 ${
+                          isToday ? 'bg-indigo-600' : 'bg-indigo-400 hover:bg-indigo-500'
+                        }`}
+                        style={{ height: `${Math.max(hPct, 4)}%` }}
+                      />
+                    </div>
+                    <span className={`text-[10px] font-mono ${isToday ? 'font-bold text-indigo-600 dark:text-indigo-400' : 'text-slate-400'}`}>
+                      {d.date}
+                    </span>
                   </div>
-                  <div className="w-full bg-slate-100 dark:bg-slate-800 rounded-t-lg overflow-hidden flex items-end h-28">
-                    <div
-                      className={`w-full rounded-t-lg transition-all duration-500 ${
-                        isToday ? 'bg-indigo-600' : 'bg-indigo-400 hover:bg-indigo-500'
-                      }`}
-                      style={{ height: `${hPct}%` }}
-                    />
-                  </div>
-                  <span className={`text-[10px] font-mono ${isToday ? 'font-bold text-indigo-600 dark:text-indigo-400' : 'text-slate-400'}`}>
-                    {d.date}
-                  </span>
-                </div>
-              )
-            })}
-          </div>
+                )
+              })}
+            </div>
+          )}
 
           <div className="pt-3 border-t flex items-center justify-between text-xs text-slate-500 font-mono" style={{ borderColor: 'var(--color-border)' }}>
             <span>Procurement vs Sales Ratio: <strong className="text-slate-800 dark:text-slate-200">{trendTotal > 0 ? '1 : 2.21' : '1 : 1.00'}</strong></span>
@@ -401,28 +390,30 @@ export function DashboardPage() {
           </div>
 
           <div className="space-y-4 my-auto py-2">
-            {(Array.isArray(analytics.salesByPaymentMode) && analytics.salesByPaymentMode.length > 0 ? analytics.salesByPaymentMode : [
-              { mode: 'UPI / QR Codes', amount: 107833, pct: 64, color: 'bg-indigo-600' },
-              { mode: 'Credit / Debit Cards', amount: 37068, pct: 22, color: 'bg-emerald-600' },
-              { mode: 'Cash Currency', amount: 23589, pct: 14, color: 'bg-amber-500' }
-            ]).map((t: any, idx: number) => (
-              <div key={idx} className="space-y-1">
-                <div className="flex justify-between text-xs font-mono">
-                  <span className="font-semibold text-slate-700 dark:text-slate-300">{t.mode}</span>
-                  <span className="font-bold text-slate-900 dark:text-slate-100">{t.pct}% ({fmt(t.amount)})</span>
-                </div>
-                <div className="w-full h-2 rounded-full bg-slate-100 dark:bg-slate-800 overflow-hidden">
-                  <div
-                    className={`h-full rounded-full ${t.color || 'bg-indigo-600'}`}
-                    style={{ width: `${t.pct}%` }}
-                  />
-                </div>
+            {!Array.isArray(analytics.salesByPaymentMode) || analytics.salesByPaymentMode.length === 0 ? (
+              <div className="py-8 text-center text-xs text-slate-400">
+                No tender transactions recorded yet
               </div>
-            ))}
+            ) : (
+              analytics.salesByPaymentMode.map((t: any, idx: number) => (
+                <div key={idx} className="space-y-1">
+                  <div className="flex justify-between text-xs font-mono">
+                    <span className="font-semibold text-slate-700 dark:text-slate-300">{t.mode}</span>
+                    <span className="font-bold text-slate-900 dark:text-slate-100">{t.pct}% ({fmt(t.amount)})</span>
+                  </div>
+                  <div className="w-full h-2 rounded-full bg-slate-100 dark:bg-slate-800 overflow-hidden">
+                    <div
+                      className={`h-full rounded-full ${t.color || 'bg-indigo-600'}`}
+                      style={{ width: `${t.pct}%` }}
+                    />
+                  </div>
+                </div>
+              ))
+            )}
           </div>
 
           <div className="pt-3 border-t text-xs text-slate-400" style={{ borderColor: 'var(--color-border)' }}>
-            100% reconciled against HDFC bank deposits
+            Reconciled against verified receipts
           </div>
         </div>
       </div>
@@ -442,28 +433,29 @@ export function DashboardPage() {
           </div>
 
           <div className="divide-y text-xs font-mono" style={{ borderColor: 'var(--color-border)' }}>
-            {(Array.isArray(analytics.topBrands) && analytics.topBrands.length > 0 ? analytics.topBrands : [
-              { brand: 'Nike', revenue: 64800, units: 14, share: 38.5 },
-              { brand: 'Adidas', revenue: 47250, units: 11, share: 28.0 },
-              { brand: 'Puma', revenue: 31800, units: 8, share: 18.9 },
-              { brand: 'Skechers', revenue: 24640, units: 7, share: 14.6 }
-            ]).map((b: any, idx: number) => (
-              <div key={idx} className="p-3.5 flex items-center justify-between hover:bg-slate-50/50 dark:hover:bg-slate-800/40">
-                <div className="flex items-center gap-3">
-                  <span className="w-5 h-5 rounded-full bg-slate-100 dark:bg-slate-800 flex items-center justify-center font-bold text-[11px] text-slate-500">
-                    {idx + 1}
-                  </span>
-                  <div>
-                    <span className="font-bold text-slate-900 dark:text-slate-100 text-sm font-sans">{b.brand}</span>
-                    <span className="block text-[11px] text-slate-400">{b.units} pairs sold</span>
+            {!Array.isArray(analytics.topBrands) || analytics.topBrands.length === 0 ? (
+              <div className="p-8 text-center text-xs text-slate-400">
+                No brand sales recorded yet
+              </div>
+            ) : (
+              analytics.topBrands.map((b: any, idx: number) => (
+                <div key={idx} className="p-3.5 flex items-center justify-between hover:bg-slate-50/50 dark:hover:bg-slate-800/40">
+                  <div className="flex items-center gap-3">
+                    <span className="w-5 h-5 rounded-full bg-slate-100 dark:bg-slate-800 flex items-center justify-center font-bold text-[11px] text-slate-500">
+                      {idx + 1}
+                    </span>
+                    <div>
+                      <span className="font-bold text-slate-900 dark:text-slate-100 text-sm font-sans">{b.brand}</span>
+                      <span className="block text-[11px] text-slate-400">{b.units} pairs sold</span>
+                    </div>
+                  </div>
+                  <div className="text-right">
+                    <span className="font-bold text-emerald-600 dark:text-emerald-400">{fmt(b.revenue)}</span>
+                    <span className="block text-[11px] text-slate-400">{b.share}% share</span>
                   </div>
                 </div>
-                <div className="text-right">
-                  <span className="font-bold text-emerald-600 dark:text-emerald-400">{fmt(b.revenue)}</span>
-                  <span className="block text-[11px] text-slate-400">{b.share}% share</span>
-                </div>
-              </div>
-            ))}
+              ))
+            )}
           </div>
         </div>
 
@@ -483,33 +475,36 @@ export function DashboardPage() {
           </div>
 
           <div className="divide-y text-xs font-mono" style={{ borderColor: 'var(--color-border)' }}>
-            {(Array.isArray(analytics.lowStockVariants) && analytics.lowStockVariants.length > 0 ? analytics.lowStockVariants : [
-              { sku: 'NK-AM-A5-8-BLK', article: 'Air Max Alpha 5', size: 'UK 8', colour: 'Midnight Black', qty: 2, urgency: 'HIGH' },
-              { sku: 'AD-SN-B2-9-WHT', article: 'Supernova Stride Pro', size: 'UK 9', colour: 'Cloud White', qty: 3, urgency: 'MEDIUM' }
-            ]).map((v: any, idx: number) => (
-              <div key={idx} className="p-3.5 flex items-center justify-between hover:bg-slate-50/50 dark:hover:bg-slate-800/40">
-                <div className="space-y-0.5">
-                  <div className="flex items-center gap-2">
-                    <span className="font-bold text-slate-900 dark:text-slate-100 font-sans">{v.article}</span>
-                    <span className="text-[10px] px-1.5 py-0.5 rounded bg-slate-100 dark:bg-slate-800 text-slate-500">{v.sku}</span>
-                  </div>
-                  <span className="text-[11px] text-slate-400">{v.size} · {v.colour}</span>
-                </div>
-                <div className="text-right flex items-center gap-3">
-                  <div>
-                    <span className="font-bold text-rose-600 text-sm">{v.qty} left</span>
-                    <span className="block text-[10px] text-slate-400">Reorder &lt; 5</span>
-                  </div>
-                  <Link
-                    to="/purchases"
-                    className="px-2 py-1 text-[11px] font-semibold rounded border hover:bg-slate-100 dark:hover:bg-slate-800"
-                    style={{ borderColor: 'var(--color-border)', color: 'var(--color-text)' }}
-                  >
-                    PO +
-                  </Link>
-                </div>
+            {!Array.isArray(analytics.lowStockVariants) || analytics.lowStockVariants.length === 0 ? (
+              <div className="p-8 text-center text-xs text-slate-400">
+                All inventory above safety replenishment levels
               </div>
-            ))}
+            ) : (
+              analytics.lowStockVariants.map((v: any, idx: number) => (
+                <div key={idx} className="p-3.5 flex items-center justify-between hover:bg-slate-50/50 dark:hover:bg-slate-800/40">
+                  <div className="space-y-0.5">
+                    <div className="flex items-center gap-2">
+                      <span className="font-bold text-slate-900 dark:text-slate-100 font-sans">{v.article}</span>
+                      <span className="text-[10px] px-1.5 py-0.5 rounded bg-slate-100 dark:bg-slate-800 text-slate-500">{v.sku}</span>
+                    </div>
+                    <span className="text-[11px] text-slate-400">{v.size} · {v.colour}</span>
+                  </div>
+                  <div className="text-right flex items-center gap-3">
+                    <div>
+                      <span className="font-bold text-rose-600 text-sm">{v.qty} left</span>
+                      <span className="block text-[10px] text-slate-400">Reorder &lt; 5</span>
+                    </div>
+                    <Link
+                      to="/purchases"
+                      className="px-2 py-1 text-[11px] font-semibold rounded border hover:bg-slate-100 dark:hover:bg-slate-800"
+                      style={{ borderColor: 'var(--color-border)', color: 'var(--color-text)' }}
+                    >
+                      PO +
+                    </Link>
+                  </div>
+                </div>
+              ))
+            )}
           </div>
         </div>
       </div>

@@ -42,20 +42,36 @@ const SUPER_ADMIN_USER = {
   mustChangePassword: false
 };
 
-// Mutable copies for runtime additions on Vercel
-let transfers = [...DB.transfers];
-let displays = [...DB.displays];
-let damages = [...DB.damages];
-let purchases = [...DB.purchases];
-let sales = [...DB.sales];
-let accounts = [...DB.accounts];
-let journals = [];
-let bankAccounts = [...DB.bankAccounts];
-let bankLines = [...DB.bankLines];
-let capitalEntries = [];
-let withdrawals = [];
-let adjustments = [];
-let audits = [];
+// Direct references to DB collections so all additions persist in DB
+if (!DB.transfers) DB.transfers = [];
+if (!DB.displays) DB.displays = [];
+if (!DB.damages) DB.damages = [];
+if (!DB.purchases) DB.purchases = [];
+if (!DB.sales) DB.sales = [];
+if (!DB.accounts) DB.accounts = [];
+if (!DB.journals) DB.journals = [];
+if (!DB.bankAccounts) DB.bankAccounts = [];
+if (!DB.bankLines) DB.bankLines = [];
+if (!DB.capitalEntries) DB.capitalEntries = [];
+if (!DB.withdrawals) DB.withdrawals = [];
+if (!DB.adjustments) DB.adjustments = [];
+if (!DB.audits) DB.audits = [];
+if (!DB.barcodeQueue) DB.barcodeQueue = [];
+
+let transfers = DB.transfers;
+let displays = DB.displays;
+let damages = DB.damages;
+let purchases = DB.purchases;
+let sales = DB.sales;
+let accounts = DB.accounts;
+let journals = DB.journals;
+let bankAccounts = DB.bankAccounts;
+let bankLines = DB.bankLines;
+let capitalEntries = DB.capitalEntries;
+let withdrawals = DB.withdrawals;
+let adjustments = DB.adjustments;
+let audits = DB.audits;
+let barcodeQueue = DB.barcodeQueue;
 let ageingRules = [
   { id: 'ar-1', category_name: 'Running & Performance', threshold_days: 90, discount_pct: 25, label: 'Running Clearance 90d+', is_active: true },
   { id: 'ar-2', category_name: 'Formal Leather', threshold_days: 100, discount_pct: 30, label: 'Formal Off-Season Clearance', is_active: true }
@@ -234,11 +250,8 @@ function getTableData(tableName) {
 
     // Procurement
     vendors: DB.vendors,
-    purchases: purchases,
-    purchase_items: [
-      { id: 'pi-01', purchase_id: 'pb-01', variant_id: 'NK-AM-A5-8-BLK', article_name: 'Air Max Pulse Retro', quantity: 10, unit_cost: 4800, tax_rate: 12, line_total: 53760 },
-      { id: 'pi-02', purchase_id: 'pb-01', variant_id: 'AD-SN-B2-9-WHT', article_name: 'Supernova Stride Pro', quantity: 15, unit_cost: 3900, tax_rate: 12, line_total: 65520 }
-    ],
+    purchases: DB.purchases,
+    purchase_items: (DB.purchases || []).flatMap(p => p.items || []),
     purchase_expenses: [
       { id: 'pe-01', purchase_id: 'pb-01', expense_type: 'FREIGHT', amount: 3500.00, allocation_method: 'VALUE' }
     ],
@@ -252,27 +265,25 @@ function getTableData(tableName) {
     // Inventory
     stock_balances: DB.balances,
     balances: DB.balances,
-    stock_movements: [
+    stock_movements: DB.stock_movements || [
       { id: 'sm-01', variant_id: 'NK-AM-A5-8-BLK', sku: 'NK-AM-A5-8-BLK', movement_type: 'PURCHASE_RECEIPT', quantity: 10, reference: 'PB-2026-001', created_at: new Date(Date.now() - 15 * 86400000).toISOString() },
       { id: 'sm-02', variant_id: 'AD-SN-B2-9-WHT', sku: 'AD-SN-B2-9-WHT', movement_type: 'PURCHASE_RECEIPT', quantity: 15, reference: 'PB-2026-001', created_at: new Date(Date.now() - 15 * 86400000).toISOString() },
       { id: 'sm-03', variant_id: 'NK-AM-A5-8-BLK', sku: 'NK-AM-A5-8-BLK', movement_type: 'SALE_DISPATCH', quantity: -1, reference: 'INV-2026-001', created_at: new Date().toISOString() }
     ],
-    stock_adjustments: adjustments,
+    stock_adjustments: DB.adjustments,
     stock_adjustment_items: [
       { id: 'saj-01', adjustment_id: 'adj-01', variant_sku: 'NK-AM-A5-8-BLK', old_quantity: 8, new_quantity: 10, difference: 2 }
     ],
-    stock_audit_sessions: audits,
+    stock_audit_sessions: DB.audits,
     stock_audit_lines: [
       { id: 'sal-01', session_id: 'aud-01', variant_sku: 'NK-AM-A5-8-BLK', expected_qty: 10, counted_qty: 10, variance: 0 }
     ],
-    display_allocations: displays,
-    displays: displays,
-    stock_transfers: transfers,
-    stock_transfer_items: [
-      { id: 'sti-01', transfer_id: 'tr-01', variant_sku: 'NK-AM-A5-8-BLK', quantity: 2 }
-    ],
-    damage_records: damages,
-    damages: damages,
+    display_allocations: DB.displays,
+    displays: DB.displays,
+    stock_transfers: DB.transfers,
+    stock_transfer_items: (DB.transfers || []).flatMap(t => t.items || []),
+    damage_records: DB.damages,
+    damages: DB.damages,
     damage_events: [
       { id: 'de-01', damage_id: 'dmg-1', event_type: 'DISPOSED', notes: 'Written off after quality inspection', created_at: new Date().toISOString() }
     ],
