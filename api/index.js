@@ -72,15 +72,8 @@ let withdrawals = DB.withdrawals;
 let adjustments = DB.adjustments;
 let audits = DB.audits;
 let barcodeQueue = DB.barcodeQueue;
-let ageingRules = [
-  { id: 'ar-1', category_name: 'Running & Performance', threshold_days: 90, discount_pct: 25, label: 'Running Clearance 90d+', is_active: true },
-  { id: 'ar-2', category_name: 'Formal Leather', threshold_days: 100, discount_pct: 30, label: 'Formal Off-Season Clearance', is_active: true }
-];
-
-let notifications = [
-  { id: 'alt-1', title: 'Low Stock Velocity Alert', message: 'Size UK 7 for Suede Classic XXI High is below safety threshold (2 pairs left)', severity: 'warning', isRead: false, is_read: false, createdAt: new Date().toISOString(), created_at: new Date().toISOString() },
-  { id: 'alt-2', title: 'GST Filing Reminder', message: 'GSTR-3B return filing window for October period is open', severity: 'info', isRead: false, is_read: false, createdAt: new Date(Date.now() - 86400000).toISOString(), created_at: new Date(Date.now() - 86400000).toISOString() }
-];
+let ageingRules = [];
+let notifications = [];
 
 let alertRules = [
   { id: 'ar-1', name: 'Low Stock Velocity Threshold', condition: 'STOCK_QTY < 5 AND 30D_SALES > 10', threshold: '5 units', severity: 'WARNING', isActive: true, is_active: true },
@@ -515,16 +508,16 @@ export default async function handler(req, res) {
       color: mode === 'UPI' ? '#4F46E5' : mode === 'CARD' ? '#059669' : '#D97706'
     }));
 
-    // Dynamic low stock
+    // Dynamic low stock (only active stock items that are below threshold)
     const lowStock = (DB.balances || [])
-      .filter(b => (b.quantity || 0) < 5)
+      .filter(b => (Number(b.quantity) || 0) > 0 && (Number(b.quantity) || 0) < 5)
       .map(b => ({
         sku: b.sku,
-        article: b.article_name || 'Footwear Model',
-        size: b.size_label || 'UK 8',
-        colour: b.colour_name || 'Black',
-        qty: b.quantity || 0,
-        urgency: (b.quantity || 0) <= 2 ? 'HIGH' : 'MEDIUM'
+        article: b.article_name || b.article || 'Footwear Model',
+        size: b.size_label || b.size || 'UK 8',
+        colour: b.colour_name || b.colour || 'Standard',
+        qty: Number(b.quantity) || 0,
+        urgency: (Number(b.quantity) || 0) <= 2 ? 'HIGH' : 'MEDIUM'
       }));
 
     // Dynamic top brands from actual recorded sales
@@ -1196,13 +1189,14 @@ export default async function handler(req, res) {
 
   // 13. Ageing & Clearance (Dynamically derived from actual stock balances and movement history)
   if (path.includes('/ageing/heatmap')) {
-    const rows = (DB.balances || []).map(b => {
+    const activeBalances = (DB.balances || []).filter(b => Number(b.quantity || 0) > 0);
+    const rows = activeBalances.map(b => {
       const daysOld = b.created_at ? Math.max(1, Math.floor((Date.now() - new Date(b.created_at).getTime()) / (1000 * 60 * 60 * 24))) : 5;
       return {
         sku: b.sku,
-        article: b.article_name || 'Footwear Model',
-        category: 'Athletic Running & Performance',
-        category_name: 'Athletic Running & Performance',
+        article: b.article_name || b.article || 'Footwear Model',
+        category: b.category_name || b.category || 'Footwear',
+        category_name: b.category_name || b.category || 'Footwear',
         quantity: Number(b.quantity || 0),
         age_days: daysOld,
         d30: daysOld <= 30 ? Number(b.quantity || 0) : 0,
@@ -1667,7 +1661,7 @@ export default async function handler(req, res) {
   if (path.includes('/alerts')) {
     // 1. Mark specific alert as read: POST /alerts/:id/read
     if (path.includes('/read') && req.method === 'POST') {
-      const match = path.match(/\/alerts\/([^/]+)\/read/);
+      const match = path.match(/(?:\/|^)alerts\/([^/]+)\/read/);
       const targetId = match ? match[1] : null;
       if (targetId) {
         notifications = notifications.map(n => n.id === targetId ? { ...n, isRead: true, is_read: true } : n);
@@ -1679,7 +1673,7 @@ export default async function handler(req, res) {
 
     // 2. Delete specific alert: DELETE /alerts/:id
     if (req.method === 'DELETE') {
-      const match = path.match(/\/alerts\/([^/?]+)/);
+      const match = path.match(/(?:\/|^)alerts\/([^/?]+)/);
       const targetId = match ? match[1] : null;
       if (targetId) {
         notifications = notifications.filter(n => n.id !== targetId);

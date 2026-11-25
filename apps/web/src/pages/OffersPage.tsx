@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { BadgePercent, Plus, Search, Sparkles, X, Calculator, Tag, CheckCircle2 } from 'lucide-react'
 import { api, fmt } from '../lib/api'
-import { OfferStorage } from '../lib/storage'
+import { OfferStorage, StockStorage } from '../lib/storage'
 
 interface Offer {
   id: string
@@ -26,9 +26,12 @@ export function OffersPage() {
   // New Offer form state
   const [name, setName] = useState('')
   const [scopeType, setScopeType] = useState('ALL')
+  const [targetSku, setTargetSku] = useState('')
   const [discountType, setDiscountType] = useState<'PERCENTAGE' | 'FLAT'>('PERCENTAGE')
   const [discountValue, setDiscountValue] = useState(15)
   const [priority, setPriority] = useState(1)
+
+  const availableSkus = StockStorage.mergeWith([])
 
   // Simulator state
   const [simCartAmount, setSimCartAmount] = useState(8999)
@@ -323,8 +326,50 @@ export function OffersPage() {
                   <option value="ALL">Entire Store Inventory</option>
                   <option value="BRAND">Specific Brand (Nike, Adidas, Puma)</option>
                   <option value="CATEGORY">Category (Running, Lifestyle, Casual)</option>
+                  <option value="FOOTWEAR_SKU">Specific Footwear SKU / Variant</option>
                 </select>
               </div>
+
+              {scopeType === 'FOOTWEAR_SKU' && (
+                <div>
+                  <label className="block text-xs font-semibold mb-1" style={{ color: 'var(--color-muted)' }}>
+                    Target Footwear SKU / Variant
+                  </label>
+                  <input
+                    list="offer-sku-options"
+                    type="text"
+                    required
+                    placeholder="Enter or select SKU (e.g. NI-AIR-8-BLK)"
+                    value={targetSku}
+                    onChange={e => setTargetSku(e.target.value)}
+                    className="w-full px-3 py-2 rounded-xl border text-sm outline-none font-mono"
+                    style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }}
+                  />
+                  <datalist id="offer-sku-options">
+                    {availableSkus.map((s: any) => (
+                      <option key={s.sku} value={s.sku}>
+                        {s.sku} - {s.article_name || s.articleName || 'Footwear'}
+                      </option>
+                    ))}
+                  </datalist>
+                  {availableSkus.length > 0 && (
+                    <div className="flex flex-wrap items-center gap-1.5 mt-1.5">
+                      <span className="text-[11px] text-slate-400">Available:</span>
+                      {availableSkus.slice(0, 4).map((s: any) => (
+                        <button
+                          key={s.sku}
+                          type="button"
+                          onClick={() => setTargetSku(s.sku)}
+                          className="text-[11px] px-2 py-0.5 rounded border font-mono transition-colors hover:bg-slate-100 dark:hover:bg-slate-800"
+                          style={{ borderColor: 'var(--color-border)', color: 'var(--color-primary)' }}
+                        >
+                          {s.sku}
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
 
               <div className="flex justify-end gap-2 pt-3 border-t" style={{ borderColor: 'var(--color-border)' }}>
                 <button

@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { ReceiptText, Plus, Search, FileText, CheckCircle2, Clock, Eye, AlertCircle, X, ChevronRight, Layers, DollarSign, Trash2, Sparkles, Building2, Calendar } from 'lucide-react'
 import { api, fmt } from '../lib/api'
-import { PurchaseStorage } from '../lib/storage'
+import { PurchaseStorage, StockStorage } from '../lib/storage'
 import { format } from 'date-fns'
 
 interface Purchase {
@@ -123,6 +123,18 @@ export function PurchasesPage() {
       const res = await api.post('/purchases', data).catch(() => ({ data: { data: { ...data, id: 'pb-' + Date.now(), status: data.status || 'DRAFT', bill_number: data.billNumber || ('PB-2026-' + Date.now().toString().slice(-4)) } } }))
       const created = res.data?.data || { ...data, id: 'pb-' + Date.now() }
       PurchaseStorage.add(created)
+      // Immediately register inwarded items into live stock storage
+      ;(data.items || []).forEach((item: any) => {
+        if (item.sku) {
+          StockStorage.adjust(item.sku, Number(item.quantity) || 1, {
+            articleName: item.articleName || item.article || 'Footwear Model',
+            size: item.size || 'UK 8',
+            colour: item.colour || 'Standard',
+            costPrice: item.costPrice || item.cost || 2000,
+            sellingPrice: item.sellingPrice || item.mrp || 3999
+          })
+        }
+      })
       return res
     },
     onSuccess: () => {

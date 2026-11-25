@@ -15,6 +15,8 @@ export interface SystemNotification {
 
 const STORAGE_KEYS = {
   NOTIFICATIONS: 'solecontrol_notifications_v2',
+  NOTIFICATIONS_DELETED: 'solecontrol_notifications_deleted_v2',
+  NOTIFICATIONS_READ: 'solecontrol_notifications_read_v2',
   PURCHASES: 'solecontrol_purchases_v2',
   SALES: 'solecontrol_sales_v2',
   TRANSFERS: 'solecontrol_transfers_v2',
@@ -27,30 +29,7 @@ const STORAGE_KEYS = {
   USERS: 'solecontrol_users_v2',
 }
 
-const DEFAULT_NOTIFICATIONS: SystemNotification[] = [
-  {
-    id: 'alt-1',
-    title: 'Low Stock Velocity Alert',
-    message: 'Size UK 7 for Suede Classic XXI High is below safety threshold (2 pairs left)',
-    severity: 'warning',
-    isRead: false,
-    is_read: false,
-    createdAt: new Date().toISOString(),
-    created_at: new Date().toISOString(),
-    time: 'Live'
-  },
-  {
-    id: 'alt-2',
-    title: 'GST Filing Reminder',
-    message: 'GSTR-3B return filing window for October period is open',
-    severity: 'info',
-    isRead: false,
-    is_read: false,
-    createdAt: new Date(Date.now() - 86400000).toISOString(),
-    created_at: new Date(Date.now() - 86400000).toISOString(),
-    time: '1d ago'
-  }
-]
+const DEFAULT_NOTIFICATIONS: SystemNotification[] = []
 
 function getLocal<T>(key: string, defaultVal: T): T {
   try {
@@ -81,16 +60,36 @@ function setLocal<T>(key: string, val: T): void {
 // Notifications Storage
 // ---------------------------------------------------------------------------
 export const NotificationStorage = {
+  getDeletedIds(): Set<string> {
+    const list = getLocal<string[]>(STORAGE_KEYS.NOTIFICATIONS_DELETED, [])
+    // Also include old dummy alert IDs permanently
+    const set = new Set<string>(['alt-1', 'alt-2', ...list])
+    return set
+  },
+
+  getReadIds(): Set<string> {
+    const list = getLocal<string[]>(STORAGE_KEYS.NOTIFICATIONS_READ, [])
+    return new Set<string>(list)
+  },
+
   getAll(): SystemNotification[] {
-    const stored = getLocal<SystemNotification[] | null>(STORAGE_KEYS.NOTIFICATIONS, null)
-    if (stored === null) {
-      setLocal(STORAGE_KEYS.NOTIFICATIONS, DEFAULT_NOTIFICATIONS)
-      return DEFAULT_NOTIFICATIONS
-    }
+    const stored = getLocal<SystemNotification[]>(STORAGE_KEYS.NOTIFICATIONS, [])
+    const deletedIds = this.getDeletedIds()
+    const readIds = this.getReadIds()
     return stored
+      .filter(n => !deletedIds.has(n.id))
+      .map(n => ({
+        ...n,
+        isRead: Boolean(n.isRead || n.is_read || readIds.has(n.id)),
+        is_read: Boolean(n.isRead || n.is_read || readIds.has(n.id)),
+      }))
   },
 
   markRead(id: string): SystemNotification[] {
+    const readIds = this.getReadIds()
+    readIds.add(id)
+    setLocal(STORAGE_KEYS.NOTIFICATIONS_READ, Array.from(readIds))
+
     const list = this.getAll().map(n => 
       n.id === id ? { ...n, isRead: true, is_read: true } : n
     )
@@ -99,15 +98,36 @@ export const NotificationStorage = {
   },
 
   markAllRead(): SystemNotification[] {
-    const list = this.getAll().map(n => ({ ...n, isRead: true, is_read: true }))
+    const current = this.getAll()
+    const readIds = this.getReadIds()
+    current.forEach(n => readIds.add(n.id))
+    setLocal(STORAGE_KEYS.NOTIFICATIONS_READ, Array.from(readIds))
+
+    const list = current.map(n => ({ ...n, isRead: true, is_read: true }))
     setLocal(STORAGE_KEYS.NOTIFICATIONS, list)
     return list
   },
 
   delete(id: string): SystemNotification[] {
+    const deletedIds = this.getDeletedIds()
+    deletedIds.add(id)
+    setLocal(STORAGE_KEYS.NOTIFICATIONS_DELETED, Array.from(deletedIds))
+
     const list = this.getAll().filter(n => n.id !== id)
     setLocal(STORAGE_KEYS.NOTIFICATIONS, list)
     return list
+  },
+
+  filterValid(serverList: any[]): any[] {
+    const deletedIds = this.getDeletedIds()
+    const readIds = this.getReadIds()
+    return serverList
+      .filter((s: any) => s && s.id && !deletedIds.has(s.id))
+      .map((s: any) => ({
+        ...s,
+        isRead: Boolean(s.isRead || s.is_read || readIds.has(s.id)),
+        is_read: Boolean(s.isRead || s.is_read || readIds.has(s.id)),
+      }))
   },
 
   add(notif: Omit<SystemNotification, 'id' | 'createdAt'>): SystemNotification[] {
@@ -394,6 +414,15 @@ export const StockStorage = {
         }
       }
     })
+    if (map.size === 0) {
+      return [
+        { id: 'stk-tmpl-1', sku: 'NI-AIR-8-BLK', article_name: 'Nike Air Zoom Pegasus', articleName: 'Nike Air Zoom Pegasus', size: 'UK 8', colour: 'Black', quantity: 0, cost_price: 2400, selling_price: 4999 },
+        { id: 'stk-tmpl-2', sku: 'AD-UB-9-WHT', article_name: 'Adidas Ultraboost Light', articleName: 'Adidas Ultraboost Light', size: 'UK 9', colour: 'White', quantity: 0, cost_price: 2800, selling_price: 5499 },
+        { id: 'stk-tmpl-3', sku: 'PU-SUE-7-BLU', article_name: 'Puma Suede Classic XXI', articleName: 'Puma Suede Classic XXI', size: 'UK 7', colour: 'Royal Blue', quantity: 0, cost_price: 1800, selling_price: 3999 },
+        { id: 'stk-tmpl-4', sku: 'RB-CL-8-WHT', article_name: 'Reebok Club C 85 Vintage', articleName: 'Reebok Club C 85 Vintage', size: 'UK 8', colour: 'Chalk White', quantity: 0, cost_price: 2100, selling_price: 4499 },
+        { id: 'stk-tmpl-5', sku: 'AS-GL-9-GRY', article_name: 'Asics Gel-Kayano 30', articleName: 'Asics Gel-Kayano 30', size: 'UK 9', colour: 'Slate Grey', quantity: 0, cost_price: 3200, selling_price: 6499 },
+      ]
+    }
     return Array.from(map.values())
   }
 }
@@ -403,7 +432,22 @@ export const StockStorage = {
 // ---------------------------------------------------------------------------
 export const UserStorage = {
   getAll(): any[] {
-    return getLocal<any[]>(STORAGE_KEYS.USERS, [])
+    const list = getLocal<any[]>(STORAGE_KEYS.USERS, [])
+    if (list.length === 0) {
+      const defaultAdmin = {
+        id: '04ba54c1-bb94-4a81-8757-bb0fcdebd06c',
+        name: 'Super Administrator',
+        email: 'superadmin@fortyv.local',
+        role: { name: 'Super Admin' },
+        role_name: 'Super Admin',
+        roleCode: 'SUPER_ADMIN',
+        isActive: true,
+        lastLoginAt: new Date().toISOString()
+      }
+      setLocal(STORAGE_KEYS.USERS, [defaultAdmin])
+      return [defaultAdmin]
+    }
+    return list
   },
 
   add(user: any): any[] {

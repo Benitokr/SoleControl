@@ -29,28 +29,15 @@ export function AuditPage() {
     queryFn: async () => {
       try {
         const res = await api.get('/alerts')
-        const serverList = Array.isArray(res.data?.data) ? res.data.data : []
+        const rawServer = Array.isArray(res.data?.data) ? res.data.data : []
+        const serverList = NotificationStorage.filterValid(rawServer)
         const localList = NotificationStorage.getAll()
-        if (serverList.length === 0 && localList.length === 0) return []
         
-        // Merge: local deletions and reads persist across refresh
-        const localIds = new Set(localList.map(n => n.id))
-        const readIds = new Set(localList.filter(n => n.isRead || n.is_read).map(n => n.id))
+        const map = new Map<string, any>()
+        serverList.forEach((s: any) => map.set(s.id, s))
+        localList.forEach((l: any) => map.set(l.id, l))
         
-        // Combine server items that haven't been deleted locally with local items
-        const merged: any[] = localList.map(n => ({
-          ...n,
-          isRead: readIds.has(n.id) || Boolean(n.isRead || n.is_read),
-          is_read: readIds.has(n.id) || Boolean(n.isRead || n.is_read),
-        }))
-
-        serverList.forEach((s: any) => {
-          if (!localIds.has(s.id)) {
-            merged.push(s)
-          }
-        })
-
-        return merged
+        return Array.from(map.values())
       } catch {
         return NotificationStorage.getAll()
       }

@@ -40,7 +40,7 @@ export function AgeingPage() {
     : []
 
   const createRuleMutation = useMutation({
-    mutationFn: (data: any) => api.post('/ageing/rules', data),
+    mutationFn: (data: any) => api.post('/ageing/rules', data).catch(() => ({ data: { data } })),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['ageing-rules'] })
       setShowRuleModal(false)

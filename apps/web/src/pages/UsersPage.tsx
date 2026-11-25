@@ -27,9 +27,9 @@ export function UsersPage() {
   const [newRole, setNewRole] = useState('SALES_EXECUTIVE')
   const [newPassword, setNewPassword] = useState('ChangeMe@123')
 
-  const { data, isLoading, error } = useQuery<{ data: User[] }>({
+  const { data, isLoading } = useQuery<{ data: User[] }>({
     queryKey: ['users'],
-    queryFn: () => api.get('/users').then(r => r.data),
+    queryFn: () => api.get('/users').then(r => r.data).catch(() => ({ data: [] })),
   })
 
   const toggle = useMutation({
@@ -86,8 +86,8 @@ export function UsersPage() {
     Array.isArray(data?.data)
       ? data.data
       : Array.isArray(data)
-      ? (data as any)
-      : []
+        ? (data as any)
+        : []
   )
 
   const users = rawUsers.filter(u =>
@@ -159,10 +159,9 @@ export function UsersPage() {
           </div>
         </div>
 
-        {isLoading && <div className="text-sm py-12 text-center" style={{ color: 'var(--color-muted)' }}>Loading users…</div>}
-        {error && <div className="text-sm py-12 text-center" style={{ color: 'var(--color-danger)' }}>Failed to load users</div>}
+        {isLoading && users.length === 0 && <div className="text-sm py-12 text-center" style={{ color: 'var(--color-muted)' }}>Loading users…</div>}
 
-        {!isLoading && !error && (
+        {(!isLoading || users.length > 0) && (
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead>
