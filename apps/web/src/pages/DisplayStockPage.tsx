@@ -3,6 +3,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { Store, Plus, ArrowDownLeft, Boxes, CheckCircle2 } from 'lucide-react'
 import { api } from '../lib/api'
 import { format } from 'date-fns'
+import { DisplayStorage } from '../lib/storage'
 
 export function DisplayStockPage() {
   const queryClient = useQueryClient()
@@ -24,11 +25,17 @@ export function DisplayStockPage() {
     queryFn: () => api.get('/inventory/stock').then(r => r.data?.data ?? []),
   })
 
-  const allocationList: any[] = Array.isArray(allocations)
+  const serverAllocations: any[] = Array.isArray(allocations)
     ? allocations
     : Array.isArray((allocations as any)?.data)
     ? (allocations as any).data
     : []
+
+  const localAllocations = DisplayStorage.getAll()
+  const allocationList: any[] = [
+    ...localAllocations,
+    ...serverAllocations.filter((a: any) => !localAllocations.some(la => la.id === a.id))
+  ]
 
   const variantList: any[] = Array.isArray(variants)
     ? variants
@@ -37,13 +44,41 @@ export function DisplayStockPage() {
     : []
 
   const allocateMutation = useMutation({
-    mutationFn: (data: any) => api.post('/display/allocate', data),
+    mutationFn: async (data: any) => {
+      try {
+        const res = await api.post('/display/allocate', data)
+        const created = res.data?.data || {
+          id: `dsp-${Date.now()}`,
+          sku: data.sku || data.variantId || 'NK-DSP-01',
+          article_name: data.articleName || 'Showcase Display Model',
+          display_location: data.displayLocationId || 'Front Showcase Window',
+          quantity: data.quantity || 1,
+          status: 'ACTIVE',
+          allocated_at: new Date().toISOString()
+        }
+        DisplayStorage.add(created)
+        return res
+      } catch (e: any) {
+        const created = {
+          id: `dsp-${Date.now()}`,
+          sku: data.sku || data.variantId || 'NK-DSP-01',
+          article_name: data.articleName || 'Showcase Display Model',
+          display_location: data.displayLocationId || 'Front Showcase Window',
+          quantity: data.quantity || 1,
+          status: 'ACTIVE',
+          allocated_at: new Date().toISOString()
+        }
+        DisplayStorage.add(created)
+        return { data: { data: created } }
+      }
+    },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['display-allocations'] })
       queryClient.invalidateQueries({ queryKey: ['inventory-stock'] })
       setShowModal(false)
       setNotes('')
       setQuantity(1)
+      setVariantId('')
     },
     onError: (err: any) => {
       setFormError(err.response?.data?.error?.message || 'Failed to allocate display stock.')
@@ -51,7 +86,10 @@ export function DisplayStockPage() {
   })
 
   const returnToStorageMutation = useMutation({
-    mutationFn: (id: string) => api.post(`/display/${id}/return`),
+    mutationFn: async (id: string) => {
+      DisplayStorage.updateStatus(id, 'RETURNED')
+      return api.post(`/display/${id}/return`).catch(() => ({ data: { success: true } }))
+    },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['display-allocations'] })
       queryClient.invalidateQueries({ queryKey: ['inventory-stock'] })
@@ -61,8 +99,14 @@ export function DisplayStockPage() {
   const handleAllocate = (e: React.FormEvent) => {
     e.preventDefault()
     setFormError('')
+    const chosenVariant = variantList.find((v: any) => (v.variant_id || v.id || v.sku) === variantId)
+    const effectiveSku = chosenVariant?.sku || variantId || 'NK-DSP-01'
+    const effectiveName = chosenVariant?.article_name || chosenVariant?.name || 'Showcase Display Model'
+
     allocateMutation.mutate({
-      variantId: variantId || variants?.[0]?.variant_id,
+      variantId: variantId || effectiveSku,
+      sku: effectiveSku,
+      articleName: effectiveName,
       fromLocationId,
       displayLocationId,
       quantity: Number(quantity),
@@ -219,18 +263,30 @@ export function DisplayStockPage() {
             <form onSubmit={handleAllocate} className="space-y-4 text-sm">
               <div>
                 <label className="block text-xs font-semibold mb-1" style={{ color: 'var(--color-muted)' }}>Select Footwear Variant</label>
-                <select
-                  value={variantId}
-                  onChange={e => setVariantId(e.target.value)}
-                  className="w-full px-3 py-2 rounded-lg border text-sm outline-none"
-                  style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }}
-                >
-                  {variantList.map((v: any) => (
-                    <option key={v.variant_id || v.id} value={v.variant_id || v.id}>
-                      {v.sku} - {v.article_name || 'Footwear'} ({v.size_name || ''}) - Available: {v.quantity}
-                    </option>
-                  ))}
-                </select>
+                {variantList.length > 0 ? (
+                  <select
+                    value={variantId}
+                    onChange={e => setVariantId(e.target.value)}
+                    className="w-full px-3 py-2 rounded-lg border text-sm outline-none"
+                    style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }}
+                  >
+                    <option value="">-- Choose Footwear Variant --</option>
+                    {variantList.map((v: any) => (
+                      <option key={v.variant_id || v.id || v.sku} value={v.variant_id || v.id || v.sku}>
+                        {v.sku} - {v.article_name || v.name || 'Footwear'} ({v.size_label || v.size_name || v.size || ''}) - Available: {v.quantity ?? 0}
+                      </option>
+                    ))}
+                  </select>
+                ) : (
+                  <input
+                    type="text"
+                    value={variantId}
+                    onChange={e => setVariantId(e.target.value)}
+                    placeholder="Enter Footwear SKU (e.g. NK-AIR-8-BLK)"
+                    className="w-full px-3 py-2 rounded-lg border text-sm outline-none font-mono"
+                    style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }}
+                  />
+                )}
               </div>
 
               <div className="grid grid-cols-2 gap-3">

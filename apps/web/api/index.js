@@ -1081,26 +1081,40 @@ export default async function handler(req, res) {
   }
 
   // 11. Display Stock
-  if (path.includes('/display/') && path.includes('/return')) {
+  if (path.includes('/display/return') || (path.includes('/display/') && path.includes('/return'))) {
     const id = path.split('/display/')[1]?.split('/')[0];
-    const idx = displays.findIndex(d => d.id === id);
-    if (idx !== -1) displays.splice(idx, 1);
+    const item = DB.displays.find(d => d.id === id);
+    if (item) {
+      item.status = 'RETURNED';
+      item.returned_at = new Date().toISOString();
+    }
     return res.status(200).json({ data: { success: true } });
   }
-  if (path.includes('/display/allocate')) {
+  if (path.includes('/display/allocate') || (path.includes('/display') && req.method === 'POST')) {
+    const vId = body.variantId || body.variant_id;
+    const variantObj = (DB.variants || []).find(v => v.id === vId || v.sku === vId)
+      || (DB.balances || []).find(b => b.id === vId || b.sku === vId)
+      || { sku: body.sku || vId || 'NK-DSP-01', article_name: body.articleName || 'Showcase Display Model', size_label: 'UK 8', colour_name: 'Black' };
+
     const newDisplay = {
       id: 'disp-' + Date.now(),
-      display_location_name: body.displayLocationName || 'Window Shelf Display',
-      sku: body.sku || 'NK-AM-A5-8-BLK',
-      article_name: body.articleName || 'Air Max Pulse Retro',
-      size_label: 'UK 8',
-      colour_name: 'Midnight Black',
+      variant_id: variantObj.id || vId || 'var-dsp',
+      sku: body.sku || variantObj.sku || 'NK-DSP-01',
+      article_name: body.articleName || variantObj.article_name || variantObj.name || 'Showcase Display Model',
+      size_label: variantObj.size_label || variantObj.size || 'UK 8',
+      colour_name: variantObj.colour_name || variantObj.colour || 'Midnight Black',
+      display_location_name: body.displayLocationId === 'DISP-RUN' ? 'Running Wall Pedestal' : body.displayLocationId === 'DISP-SNK' ? 'Streetwear Center Island' : 'Front Showcase Window',
+      display_location: body.displayLocationId || 'Front Showcase Window',
+      quantity: Number(body.quantity || 1),
+      purpose: body.notes || 'Featured Showcase Pair',
+      notes: body.notes || 'Featured Showcase Pair',
+      status: 'ACTIVE',
       allocated_at: new Date().toISOString()
     };
-    displays.unshift(newDisplay);
+    DB.displays.unshift(newDisplay);
     return res.status(201).json({ data: newDisplay });
   }
-  if (path.includes('/display')) return res.status(200).json({ data: displays });
+  if (path.includes('/display')) return res.status(200).json({ data: DB.displays });
 
   // 12. Damaged Goods
   if (path.includes('/damage/') && path.includes('/write-off')) {
@@ -1188,18 +1202,25 @@ export default async function handler(req, res) {
           // Inward items to inventory balances
           if (Array.isArray(p.items)) {
             p.items.forEach(item => {
-              const sku = item.sku || `${(item.article_name || 'SHOE').slice(0, 3).toUpperCase()}-${item.size || 'UK8'}-${item.colour || 'BLK'}`;
+              const artName = item.articleName || item.article_name || 'Footwear Model';
+              const sz = item.size || item.size_label || 'UK 8';
+              const clr = item.colour || item.colour_name || 'Triple Black';
+              const sku = item.sku || `${artName.slice(0, 3).toUpperCase()}-${sz.replace(/\D/g, '') || '8'}-${clr.slice(0, 3).toUpperCase()}`;
+              const cPrice = Number(item.costPrice || item.cost_price || 2000);
+              const mPrice = Number(item.mrp || 4999);
+              const sPrice = Number(item.sellingPrice || item.selling_price || mPrice || 4499);
+
               let v = (DB.variants || []).find(x => x.sku === sku);
               if (!v) {
                 v = {
                   id: 'var-' + Date.now() + Math.random().toString().slice(2, 6),
                   sku,
-                  article_name: item.article_name || 'Footwear Model',
-                  size_label: item.size || 'UK 8',
-                  colour_name: item.colour || 'Triple Black',
-                  cost_price: Number(item.cost_price || 2000),
-                  mrp: Number(item.mrp || 4999),
-                  selling_price: Number(item.selling_price || item.mrp || 4499),
+                  article_name: artName,
+                  size_label: sz,
+                  colour_name: clr,
+                  cost_price: cPrice,
+                  mrp: mPrice,
+                  selling_price: sPrice,
                   is_active: true,
                   created_at: new Date().toISOString()
                 };
@@ -1209,13 +1230,15 @@ export default async function handler(req, res) {
               if (!b) {
                 b = {
                   id: 'bal-' + Date.now() + Math.random().toString().slice(2, 6),
+                  variant_id: v.id,
                   sku,
-                  article_name: v.article_name,
-                  size_label: v.size_label,
-                  colour_name: v.colour_name,
+                  article_name: artName,
+                  size_label: sz,
+                  size_name: sz,
+                  colour_name: clr,
                   quantity: 0,
-                  cost_price: v.cost_price,
-                  selling_price: v.selling_price
+                  cost_price: cPrice,
+                  selling_price: sPrice
                 };
                 DB.balances.push(b);
               }
@@ -1250,18 +1273,25 @@ export default async function handler(req, res) {
       if (newP.status === 'FINAL' || newP.status === 'FINALISED') {
         newP.status = 'FINALISED';
         items.forEach(item => {
-          const sku = item.sku || `${(item.article_name || 'SHOE').slice(0, 3).toUpperCase()}-${item.size || 'UK8'}-${item.colour || 'BLK'}`;
+          const artName = item.articleName || item.article_name || 'Footwear Model';
+          const sz = item.size || item.size_label || 'UK 8';
+          const clr = item.colour || item.colour_name || 'Triple Black';
+          const sku = item.sku || `${artName.slice(0, 3).toUpperCase()}-${sz.replace(/\D/g, '') || '8'}-${clr.slice(0, 3).toUpperCase()}`;
+          const cPrice = Number(item.costPrice || item.cost_price || 2000);
+          const mPrice = Number(item.mrp || 4999);
+          const sPrice = Number(item.sellingPrice || item.selling_price || mPrice || 4499);
+
           let v = (DB.variants || []).find(x => x.sku === sku);
           if (!v) {
             v = {
               id: 'var-' + Date.now() + Math.random().toString().slice(2, 6),
               sku,
-              article_name: item.article_name || 'Footwear Model',
-              size_label: item.size || 'UK 8',
-              colour_name: item.colour || 'Triple Black',
-              cost_price: Number(item.cost_price || 2000),
-              mrp: Number(item.mrp || 4999),
-              selling_price: Number(item.selling_price || item.mrp || 4499),
+              article_name: artName,
+              size_label: sz,
+              colour_name: clr,
+              cost_price: cPrice,
+              mrp: mPrice,
+              selling_price: sPrice,
               is_active: true,
               created_at: new Date().toISOString()
             };
@@ -1271,13 +1301,15 @@ export default async function handler(req, res) {
           if (!b) {
             b = {
               id: 'bal-' + Date.now() + Math.random().toString().slice(2, 6),
+              variant_id: v.id,
               sku,
-              article_name: v.article_name,
-              size_label: v.size_label,
-              colour_name: v.colour_name,
+              article_name: artName,
+              size_label: sz,
+              size_name: sz,
+              colour_name: clr,
               quantity: 0,
-              cost_price: v.cost_price,
-              selling_price: v.selling_price
+              cost_price: cPrice,
+              selling_price: sPrice
             };
             DB.balances.push(b);
           }

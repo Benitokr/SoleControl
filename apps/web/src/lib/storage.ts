@@ -20,6 +20,7 @@ const STORAGE_KEYS = {
   TRANSFERS: 'solecontrol_transfers_v2',
   CLEARANCE_RULES: 'solecontrol_clearance_rules_v2',
   DAMAGED_GOODS: 'solecontrol_damaged_goods_v2',
+  DISPLAYS: 'solecontrol_displays_v2',
 }
 
 const DEFAULT_NOTIFICATIONS: SystemNotification[] = [
@@ -238,6 +239,34 @@ export const ClearanceRuleStorage = {
     const list = this.getAll()
     list.unshift(rule)
     setLocal(STORAGE_KEYS.CLEARANCE_RULES, list)
+    return list
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Display Stock Storage
+// ---------------------------------------------------------------------------
+export const DisplayStorage = {
+  getAll(): any[] {
+    return getLocal<any[]>(STORAGE_KEYS.DISPLAYS, [])
+  },
+
+  add(disp: any): any[] {
+    const list = this.getAll()
+    const item = {
+      ...disp,
+      id: disp.id || ('dsp-' + Date.now().toString().slice(-4)),
+      status: disp.status || 'ACTIVE',
+      allocated_at: disp.allocated_at || new Date().toISOString()
+    }
+    list.unshift(item)
+    setLocal(STORAGE_KEYS.DISPLAYS, list)
+    return list
+  },
+
+  updateStatus(id: string, status: string): any[] {
+    const list = this.getAll().map(d => d.id === id ? { ...d, status, returned_at: new Date().toISOString() } : d)
+    setLocal(STORAGE_KEYS.DISPLAYS, list)
     return list
   }
 }
