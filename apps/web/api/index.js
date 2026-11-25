@@ -76,7 +76,6 @@ let ageingRules = [
   { id: 'ar-1', category_name: 'Running & Performance', threshold_days: 90, discount_pct: 25, label: 'Running Clearance 90d+', is_active: true },
   { id: 'ar-2', category_name: 'Formal Leather', threshold_days: 100, discount_pct: 30, label: 'Formal Off-Season Clearance', is_active: true }
 ];
-let barcodeQueue = [];
 
 let notifications = [
   { id: 'alt-1', title: 'Low Stock Velocity Alert', message: 'Size UK 7 for Suede Classic XXI High is below safety threshold (2 pairs left)', severity: 'warning', isRead: false, is_read: false, createdAt: new Date().toISOString(), created_at: new Date().toISOString() },
