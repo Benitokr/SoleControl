@@ -2,6 +2,7 @@ import { Package } from 'lucide-react'
 import { formatINR } from '../../lib/format'
 import { ColourSwatch } from './ColourSwatch'
 import { StockBadge } from './FootwearBadges'
+import { SizeStrip } from './SizeStrip'
 import { cn } from '../../lib/utils'
 
 interface ArticleCardProps {
@@ -11,6 +12,7 @@ interface ArticleCardProps {
   mrp: number
   stockQty: number
   colours?: string[]
+  stockBySize?: Record<string, number>
   imageUrl?: string
   onClick?: () => void
   className?: string
@@ -23,6 +25,7 @@ export function ArticleCard({
   mrp,
   stockQty,
   colours = [],
+  stockBySize,
   imageUrl,
   onClick,
   className,
@@ -63,6 +66,8 @@ export function ArticleCard({
           )}
         </div>
       )}
+
+      {stockBySize && <SizeStrip stockBySize={stockBySize} />}
 
       <div className="flex items-center justify-between pt-2 border-t border-slate-100 gap-2">
         <span className="text-sm font-semibold tabular-nums text-slate-900">{formatINR(mrp)}</span>

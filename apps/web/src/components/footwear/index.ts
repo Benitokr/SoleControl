@@ -1,4 +1,5 @@
 export * from './SizeRunGrid'
+export * from './SizeStrip'
 export * from './ColourSwatch'
 export * from './ArticleCard'
 export * from './FootwearBadges'

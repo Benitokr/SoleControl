@@ -4,6 +4,7 @@ import { authenticate } from '../../middleware/auth.js';
 import { requirePermission } from '../../middleware/requirePermission.js';
 import { AuthRequest } from '../../middleware/auth.js';
 import { prisma } from '../../lib/prisma.js';
+import { getPGlite } from '../../lib/db.js';
 import { AppError } from '../../middleware/errorHandler.js';
 
 export const mastersRoutes = Router();
@@ -170,13 +171,52 @@ mastersRoutes.put('/colours/:id', requirePermission('masters.edit'), async (req:
   } catch (err) { next(err); }
 });
 
+// ─── TAX RATES (DATA-DRIVEN GST SLABS) ──────────────────────────────────────
+mastersRoutes.get('/tax-rates', requirePermission('masters.view'), async (_req: AuthRequest, res: Response, next: NextFunction) => {
+  try {
+    const db = getPGlite();
+    const r = await db.query(`SELECT * FROM "tax_rates" WHERE is_active = true ORDER BY rate ASC`);
+    return res.json({ data: r.rows });
+  } catch (err) { next(err); }
+});
+
+mastersRoutes.get('/gst-rate', requirePermission('masters.view'), async (req: AuthRequest, res: Response, next: NextFunction) => {
+  try {
+    const hsn = String(req.query.hsn || '6404');
+    const db = getPGlite();
+    const r = await db.query(
+      `SELECT * FROM "tax_rates" WHERE is_active = true AND (hsn_code = $1 OR hsn_code IS NULL) ORDER BY (CASE WHEN hsn_code = $1 THEN 0 ELSE 1 END), rate ASC`,
+      [hsn]
+    );
+    const slabs = r.rows as any[];
+    // India GST Notification 21/2021: HSN 6401-6405 footwear unified at 12%; HSN 6406 parts at 18%
+    const chosen =
+      hsn.startsWith('6406')
+        ? slabs.find((s) => Number(s.rate) === 18) || slabs[0]
+        : slabs.find((s) => Number(s.rate) === 12) || slabs[0];
+    return res.json({
+      data: chosen || { id: 'tax-gst-12', name: 'GST 12% Standard Footwear', rate: 12, cgst_rate: 6, sgst_rate: 6, igst_rate: 12 },
+    });
+  } catch (err) { next(err); }
+});
+
 // ─── ARTICLES ────────────────────────────────────────────────────────────────
 const ArticleSchema = z.object({
-  articleNumber: z.string().min(1), name: z.string().min(1),
-  brandId: z.string(), categoryId: z.string(),
+  articleNumber: z.string().min(1, 'Article code is required').optional(),
+  code: z.string().min(1).optional(),
+  name: z.string().min(1, 'Article name is required'),
+  brandId: z.string().min(1, 'Brand is required').optional(),
+  categoryId: z.string().min(1, 'Category is required').optional(),
   gender: z.enum(['MENS', 'WOMENS', 'KIDS', 'UNISEX']).default('UNISEX'),
-  hsnCode: z.string().optional(), description: z.string().optional(),
-  baseCostPrice: z.number().default(0), baseMrp: z.number().default(0), baseSellingPrice: z.number().default(0),
+  hsnCode: z.string().min(2).default('6404'),
+  hsn: z.string().optional(),
+  description: z.string().optional(),
+  baseCostPrice: z.number().min(0, 'Cost cannot be negative').default(0),
+  costPrice: z.number().min(0).optional(),
+  baseMrp: z.number().positive('MRP must be greater than 0').default(1),
+  mrp: z.number().positive('MRP must be greater than 0').optional(),
+  baseSellingPrice: z.number().min(0).default(0),
+  isActive: z.boolean().optional(),
 });
 
 mastersRoutes.get('/articles', requirePermission('masters.view'), async (req: AuthRequest, res: Response, next: NextFunction) => {
@@ -227,8 +267,32 @@ mastersRoutes.get('/articles/:id/variants', requirePermission('masters.view'), a
 
 mastersRoutes.post('/articles', requirePermission('masters.create'), async (req: AuthRequest, res: Response, next: NextFunction) => {
   try {
-    const body = ArticleSchema.parse(req.body);
-    const article = await prisma.article.create({ data: body, include: { brand: true, category: true } });
+    const parsed = ArticleSchema.parse(req.body);
+    const articleNumber = (parsed.articleNumber || parsed.code || parsed.name.replace(/[^A-Za-z0-9]/g, '').slice(0, 6) + '-' + Date.now().toString().slice(-4)).toUpperCase();
+    const baseMrp = parsed.mrp ?? parsed.baseMrp;
+    const baseCostPrice = parsed.costPrice ?? parsed.baseCostPrice;
+    if (baseMrp <= 0) throw new AppError('MRP must be greater than 0.', 400, 'INVALID_MRP');
+    if (baseCostPrice < 0) throw new AppError('Cost price cannot be negative.', 400, 'INVALID_COST');
+
+    // Enforce unique articleNumber
+    const dup = await prisma.article.findFirst({ where: { articleNumber } } as any);
+    if (dup) throw new AppError(`Article code ${articleNumber} already exists.`, 409, 'DUPLICATE_ARTICLE_CODE');
+
+    const article = await prisma.article.create({
+      data: {
+        articleNumber,
+        name: parsed.name.trim(),
+        brandId: parsed.brandId,
+        categoryId: parsed.categoryId,
+        gender: parsed.gender,
+        hsnCode: parsed.hsn || parsed.hsnCode || '6404',
+        description: parsed.description,
+        baseCostPrice,
+        baseMrp,
+        baseSellingPrice: parsed.baseSellingPrice || baseMrp,
+      } as any,
+      include: { brand: true, category: true },
+    });
     return res.status(201).json({ data: article });
   } catch (err) { next(err); }
 });

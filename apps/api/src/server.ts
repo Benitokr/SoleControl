@@ -8,7 +8,7 @@ import cors from 'cors';
 import cookieParser from 'cookie-parser';
 import rateLimit from 'express-rate-limit';
 import { randomUUID } from 'crypto';
-import { initDatabase } from './lib/db.js';
+import { initDatabase, getPGlite, getDbMode } from './lib/db.js';
 import { logger } from './lib/logger.js';
 import { errorHandler } from './middleware/errorHandler.js';
 
@@ -49,10 +49,16 @@ const PORT = parseInt(process.env.PORT || '4000', 10);
 app.use(helmet({ crossOriginResourcePolicy: { policy: 'cross-origin' } }));
 app.use(cors({
   origin: (origin, callback) => {
-    if (!origin || origin.includes('localhost') || origin.includes('127.0.0.1') || origin.includes('vercel.app') || (process.env.CORS_ORIGIN && process.env.CORS_ORIGIN.includes(origin))) {
+    const allowed = (process.env.CORS_ORIGIN || '').split(',').map(s => s.trim()).filter(Boolean);
+    if (
+      !origin ||
+      origin === 'https://web-digisquares1.vercel.app' ||
+      allowed.includes(origin) ||
+      (process.env.NODE_ENV !== 'production' && (origin.includes('localhost') || origin.includes('127.0.0.1')))
+    ) {
       callback(null, true);
     } else {
-      callback(null, true);
+      callback(new Error('Not allowed by CORS'));
     }
   },
   credentials: true
@@ -92,7 +98,22 @@ app.use('/api/v1/alerts', alertRoutes);
 app.use('/api/v1/integrations', integrationsRoutes);
 app.use('/api/v1/database', databaseRoutes);
 
-app.get('/api/health', (_req, res) => res.json({ status: 'ok', ts: new Date().toISOString() }));
+const healthHandler = async (_req: any, res: any) => {
+  try {
+    const db = getPGlite();
+    const r = await db.query('SELECT current_database() as db');
+    const dbName = (r.rows[0] as any)?.db || 'unknown';
+    res.json({ status: 'ok', database: dbName, mode: getDbMode(), ts: new Date().toISOString() });
+  } catch (err: any) {
+    res.status(503).json({
+      status: 'error',
+      error: { code: 'DB_UNAVAILABLE', message: 'Database connection unavailable' },
+      ts: new Date().toISOString(),
+    });
+  }
+};
+app.get('/api/health', healthHandler);
+app.get('/api/v1/health', healthHandler);
 app.use((_req, res) => res.status(404).json({ error: { code: 'NOT_FOUND', message: 'Route not found' } }));
 app.use(errorHandler);
 

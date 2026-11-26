@@ -90,6 +90,40 @@ purchaseRoutes.get('/', requirePermission('purchases.view'), async (req: AuthReq
   } catch (err) { next(err); }
 });
 
+// Purchase Orders
+purchaseRoutes.get('/orders', requirePermission('purchases.view'), async (req: AuthRequest, res: Response, next: NextFunction) => {
+  try {
+    const { getPGlite } = await import('../../lib/db.js');
+    const db = getPGlite();
+    const r = await db.query(
+      `SELECT po.*, v.name as vendor_name FROM "purchase_orders" po LEFT JOIN "vendors" v ON v.id = po.vendor_id ORDER BY po.created_at DESC LIMIT 50`
+    );
+    return res.json({ data: r.rows });
+  } catch (err) { next(err); }
+});
+
+purchaseRoutes.post('/orders', requirePermission('purchases.create'), async (req: AuthRequest, res: Response, next: NextFunction) => {
+  try {
+    const { vendorId, expectedDate, items, notes } = req.body as any;
+    if (!vendorId || !Array.isArray(items) || items.length === 0) {
+      throw new AppError('vendorId and items are required', 400, 'VALIDATION_ERROR');
+    }
+    const { getPGlite } = await import('../../lib/db.js');
+    const db = getPGlite();
+    const subtotal = items.reduce((s: number, it: any) => s + Number(it.quantity || 0) * Number(it.costPrice || 0), 0);
+    const taxAmount = items.reduce((s: number, it: any) => s + Number(it.quantity || 0) * Number(it.costPrice || 0) * (Number(it.taxRate || 12) / 100), 0);
+    const totalAmount = subtotal + taxAmount;
+    const id = randomUUID();
+    const poNumber = `PO-${new Date().getFullYear().toString().slice(-2)}-${Date.now().toString().slice(-5)}`;
+    const r = await db.query(
+      `INSERT INTO "purchase_orders" ("id","store_id","vendor_id","po_number","expected_date","status","subtotal","tax_amount","total_amount","items","notes","actor_id")
+       VALUES ($1,$2,$3,$4,$5,'ORDERED',$6,$7,$8,$9::jsonb,$10,$11) RETURNING *`,
+      [id, req.user!.storeId || 'default', vendorId, poNumber, expectedDate || null, subtotal, taxAmount, totalAmount, JSON.stringify(items), notes || null, req.user!.id]
+    );
+    return res.status(201).json({ data: r.rows[0] });
+  } catch (err) { next(err); }
+});
+
 // Get purchase detail
 purchaseRoutes.get('/:id', requirePermission('purchases.view'), async (req: AuthRequest, res: Response, next: NextFunction) => {
   try {

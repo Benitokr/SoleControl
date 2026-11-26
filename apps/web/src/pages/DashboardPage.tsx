@@ -323,60 +323,82 @@ export function DashboardPage() {
 
       {/* Needs Attention & Recent Bills */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-5">
-        <div className="lg:col-span-6 bg-white rounded-lg border border-slate-200 p-5 space-y-3">
-          <div className="flex items-center justify-between">
-            <h2 className="text-sm font-semibold text-slate-900">Needs attention</h2>
-            <button
-              type="button"
-              onClick={() => navigate('/notifications')}
-              className="text-xs font-medium text-teal-700 hover:underline inline-flex items-center gap-1"
-            >
-              View all <ArrowRight className="w-3 h-3" />
-            </button>
-          </div>
-          {insights.length === 0 && Number(kpis.pendingPurchases ?? 0) === 0 && lowStockCount === 0 ? (
-            <p className="text-sm text-slate-500 py-4">No urgent operational alerts right now.</p>
-          ) : (
-            <div className="space-y-2">
-              {lowStockCount > 0 && (
-                <div className="p-3 rounded-lg bg-amber-50 border border-amber-200 flex items-center justify-between gap-2 text-sm">
-                  <span className="text-amber-900">
-                    {lowStockCount} SKUs are at low stock (5 pairs or fewer)
-                  </span>
-                  <Button size="sm" variant="outline" onClick={() => navigate('/inventory')}>
-                    Review
-                  </Button>
-                </div>
-              )}
-              {Number(kpis.pendingPurchases ?? 0) > 0 && (
-                <div className="p-3 rounded-lg bg-slate-50 border border-slate-200 flex items-center justify-between gap-2 text-sm">
-                  <span className="text-slate-800">
-                    {kpis.pendingPurchases} draft purchase bills awaiting goods inward
-                  </span>
-                  <Button size="sm" variant="outline" onClick={() => navigate('/purchases')}>
-                    Open
-                  </Button>
-                </div>
-              )}
-              {insights.slice(0, 4).map((ins: any, i: number) => (
-                <div
-                  key={ins.id || i}
-                  className="p-3 rounded-lg border border-slate-200 flex items-center justify-between gap-2 text-sm"
-                >
-                  <div>
-                    <p className="font-medium text-slate-900">{ins.title || 'Alert'}</p>
-                    <p className="text-xs text-slate-500">{ins.message}</p>
-                  </div>
-                  {ins.actionRoute && (
-                    <Button size="sm" variant="outline" onClick={() => navigate(ins.actionRoute)}>
-                      {ins.actionText || 'View'}
-                    </Button>
-                  )}
-                </div>
-              ))}
+          <div className="bg-white rounded-xl border border-slate-200 p-5 space-y-3">
+            <div className="flex items-center justify-between">
+              <h2 className="text-sm font-semibold text-slate-900">Today&apos;s Work Queues</h2>
+              <button
+                type="button"
+                onClick={() => navigate('/notifications')}
+                className="text-xs font-medium text-teal-700 hover:underline inline-flex items-center gap-1"
+              >
+                View all <ArrowRight className="w-3 h-3" />
+              </button>
             </div>
-          )}
-        </div>
+            {insights.length === 0 && Number(kpis.pendingPurchases ?? 0) === 0 && lowStockCount === 0 && Number(kpis.vendorOutstanding ?? 0) === 0 && Number(kpis.customerOutstanding ?? 0) === 0 ? (
+              <p className="text-sm text-emerald-700 bg-emerald-50 border border-emerald-200 rounded-lg px-3.5 py-3 font-medium">
+                All clear — no pending deliveries, low stock alerts, or overdue balances.
+              </p>
+            ) : (
+              <div className="space-y-2">
+                {lowStockCount > 0 && (
+                  <div className="p-3 rounded-lg bg-amber-50 border border-amber-200 flex items-center justify-between gap-2 text-sm">
+                    <span className="text-amber-900">
+                      Sizes to restock: {lowStockCount} SKUs at ≤5 pairs
+                    </span>
+                    <Button size="sm" variant="outline" onClick={() => navigate('/inventory?filter=LOW')}>
+                      Restock
+                    </Button>
+                  </div>
+                )}
+                {Number(kpis.pendingPurchases ?? 0) > 0 && (
+                  <div className="p-3 rounded-lg bg-slate-50 border border-slate-200 flex items-center justify-between gap-2 text-sm">
+                    <span className="text-slate-800">
+                      Deliveries to receive: {kpis.pendingPurchases} draft bills
+                    </span>
+                    <Button size="sm" variant="outline" onClick={() => navigate('/purchases')}>
+                      Receive
+                    </Button>
+                  </div>
+                )}
+                {Number(kpis.vendorOutstanding ?? 0) > 0 && (
+                  <div className="p-3 rounded-lg bg-slate-50 border border-slate-200 flex items-center justify-between gap-2 text-sm">
+                    <span className="text-slate-800">
+                      Unpaid vendor bills: {formatINR(kpis.vendorOutstanding)}
+                    </span>
+                    <Button size="sm" variant="outline" onClick={() => navigate('/vendors')}>
+                      Pay
+                    </Button>
+                  </div>
+                )}
+                {Number(kpis.customerOutstanding ?? 0) > 0 && (
+                  <div className="p-3 rounded-lg bg-slate-50 border border-slate-200 flex items-center justify-between gap-2 text-sm">
+                    <span className="text-slate-800">
+                      Customer credit due: {formatINR(kpis.customerOutstanding)}
+                    </span>
+                    <Button size="sm" variant="outline" onClick={() => navigate('/customers')}>
+                      Collect
+                    </Button>
+                  </div>
+                )}
+                {insights.slice(0, 3).map((ins: any, i: number) => (
+                  <div
+                    key={ins.id || i}
+                    className="p-3 rounded-lg border border-slate-200 flex items-center justify-between gap-2 text-sm"
+                  >
+                    <div>
+                      <p className="font-medium text-slate-900">{ins.title || 'Alert'}</p>
+                      <p className="text-xs text-slate-500">{ins.message}</p>
+                    </div>
+                    {ins.actionRoute && (
+                      <Button size="sm" variant="outline" onClick={() => navigate(ins.actionRoute)}>
+                        {ins.actionText || 'View'}
+                      </Button>
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
 
         <div className="lg:col-span-6 bg-white rounded-lg border border-slate-200 p-5 space-y-3">
           <div className="flex items-center justify-between">

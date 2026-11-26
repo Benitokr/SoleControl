@@ -76,7 +76,14 @@ export async function initDatabase() {
       return;
     } catch (err: any) {
       logger.error(`Cloud PostgreSQL connection attempt failed: ${err.message}`);
+      if (process.env.VERCEL || process.env.NODE_ENV === 'production') {
+        throw new Error(`Production PostgreSQL unreachable: ${err.message}`);
+      }
     }
+  }
+
+  if ((process.env.VERCEL || process.env.NODE_ENV === 'production') && !databaseUrl) {
+    throw new Error('DATABASE_URL is required in production');
   }
 
   // 2. Local Docker PostgreSQL check
@@ -158,6 +165,38 @@ export function getPGlite(): any {
     pgliteInstance = new PGlite(dbDir);
   }
   return pgliteInstance;
+}
+
+export async function withTransaction<T>(fn: (tx: { query: (sql: string, params?: any[]) => Promise<{ rows: any[] }> }) => Promise<T>): Promise<T> {
+  if (dbMode === 'POSTGRES' && pgPoolInstance) {
+    const client = await pgPoolInstance.connect();
+    try {
+      await client.query('BEGIN');
+      const result = await fn({
+        query: async (sql: string, params?: any[]) => {
+          const r = await client.query(sql, params);
+          return { rows: r.rows };
+        },
+      });
+      await client.query('COMMIT');
+      return result;
+    } catch (err) {
+      await client.query('ROLLBACK').catch(() => {});
+      throw err;
+    } finally {
+      client.release();
+    }
+  }
+  const db = getPGlite();
+  await db.query('BEGIN');
+  try {
+    const result = await fn(db);
+    await db.query('COMMIT');
+    return result;
+  } catch (err) {
+    await db.query('ROLLBACK').catch(() => {});
+    throw err;
+  }
 }
 
 export function getPrisma(): PrismaClient {

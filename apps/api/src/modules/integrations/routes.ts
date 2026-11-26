@@ -1,11 +1,13 @@
 import { Router, Request, Response } from 'express';
 import { requireAuth } from '../../middleware/auth.js';
+import { requirePermission } from '../../middleware/requirePermission.js';
 import { getPGlite, getDbMode, getPrisma } from '../../lib/db.js';
 import { auditService } from '../audit/service.js';
 import crypto from 'crypto';
 
 export const integrationRoutes = Router();
 export const integrationsRoutes = integrationRoutes;
+integrationRoutes.use(requireAuth, requirePermission('integrations.view'));
 
 const PROVIDERS = ['whatsapp', 'barcode_service', 'bank_api', 'gst_portal', 'printer'];
 

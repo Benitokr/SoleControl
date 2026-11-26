@@ -325,10 +325,11 @@ export function AppShell() {
       {/* Fixed-order collapsible navigation groups */}
       <nav className="flex-1 overflow-y-auto px-2.5 py-3 space-y-2" aria-label="Main navigation">
         {visibleGroups.map((group) => {
-          const isOpen = expandedGroup === group.id || (collapsed && !isMobile)
+          const isAlwaysOpen = group.id === 'overview'
+          const isOpen = isAlwaysOpen || expandedGroup === group.id || (collapsed && !isMobile)
           return (
             <div key={group.id} className="space-y-0.5">
-              {(!collapsed || isMobile) && (
+              {(!collapsed || isMobile) && !isAlwaysOpen && (
                 <button
                   type="button"
                   onClick={() => setExpandedGroup((cur) => (cur === group.id ? '' : group.id))}

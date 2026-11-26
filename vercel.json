@@ -5,6 +5,11 @@
   "installCommand": "npm install",
   "framework": "vite",
   "cleanUrls": false,
+  "functions": {
+    "api/index.js": {
+      "includeFiles": "apps/api/dist/**"
+    }
+  },
   "rewrites": [
     {
       "source": "/api/(.*)",

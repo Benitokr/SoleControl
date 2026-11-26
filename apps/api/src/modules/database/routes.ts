@@ -1,9 +1,10 @@
 import { Router } from 'express';
 import { getDbMode, getPGlite, getPrisma } from '../../lib/db.js';
 import { requireAuth } from '../../middleware/auth.js';
+import { requirePermission } from '../../middleware/requirePermission.js';
 
 export const databaseRoutes = Router();
-databaseRoutes.use(requireAuth);
+databaseRoutes.use(requireAuth, requirePermission('audit.view'));
 
 const TABLE_METADATA: Record<string, { group: string; description: string }> = {
   // Company & Locations

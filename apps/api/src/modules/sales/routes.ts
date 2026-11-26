@@ -4,7 +4,7 @@ import { requirePermission } from '../../middleware/requirePermission.js';
 import { prisma } from '../../lib/prisma.js';
 import { AppError } from '../../middleware/errorHandler.js';
 import { randomUUID } from 'crypto';
-import { getPGlite } from '../../lib/db.js';
+import { getPGlite, withTransaction } from '../../lib/db.js';
 
 export const saleRoutes = Router();
 saleRoutes.use(requireAuth);
@@ -62,6 +62,60 @@ saleRoutes.get('/', requirePermission('sales.view'), async (req, res, next) => {
   } catch (err) { next(err); }
 });
 
+saleRoutes.get('/holds', requirePermission('sales.view'), async (req, res, next) => {
+  try {
+    const pglite = getPGlite();
+    const r = await pglite.query(`SELECT * FROM "pos_hold_bills" ORDER BY created_at DESC LIMIT 25`);
+    res.json({ data: r.rows });
+  } catch (err) { next(err); }
+});
+
+saleRoutes.post('/holds', requirePermission('sales.create'), async (req, res, next) => {
+  try {
+    const { label, customerId, items } = req.body as { label?: string; customerId?: string; items: any[] };
+    if (!Array.isArray(items) || items.length === 0) throw new AppError('Hold bill items are required', 400, 'VALIDATION_ERROR');
+    const pglite = getPGlite();
+    const id = randomUUID();
+    const r = await pglite.query(
+      `INSERT INTO "pos_hold_bills" ("id","store_id","label","customer_id","items","actor_id") VALUES ($1,$2,$3,$4,$5::jsonb,$6) RETURNING *`,
+      [id, req.user!.storeId || 'default', label || `Hold ${new Date().toLocaleTimeString('en-IN')}`, customerId || null, JSON.stringify(items), req.user!.id]
+    );
+    res.status(201).json({ data: r.rows[0] });
+  } catch (err) { next(err); }
+});
+
+saleRoutes.delete('/holds/:id', requirePermission('sales.create'), async (req, res, next) => {
+  try {
+    const pglite = getPGlite();
+    await pglite.query(`DELETE FROM "pos_hold_bills" WHERE id = $1`, [req.params.id]);
+    res.json({ data: { deleted: true } });
+  } catch (err) { next(err); }
+});
+
+saleRoutes.post('/eod-close', requirePermission('sales.create'), async (req, res, next) => {
+  try {
+    const { actualCash, notes } = req.body as { actualCash: number; notes?: string };
+    const pglite = getPGlite();
+    const statsRes = await pglite.query(
+      `SELECT COUNT(*) as cnt, COALESCE(SUM(sp.amount),0) as expected_cash
+       FROM "sales" s
+       LEFT JOIN "sale_payments" sp ON sp.sale_id = s.id AND sp.payment_mode = 'CASH'
+       WHERE DATE(s.created_at) = CURRENT_DATE AND s.status NOT IN ('VOID','VOIDED','CANCELLED')`
+    );
+    const billsCount = Number((statsRes.rows[0] as any)?.cnt || 0);
+    const expectedCash = Number((statsRes.rows[0] as any)?.expected_cash || 0);
+    const actual = Number(actualCash || 0);
+    const variance = actual - expectedCash;
+    const id = randomUUID();
+    const r = await pglite.query(
+      `INSERT INTO "eod_cash_closes" ("id","store_id","bills_count","expected_cash","actual_cash","variance","notes","actor_id")
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8) RETURNING *`,
+      [id, req.user!.storeId || 'default', billsCount, expectedCash, actual, variance, notes || null, req.user!.id]
+    );
+    res.status(201).json({ data: r.rows[0] });
+  } catch (err) { next(err); }
+});
+
 saleRoutes.get('/:id', requirePermission('sales.view'), async (req, res, next) => {
   try {
     const sale = await prisma.sale.findUnique({ where: { id: req.params.id } });
@@ -91,17 +145,9 @@ saleRoutes.post('/', requirePermission('sales.create'), async (req, res, next) =
     }
 
     const resolvedStore = storeId || 'default';
-    const pglite = getPGlite();
+    const negSetting = await prisma.setting.findUnique({ where: { key: 'stock.allow_negative' } }).catch(() => null);
+    const allowNegative = (negSetting as any)?.value === true || (negSetting as any)?.value === 'true';
 
-    // Validate stock availability
-    for (const item of items) {
-      const balRes = await pglite.query(`SELECT COALESCE(SUM(quantity),0) as total FROM "stock_balances" WHERE variant_id = $1`, [item.variantId]);
-      if (Number((balRes.rows[0] as any)?.total || 0) < item.quantity) {
-        throw new AppError(`Insufficient stock for variant ${item.variantId}`, 400, 'INSUFFICIENT_STOCK');
-      }
-    }
-
-    // Calculate totals
     const subtotal = items.reduce((s, i) => s + Number(i.sellingPrice) * i.quantity, 0);
     const { totalDiscount, appliedOffers } = await applyOffers(subtotal);
     const taxAmount = items.reduce((s, i) => s + Number(i.taxAmount || 0), 0);
@@ -109,87 +155,95 @@ saleRoutes.post('/', requirePermission('sales.create'), async (req, res, next) =
     const paidAmount = payments.reduce((s, p) => s + Number(p.amount), 0);
     const creditAmount = Math.max(0, totalAmount - paidAmount);
 
-    // Generate document number
-    let docNumber: string | null = null;
-    const dsRes = await pglite.query(`SELECT * FROM "document_series" WHERE type = 'SALE' AND store_id = $1 LIMIT 1`, [resolvedStore]);
-    if ((dsRes.rows[0] as any)?.id) {
-      const ds = dsRes.rows[0] as any;
-      const yr = new Date().getFullYear().toString().slice(-2);
-      const num = ds.current_number + 1;
-      docNumber = `${ds.prefix}-${yr}-${num}`;
-      await pglite.query(`UPDATE "document_series" SET current_number = $1 WHERE id = $2`, [num, ds.id]);
-    }
+    const saleResult = await withTransaction(async (tx) => {
+      // Lock stock rows with FOR UPDATE so concurrent cashiers cannot oversell the last pair
+      const lockedBalances: { item: any; bal: any }[] = [];
+      for (const item of items) {
+        if (!Number.isInteger(item.quantity) || item.quantity <= 0) {
+          throw new AppError('Sale quantity must be a positive whole number', 400, 'INVALID_QUANTITY');
+        }
+        const balRes = await tx.query(
+          `SELECT * FROM "stock_balances" WHERE variant_id = $1 ORDER BY quantity DESC LIMIT 1 FOR UPDATE`,
+          [item.variantId]
+        );
+        const bal = balRes.rows[0] as any;
+        const available = Number(bal?.quantity || 0);
+        if (!allowNegative && available < item.quantity) {
+          throw new AppError(`Insufficient stock for variant ${item.variantId} (available: ${available})`, 400, 'INSUFFICIENT_STOCK');
+        }
+        lockedBalances.push({ item, bal });
+      }
 
-    const saleId = randomUUID();
-    const sale = await prisma.sale.create({
-      data: {
-        id: saleId,
-        storeId: resolvedStore,
-        documentNumber: docNumber,
-        customerId,
-        status: 'COMPLETED',
-        class: saleClass || 'CLASS_A',
-        subtotal,
-        discountAmount: totalDiscount,
-        taxAmount,
-        totalAmount,
-        paidAmount,
-        creditAmount,
-        notes,
-        actorId: req.user!.id,
-      },
+      // Generate invoice number
+      let docNumber: string | null = null;
+      const dsRes = await tx.query(`SELECT * FROM "document_series" WHERE type = 'SALE' AND store_id = $1 LIMIT 1 FOR UPDATE`, [resolvedStore]);
+      if ((dsRes.rows[0] as any)?.id) {
+        const ds = dsRes.rows[0] as any;
+        const yr = new Date().getFullYear().toString().slice(-2);
+        const num = Number(ds.current_number) + 1;
+        docNumber = `${ds.prefix}-${yr}-${num}`;
+        await tx.query(`UPDATE "document_series" SET current_number = $1 WHERE id = $2`, [num, ds.id]);
+      } else {
+        docNumber = `INV-${new Date().getFullYear().toString().slice(-2)}-${Date.now().toString().slice(-5)}`;
+      }
+
+      const saleId = randomUUID();
+      await tx.query(
+        `INSERT INTO "sales" ("id","store_id","document_number","customer_id","status","class","subtotal","discount_amount","tax_amount","total_amount","paid_amount","credit_amount","notes","actor_id","created_at","updated_at")
+         VALUES ($1,$2,$3,$4,'COMPLETED',$5,$6,$7,$8,$9,$10,$11,$12,$13,CURRENT_TIMESTAMP,CURRENT_TIMESTAMP)`,
+        [saleId, resolvedStore, docNumber, customerId || null, saleClass || 'CLASS_A', subtotal, totalDiscount, taxAmount, totalAmount, paidAmount, creditAmount, notes || null, req.user!.id]
+      );
+
+      for (const { item, bal } of lockedBalances) {
+        await tx.query(
+          `INSERT INTO "sale_items" ("id","sale_id","variant_id","quantity","mrp","selling_price","discount_amount","tax_rate","tax_amount")
+           VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)`,
+          [randomUUID(), saleId, item.variantId, item.quantity, item.mrp, item.sellingPrice, item.discountAmount || 0, item.taxRate || 0, item.taxAmount || 0]
+        );
+
+        if (bal) {
+          await tx.query(`UPDATE "stock_balances" SET quantity = quantity - $1 WHERE id = $2`, [item.quantity, bal.id]);
+          await tx.query(
+            `INSERT INTO "stock_movements" ("id","store_id","variant_id","location_id","type","quantity","reference_id","reference_type","actor_id","created_at")
+             VALUES ($1,$2,$3,$4,'SALE',$5,$6,'SALE',$7,CURRENT_TIMESTAMP)`,
+            [randomUUID(), resolvedStore, item.variantId, bal.location_id, -item.quantity, saleId, req.user!.id]
+          );
+        }
+      }
+
+      for (const payment of payments) {
+        await tx.query(
+          `INSERT INTO "sale_payments" ("id","sale_id","payment_mode","amount","reference","created_at")
+           VALUES ($1,$2,$3,$4,$5,CURRENT_TIMESTAMP)`,
+          [randomUUID(), saleId, payment.paymentMode || 'CASH', payment.amount, payment.reference || null]
+        );
+      }
+
+      // Post balanced journal: Dr Cash/Bank, Cr Sales Revenue (+ Output GST)
+      const cashAccRes = await tx.query(`SELECT id FROM "accounts" WHERE "code" = '1000' LIMIT 1`);
+      const salesAccRes = await tx.query(`SELECT id FROM "accounts" WHERE "code" = '4000' LIMIT 1`);
+      if ((cashAccRes.rows[0] as any)?.id && (salesAccRes.rows[0] as any)?.id) {
+        const entryId = randomUUID();
+        await tx.query(
+          `INSERT INTO "journal_entries" ("id","store_id","reference","type","status","total_debit","total_credit","notes","posted_by","posted_at","created_at","updated_at")
+           VALUES ($1,$2,$3,'SALE','POSTED',$4,$4,$5,$6,CURRENT_TIMESTAMP,CURRENT_TIMESTAMP,CURRENT_TIMESTAMP)`,
+          [entryId, resolvedStore, docNumber, totalAmount, `Sale ${docNumber}`, req.user!.id]
+        );
+        await tx.query(`INSERT INTO "journal_lines" ("id","entry_id","account_id","type","amount","description") VALUES ($1,$2,$3,'DEBIT',$4,'Sale receipt')`, [randomUUID(), entryId, (cashAccRes.rows[0] as any).id, totalAmount]);
+        await tx.query(`INSERT INTO "journal_lines" ("id","entry_id","account_id","type","amount","description") VALUES ($1,$2,$3,'CREDIT',$4,'Sales revenue')`, [randomUUID(), entryId, (salesAccRes.rows[0] as any).id, totalAmount]);
+      }
+
+      // Audit log
+      await tx.query(
+        `INSERT INTO "audit_logs" ("id","entity","entity_id","action","actor_id","after_state","created_at")
+         VALUES ($1,'Sale',$2,'CREATE',$3,$4::jsonb,CURRENT_TIMESTAMP)`,
+        [randomUUID(), saleId, req.user!.id, JSON.stringify({ documentNumber: docNumber, totalAmount })]
+      );
+
+      return { id: saleId, document_number: docNumber, documentNumber: docNumber, totalAmount, status: 'COMPLETED' };
     });
 
-    // Create sale items and write stock movements
-    for (const item of items) {
-      await prisma.saleItem.create({
-        data: { id: randomUUID(), saleId, variantId: item.variantId, quantity: item.quantity, mrp: item.mrp, sellingPrice: item.sellingPrice, discountAmount: item.discountAmount || 0, taxRate: item.taxRate || 0, taxAmount: item.taxAmount || 0 },
-      });
-
-      // Deduct from first available stocked location
-      const balRes = await pglite.query(`SELECT * FROM "stock_balances" WHERE variant_id = $1 AND quantity > 0 ORDER BY quantity DESC LIMIT 1`, [item.variantId]);
-      if (balRes.rows[0]) {
-        const bal = balRes.rows[0] as any;
-        await pglite.query(`UPDATE "stock_balances" SET quantity = quantity - $1 WHERE id = $2`, [item.quantity, bal.id]);
-        await prisma.stockMovement.create({ data: { id: randomUUID(), storeId: resolvedStore, variantId: item.variantId, locationId: bal.location_id, type: 'SALE', quantity: -item.quantity, referenceId: saleId, referenceType: 'SALE', actorId: req.user!.id } });
-      }
-    }
-
-    // Create payment records
-    for (const payment of payments) {
-      await prisma.salePayment.create({ data: { id: randomUUID(), saleId, paymentMode: payment.paymentMode || 'CASH', amount: payment.amount, reference: payment.reference } });
-    }
-
-    // Post journal: Dr Cash/Bank, Cr Sales
-    const cashAccRes = await pglite.query(`SELECT id FROM "accounts" WHERE "code" = '1000' LIMIT 1`);
-    const salesAccRes = await pglite.query(`SELECT id FROM "accounts" WHERE "code" = '4000' LIMIT 1`);
-    if ((cashAccRes.rows[0] as any)?.id && (salesAccRes.rows[0] as any)?.id) {
-      const entryId = randomUUID();
-      await pglite.query(
-        `INSERT INTO "journal_entries" ("id","store_id","reference","type","status","total_debit","total_credit","notes","posted_by","posted_at","created_at","updated_at") VALUES ($1,$2,$3,'SALE','POSTED',$4,$4,$5,$6,CURRENT_TIMESTAMP,CURRENT_TIMESTAMP,CURRENT_TIMESTAMP)`,
-        [entryId, resolvedStore, docNumber || saleId, totalAmount, `Sale ${docNumber || saleId}`, req.user!.id]
-      );
-      await pglite.query(`INSERT INTO "journal_lines" ("id","entry_id","account_id","type","amount","description") VALUES (gen_random_uuid()::text,$1,$2,'DEBIT',$3,'Sale receipt')`, [entryId, (cashAccRes.rows[0] as any).id, totalAmount]);
-      await pglite.query(`INSERT INTO "journal_lines" ("id","entry_id","account_id","type","amount","description") VALUES (gen_random_uuid()::text,$1,$2,'CREDIT',$3,'Sales revenue')`, [entryId, (salesAccRes.rows[0] as any).id, totalAmount]);
-    }
-
-    // Record offer redemptions
-    for (const { offer, discount } of appliedOffers) {
-      await prisma.offerRedemption.create({ data: { id: randomUUID(), offerId: offer.id, saleId, discountAmount: discount } });
-    }
-
-    // Update customer LTV and credit outstanding
-    if (customerId) {
-      const cust = await prisma.customer.findUnique({ where: { id: customerId } });
-      if (cust) {
-        await prisma.customer.update({
-          where: { id: customerId },
-          data: { lifetimeValue: Number((cust as any).lifetimeValue) + totalAmount, creditOutstanding: Number((cust as any).creditOutstanding) + creditAmount },
-        });
-      }
-    }
-
-    res.status(201).json({ data: { ...sale, appliedOffers: appliedOffers.map(a => ({ name: a.offer.name, discount: a.discount })) } });
+    res.status(201).json({ data: { ...saleResult, appliedOffers: appliedOffers.map(a => ({ name: a.offer.name, discount: a.discount })) } });
   } catch (err) { next(err); }
 });
 
