@@ -3,6 +3,7 @@ import { useQuery } from '@tanstack/react-query'
 import { api, fmt } from '../lib/api'
 import { useAuthStore } from '../store/authStore'
 import { format } from 'date-fns'
+import { StockStorage } from '../lib/storage'
 import {
   AlertCircle, CheckCircle2, Info, TrendingUp, ShoppingBag, Boxes, Clock,
   ArrowUpRight, ArrowDownRight, DollarSign, Wallet, Landmark, Truck,
@@ -183,6 +184,12 @@ export function DashboardPage() {
   const cardStyle = { background: 'var(--color-surface)', borderColor: 'var(--color-border)' }
   const analytics = analyticsData || {}
 
+  const localStock = StockStorage.getAll()
+  const localUnits = localStock.reduce((acc, s) => acc + (Number(s.quantity) || 0), 0)
+  const localValuation = localStock.reduce((acc, s) => acc + ((Number(s.quantity) || 0) * (Number(s.cost_price) || 2400)), 0)
+  const displayTotalStock = (Number(kpisData?.totalStock) > 0 ? Number(kpisData?.totalStock) : localUnits)
+  const displayValuation = (Number(kpisData?.inventoryValuation) > 0 ? Number(kpisData?.inventoryValuation) : localValuation)
+
   const trendData = (Array.isArray(analytics.salesTrend7d) && analytics.salesTrend7d.length > 0)
     ? analytics.salesTrend7d
     : []
@@ -247,10 +254,10 @@ export function DashboardPage() {
         />
         <KpiCard
           label="Total Inventory Units"
-          value={loadingKpis ? '...' : (Number(kpisData?.totalStock || 0).toLocaleString('en-IN'))}
+          value={loadingKpis ? '...' : displayTotalStock.toLocaleString('en-IN')}
           badge="Stock On Hand"
           badgeType="neutral"
-          sub={`${Number(kpisData?.totalStock || 0)} pairs across inventory`}
+          sub={`${displayTotalStock} pairs across inventory`}
           color="var(--color-text)"
           icon={Boxes}
         />
@@ -266,7 +273,7 @@ export function DashboardPage() {
 
         <KpiCard
           label="Inventory Valuation"
-          value={loadingKpis ? '...' : fmt(Number(kpisData?.inventoryValuation || 0))}
+          value={loadingKpis ? '...' : fmt(displayValuation)}
           badge="Weighted Avg"
           badgeType="neutral"
           sub="Current warehouse balance"

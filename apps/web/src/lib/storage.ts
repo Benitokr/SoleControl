@@ -367,7 +367,19 @@ export const AdjustmentStorage = {
 // ---------------------------------------------------------------------------
 export const StockStorage = {
   getAll(): any[] {
-    return getLocal<any[]>(STORAGE_KEYS.STOCK, [])
+    const list = getLocal<any[]>(STORAGE_KEYS.STOCK, [])
+    if (list.length === 0) {
+      const defaultStock = [
+        { id: 'stk-01', sku: 'NI-AIR-8-BLK', barcode: '890100100001', articleName: 'Nike Air Zoom Pegasus', article_name: 'Nike Air Zoom Pegasus', size: 'UK 8', colour: 'Black', quantity: 24, cost_price: 2400, selling_price: 4999, location_name: 'Main Warehouse (Rack R1)' },
+        { id: 'stk-02', sku: 'AD-UB-9-WHT', barcode: '890100100002', articleName: 'Adidas Ultraboost Light', article_name: 'Adidas Ultraboost Light', size: 'UK 9', colour: 'White', quantity: 18, cost_price: 2800, selling_price: 5499, location_name: 'Main Warehouse (Rack R2)' },
+        { id: 'stk-03', sku: 'PU-SUE-7-BLU', barcode: '890100100003', articleName: 'Puma Suede Classic XXI', article_name: 'Puma Suede Classic XXI', size: 'UK 7', colour: 'Royal Blue', quantity: 15, cost_price: 1800, selling_price: 3999, location_name: 'Main Warehouse (Rack R3)' },
+        { id: 'stk-04', sku: 'RB-CL-8-WHT', barcode: '890100100004', articleName: 'Reebok Club C 85 Vintage', article_name: 'Reebok Club C 85 Vintage', size: 'UK 8', colour: 'Chalk White', quantity: 12, cost_price: 2100, selling_price: 4499, location_name: 'Main Warehouse (Rack S1)' },
+        { id: 'stk-05', sku: 'AS-GL-9-GRY', barcode: '890100100005', articleName: 'Asics Gel-Kayano 30', article_name: 'Asics Gel-Kayano 30', size: 'UK 9', colour: 'Slate Grey', quantity: 20, cost_price: 3200, selling_price: 6499, location_name: 'Main Warehouse (Rack S2)' },
+      ]
+      setLocal(STORAGE_KEYS.STOCK, defaultStock)
+      return defaultStock
+    }
+    return list
   },
 
   adjust(sku: string, qtyChange: number, extra?: any): any[] {
@@ -402,8 +414,22 @@ export const StockStorage = {
       : []
     const local = this.getAll()
     const map = new Map<string, any>()
+
+    // Pre-populate core catalogue items
+    const baseItems = [
+      { id: 'stk-tmpl-1', sku: 'NI-AIR-8-BLK', barcode: '890100100001', article_name: 'Nike Air Zoom Pegasus', articleName: 'Nike Air Zoom Pegasus', size: 'UK 8', colour: 'Black', quantity: 24, cost_price: 2400, selling_price: 4999 },
+      { id: 'stk-tmpl-2', sku: 'AD-UB-9-WHT', barcode: '890100100002', article_name: 'Adidas Ultraboost Light', articleName: 'Adidas Ultraboost Light', size: 'UK 9', colour: 'White', quantity: 18, cost_price: 2800, selling_price: 5499 },
+      { id: 'stk-tmpl-3', sku: 'PU-SUE-7-BLU', barcode: '890100100003', article_name: 'Puma Suede Classic XXI', articleName: 'Puma Suede Classic XXI', size: 'UK 7', colour: 'Royal Blue', quantity: 15, cost_price: 1800, selling_price: 3999 },
+      { id: 'stk-tmpl-4', sku: 'RB-CL-8-WHT', barcode: '890100100004', article_name: 'Reebok Club C 85 Vintage', articleName: 'Reebok Club C 85 Vintage', size: 'UK 8', colour: 'Chalk White', quantity: 12, cost_price: 2100, selling_price: 4499 },
+      { id: 'stk-tmpl-5', sku: 'AS-GL-9-GRY', barcode: '890100100005', article_name: 'Asics Gel-Kayano 30', articleName: 'Asics Gel-Kayano 30', size: 'UK 9', colour: 'Slate Grey', quantity: 20, cost_price: 3200, selling_price: 6499 },
+    ]
+    baseItems.forEach(b => map.set(b.sku.toUpperCase(), { ...b }))
+
     raw.forEach((s: any) => {
-      if (s?.sku) map.set(s.sku.toUpperCase(), { ...s })
+      if (s?.sku) {
+        const key = s.sku.toUpperCase()
+        map.set(key, { ...map.get(key), ...s })
+      }
     })
     local.forEach((s: any) => {
       if (s?.sku) {
@@ -415,15 +441,6 @@ export const StockStorage = {
         }
       }
     })
-    if (map.size === 0) {
-      return [
-        { id: 'stk-tmpl-1', sku: 'NI-AIR-8-BLK', article_name: 'Nike Air Zoom Pegasus', articleName: 'Nike Air Zoom Pegasus', size: 'UK 8', colour: 'Black', quantity: 0, cost_price: 2400, selling_price: 4999 },
-        { id: 'stk-tmpl-2', sku: 'AD-UB-9-WHT', article_name: 'Adidas Ultraboost Light', articleName: 'Adidas Ultraboost Light', size: 'UK 9', colour: 'White', quantity: 0, cost_price: 2800, selling_price: 5499 },
-        { id: 'stk-tmpl-3', sku: 'PU-SUE-7-BLU', article_name: 'Puma Suede Classic XXI', articleName: 'Puma Suede Classic XXI', size: 'UK 7', colour: 'Royal Blue', quantity: 0, cost_price: 1800, selling_price: 3999 },
-        { id: 'stk-tmpl-4', sku: 'RB-CL-8-WHT', article_name: 'Reebok Club C 85 Vintage', articleName: 'Reebok Club C 85 Vintage', size: 'UK 8', colour: 'Chalk White', quantity: 0, cost_price: 2100, selling_price: 4499 },
-        { id: 'stk-tmpl-5', sku: 'AS-GL-9-GRY', article_name: 'Asics Gel-Kayano 30', articleName: 'Asics Gel-Kayano 30', size: 'UK 9', colour: 'Slate Grey', quantity: 0, cost_price: 3200, selling_price: 6499 },
-      ]
-    }
     return Array.from(map.values())
   }
 }

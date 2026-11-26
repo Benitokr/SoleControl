@@ -315,35 +315,46 @@ export function BarcodesPage() {
             <form onSubmit={handleQueueSubmit} className="space-y-4 text-sm">
               <div>
                 <label className="block text-xs font-semibold mb-1" style={{ color: 'var(--color-muted)' }}>
-                  Footwear Model / SKU
+                  Select Footwear SKU
                 </label>
-                <input
-                  list="barcode-sku-options"
-                  type="text"
-                  required
-                  placeholder="Enter or select SKU (e.g. NI-AIR-8-BLK)"
+                <select
                   value={selectedSku}
                   onChange={e => setSelectedSku(e.target.value)}
                   className="w-full px-3 py-2 rounded-xl border text-sm outline-none font-mono"
                   style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }}
-                />
-                <datalist id="barcode-sku-options">
+                >
+                  <option value="">-- Choose Footwear SKU / Variant --</option>
                   {stockList.map((s: any) => (
                     <option key={s.sku} value={s.sku}>
-                      {s.sku} - {s.article_name || 'Shoe'} ({s.size_label || s.size || ''})
+                      {s.sku} — {s.article_name || s.articleName || 'Footwear'} ({s.size_label || s.size || 'UK 8'}, {s.colour_name || s.colour || 'Standard'}) — Stock: {s.quantity ?? 0}
                     </option>
                   ))}
-                </datalist>
+                </select>
+
+                <div className="mt-2">
+                  <span className="text-[11px] text-slate-400 block mb-1">Or enter custom SKU:</span>
+                  <input
+                    type="text"
+                    placeholder="e.g. NI-AIR-8-BLK"
+                    value={selectedSku}
+                    onChange={e => setSelectedSku(e.target.value.toUpperCase())}
+                    className="w-full px-3 py-1.5 rounded-lg border text-xs outline-none font-mono"
+                    style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }}
+                  />
+                </div>
+
                 {stockList.length > 0 && (
-                  <div className="flex flex-wrap items-center gap-1.5 mt-1.5">
-                    <span className="text-[11px] text-slate-400">Available:</span>
+                  <div className="flex flex-wrap items-center gap-1.5 mt-2">
+                    <span className="text-[11px] text-slate-400">Quick select:</span>
                     {stockList.slice(0, 5).map((s: any) => (
                       <button
                         key={s.sku}
                         type="button"
                         onClick={() => setSelectedSku(s.sku)}
-                        className="text-[11px] px-2 py-0.5 rounded border font-mono transition-colors hover:bg-slate-100 dark:hover:bg-slate-800"
-                        style={{ borderColor: 'var(--color-border)', color: 'var(--color-primary)' }}
+                        className={`text-[11px] px-2 py-0.5 rounded border font-mono transition-colors ${
+                          selectedSku === s.sku ? 'bg-indigo-600 text-white border-indigo-600' : 'hover:bg-slate-100 dark:hover:bg-slate-800'
+                        }`}
+                        style={selectedSku === s.sku ? {} : { borderColor: 'var(--color-border)', color: 'var(--color-primary)' }}
                       >
                         {s.sku}
                       </button>

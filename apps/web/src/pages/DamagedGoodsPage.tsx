@@ -274,35 +274,46 @@ export function DamagedGoodsPage() {
             <form onSubmit={handleCreate} className="space-y-4 text-sm">
               <div>
                 <label className="block text-xs font-semibold mb-1" style={{ color: 'var(--color-muted)' }}>
-                  Footwear Variant / SKU
+                  Select Footwear SKU
                 </label>
-                <input
-                  list="damage-sku-list"
-                  type="text"
-                  required
-                  placeholder="Enter or select SKU (e.g. NI-AIR-8-BLK)"
+                <select
                   value={variantId}
                   onChange={e => setVariantId(e.target.value)}
                   className="w-full px-3 py-2 rounded-lg border text-sm outline-none font-mono"
                   style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }}
-                />
-                <datalist id="damage-sku-list">
+                >
+                  <option value="">-- Choose Footwear SKU / Variant --</option>
                   {variantList.map((v: any) => (
                     <option key={v.sku || v.variant_id || v.id} value={v.sku || v.variant_id || v.id}>
-                      {v.sku} - {v.article_name || 'Footwear'} ({v.size_name || ''}) - Stock: {v.quantity}
+                      {v.sku} — {v.article_name || v.articleName || 'Footwear'} ({v.size || v.size_name || 'UK 8'}) — Stock: {v.quantity ?? 0}
                     </option>
                   ))}
-                </datalist>
+                </select>
+
+                <div className="mt-2">
+                  <span className="text-[11px] text-slate-400 block mb-1">Or enter custom SKU:</span>
+                  <input
+                    type="text"
+                    placeholder="e.g. NI-AIR-8-BLK"
+                    value={variantId}
+                    onChange={e => setVariantId(e.target.value.toUpperCase())}
+                    className="w-full px-3 py-1.5 rounded-lg border text-xs outline-none font-mono"
+                    style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }}
+                  />
+                </div>
+
                 {variantList.length > 0 && (
-                  <div className="flex flex-wrap items-center gap-1.5 mt-1.5">
-                    <span className="text-[11px] text-slate-400">Available:</span>
+                  <div className="flex flex-wrap items-center gap-1.5 mt-2">
+                    <span className="text-[11px] text-slate-400">Quick select:</span>
                     {variantList.slice(0, 5).map((v: any) => (
                       <button
                         key={v.sku || v.id}
                         type="button"
                         onClick={() => setVariantId(v.sku || v.id)}
-                        className="text-[11px] px-2 py-0.5 rounded border font-mono transition-colors hover:bg-slate-100 dark:hover:bg-slate-800"
-                        style={{ borderColor: 'var(--color-border)', color: 'var(--color-primary)' }}
+                        className={`text-[11px] px-2 py-0.5 rounded border font-mono transition-colors ${
+                          variantId === (v.sku || v.id) ? 'bg-indigo-600 text-white border-indigo-600' : 'hover:bg-slate-100 dark:hover:bg-slate-800'
+                        }`}
+                        style={variantId === (v.sku || v.id) ? {} : { borderColor: 'var(--color-border)', color: 'var(--color-primary)' }}
                       >
                         {v.sku}
                       </button>

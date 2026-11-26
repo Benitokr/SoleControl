@@ -74,6 +74,13 @@ if (!DB.withdrawals) DB.withdrawals = [];
 if (!DB.adjustments) DB.adjustments = [];
 if (!DB.audits) DB.audits = [];
 if (!DB.barcodeQueue) DB.barcodeQueue = [];
+if (!DB.offers) DB.offers = [];
+if (!DB.ageingRules) {
+  DB.ageingRules = [
+    { id: 'ar-01', category_name: 'All Categories', threshold_days: 90, discount_pct: 25, label: 'Deadstock Clearance 90+ Days', is_active: true },
+    { id: 'ar-02', category_name: 'All Categories', threshold_days: 60, discount_pct: 15, label: 'Slow Moving Stock 60-90 Days', is_active: true }
+  ];
+}
 
 let transfers = DB.transfers;
 let displays = DB.displays;
@@ -89,7 +96,7 @@ let withdrawals = DB.withdrawals;
 let adjustments = DB.adjustments;
 let audits = DB.audits;
 let barcodeQueue = DB.barcodeQueue;
-let ageingRules = [];
+let ageingRules = DB.ageingRules;
 let notifications = [];
 
 let alertRules = [

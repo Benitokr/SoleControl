@@ -77,17 +77,7 @@ export function InventoryPage() {
     : []
   
   // Merge server stock with persistent local stock
-  const localStock = StockStorage.getAll()
-  const stockMap = new Map<string, any>()
-  rawStock.forEach(s => stockMap.set(s.sku, { ...s }))
-  localStock.forEach(s => {
-    if (stockMap.has(s.sku)) {
-      stockMap.get(s.sku).quantity = s.quantity
-    } else {
-      stockMap.set(s.sku, s)
-    }
-  })
-  const stockList: any[] = Array.from(stockMap.values())
+  const stockList: any[] = StockStorage.mergeWith(rawStock)
 
   const filteredStock = stockList.filter(s =>
     (s.sku ?? '').toLowerCase().includes(search.toLowerCase()) ||
@@ -452,35 +442,46 @@ export function InventoryPage() {
             <form onSubmit={handleAdjSubmit} className="space-y-4 text-sm">
               <div>
                 <label className="block text-xs font-semibold mb-1" style={{ color: 'var(--color-muted)' }}>
-                  Footwear SKU / Variant
+                  Select Footwear SKU
                 </label>
-                <input
-                  list="stock-sku-options"
-                  type="text"
-                  required
-                  placeholder="Enter or select SKU (e.g. NI-AIR-8-BLK)"
+                <select
                   value={adjSku}
                   onChange={e => setAdjSku(e.target.value)}
                   className="w-full px-3 py-2 rounded-xl border text-sm outline-none font-mono"
                   style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }}
-                />
-                <datalist id="stock-sku-options">
+                >
+                  <option value="">-- Choose Footwear SKU / Variant --</option>
                   {stockList.map((s: any) => (
                     <option key={s.sku} value={s.sku}>
-                      {s.sku} - {s.articleName || s.article_name || s.article || 'Shoe'} (Current: {s.quantity ?? s.qty ?? 0})
+                      {s.sku} — {s.articleName || s.article_name || s.article || 'Footwear'} ({s.size || s.size_label || 'UK 8'}, {s.colour || s.colour_name || 'Standard'}) — Current On-Hand: {s.quantity ?? s.qty ?? 0} pairs
                     </option>
                   ))}
-                </datalist>
+                </select>
+
+                <div className="mt-2">
+                  <span className="text-[11px] text-slate-400 block mb-1">Or enter a custom / new SKU:</span>
+                  <input
+                    type="text"
+                    placeholder="e.g. NI-AIR-8-BLK"
+                    value={adjSku}
+                    onChange={e => setAdjSku(e.target.value.toUpperCase())}
+                    className="w-full px-3 py-1.5 rounded-lg border text-xs outline-none font-mono"
+                    style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }}
+                  />
+                </div>
+
                 {stockList.length > 0 && (
-                  <div className="flex flex-wrap items-center gap-1.5 mt-1.5">
-                    <span className="text-[11px] text-slate-400">Available:</span>
+                  <div className="flex flex-wrap items-center gap-1.5 mt-2">
+                    <span className="text-[11px] text-slate-400">Quick select:</span>
                     {stockList.slice(0, 5).map((s: any) => (
                       <button
                         key={s.sku}
                         type="button"
                         onClick={() => setAdjSku(s.sku)}
-                        className="text-[11px] px-2 py-0.5 rounded border font-mono transition-colors hover:bg-slate-100 dark:hover:bg-slate-800"
-                        style={{ borderColor: 'var(--color-border)', color: 'var(--color-primary)' }}
+                        className={`text-[11px] px-2 py-0.5 rounded border font-mono transition-colors ${
+                          adjSku === s.sku ? 'bg-indigo-600 text-white border-indigo-600' : 'hover:bg-slate-100 dark:hover:bg-slate-800'
+                        }`}
+                        style={adjSku === s.sku ? {} : { borderColor: 'var(--color-border)', color: 'var(--color-primary)' }}
                       >
                         {s.sku}
                       </button>
