@@ -110,121 +110,33 @@ async function main() {
     }
   });
 
-  // Assign permissions to roles
+  // Assign permissions to roles in fast batches
   // Super Admin gets all permissions
-  for (const perm of permissions) {
-    await prisma.rolePermission.upsert({
-      where: {
-        roleId_permissionId: {
-          roleId: superAdminRole.id,
-          permissionId: perm.id
-        }
-      },
-      update: {},
-      create: {
-        roleId: superAdminRole.id,
-        permissionId: perm.id
-      }
-    });
-  }
+  const superAdminRolePerms = permissions.map(p => ({ roleId: superAdminRole.id, permissionId: p.id }));
+  await prisma.rolePermission.createMany({ data: superAdminRolePerms, skipDuplicates: true });
 
   // Administrator gets almost all except security overrides
-  for (const perm of permissions) {
-    if (!perm.key.startsWith('audit.delete')) {
-      await prisma.rolePermission.upsert({
-        where: {
-          roleId_permissionId: {
-            roleId: administratorRole.id,
-            permissionId: perm.id
-          }
-        },
-        update: {},
-        create: {
-          roleId: administratorRole.id,
-          permissionId: perm.id
-        }
-      });
-    }
-  }
+  const adminRolePerms = permissions.filter(p => !p.key.startsWith('audit.delete')).map(p => ({ roleId: administratorRole.id, permissionId: p.id }));
+  await prisma.rolePermission.createMany({ data: adminRolePerms, skipDuplicates: true });
 
   // Management gets view on all, export on all, approve on transactions
-  for (const perm of permissions) {
-    if (perm.action === 'view' || perm.action === 'export' || perm.action === 'approve') {
-      await prisma.rolePermission.upsert({
-        where: {
-          roleId_permissionId: {
-            roleId: managementRole.id,
-            permissionId: perm.id
-          }
-        },
-        update: {},
-        create: {
-          roleId: managementRole.id,
-          permissionId: perm.id
-        }
-      });
-    }
-  }
+  const mgmtRolePerms = permissions.filter(p => p.action === 'view' || p.action === 'export' || p.action === 'approve').map(p => ({ roleId: managementRole.id, permissionId: p.id }));
+  await prisma.rolePermission.createMany({ data: mgmtRolePerms, skipDuplicates: true });
 
   // Sales Executive gets sales, customers, display, inventory view, barcode view
   const salesAllowed = ['sales.', 'customers.', 'display_stock.', 'barcodes.view', 'inventory.view', 'dashboard.view'];
-  for (const perm of permissions) {
-    if (salesAllowed.some(prefix => perm.key.startsWith(prefix))) {
-      await prisma.rolePermission.upsert({
-        where: {
-          roleId_permissionId: {
-            roleId: salesExecutiveRole.id,
-            permissionId: perm.id
-          }
-        },
-        update: {},
-        create: {
-          roleId: salesExecutiveRole.id,
-          permissionId: perm.id
-        }
-      });
-    }
-  }
+  const salesRolePerms = permissions.filter(p => salesAllowed.some(prefix => p.key.startsWith(prefix))).map(p => ({ roleId: salesExecutiveRole.id, permissionId: p.id }));
+  await prisma.rolePermission.createMany({ data: salesRolePerms, skipDuplicates: true });
 
   // Accounts User gets finance, purchases, vendors, reports view
   const accountsAllowed = ['accounting.', 'capital.', 'bank_gst.', 'purchases.', 'vendors.', 'reports.view', 'dashboard.view'];
-  for (const perm of permissions) {
-    if (accountsAllowed.some(prefix => perm.key.startsWith(prefix))) {
-      await prisma.rolePermission.upsert({
-        where: {
-          roleId_permissionId: {
-            roleId: accountsUserRole.id,
-            permissionId: perm.id
-          }
-        },
-        update: {},
-        create: {
-          roleId: accountsUserRole.id,
-          permissionId: perm.id
-        }
-      });
-    }
-  }
+  const accountsRolePerms = permissions.filter(p => accountsAllowed.some(prefix => p.key.startsWith(prefix))).map(p => ({ roleId: accountsUserRole.id, permissionId: p.id }));
+  await prisma.rolePermission.createMany({ data: accountsRolePerms, skipDuplicates: true });
 
   // Inventory User gets inventory, locations, display_stock, transfers, damaged, ageing
   const inventoryAllowed = ['inventory.', 'locations.', 'display_stock.', 'stock_transfers.', 'damaged_goods.', 'ageing.', 'barcodes.', 'dashboard.view'];
-  for (const perm of permissions) {
-    if (inventoryAllowed.some(prefix => perm.key.startsWith(prefix))) {
-      await prisma.rolePermission.upsert({
-        where: {
-          roleId_permissionId: {
-            roleId: inventoryUserRole.id,
-            permissionId: perm.id
-          }
-        },
-        update: {},
-        create: {
-          roleId: inventoryUserRole.id,
-          permissionId: perm.id
-        }
-      });
-    }
-  }
+  const inventoryRolePerms = permissions.filter(p => inventoryAllowed.some(prefix => p.key.startsWith(prefix))).map(p => ({ roleId: inventoryUserRole.id, permissionId: p.id }));
+  await prisma.rolePermission.createMany({ data: inventoryRolePerms, skipDuplicates: true });
 
   console.log('✓ System roles and permissions mapped successfully');
 
@@ -348,7 +260,93 @@ async function main() {
 
   console.log('✓ System configuration settings seeded');
 
-  // 9. Seed Chart of Accounts
+  // 9. Seed Standard Footwear Sizes & Colours
+  const sizes = [
+    { code: 'UK-5', name: 'UK 5', sequence: 5 },
+    { code: 'UK-6', name: 'UK 6', sequence: 6 },
+    { code: 'UK-7', name: 'UK 7', sequence: 7 },
+    { code: 'UK-8', name: 'UK 8', sequence: 8 },
+    { code: 'UK-9', name: 'UK 9', sequence: 9 },
+    { code: 'UK-10', name: 'UK 10', sequence: 10 },
+    { code: 'UK-11', name: 'UK 11', sequence: 11 },
+    { code: 'UK-12', name: 'UK 12', sequence: 12 },
+  ];
+  for (const sz of sizes) {
+    await prisma.size.upsert({
+      where: { code: sz.code },
+      update: {},
+      create: { code: sz.code, name: sz.name, system: 'UK', sequence: sz.sequence, isActive: true },
+    });
+  }
+  console.log(`✓ Seeded ${sizes.length} standard footwear sizes`);
+
+  const colours = [
+    { code: 'BLK', name: 'Core Black', hexCode: '#000000' },
+    { code: 'WHT', name: 'Pure White', hexCode: '#FFFFFF' },
+    { code: 'BRN', name: 'Rich Brown', hexCode: '#795548' },
+    { code: 'TAN', name: 'Classic Tan', hexCode: '#D2B48C' },
+    { code: 'NVY', name: 'Navy Blue', hexCode: '#000080' },
+    { code: 'GRY', name: 'Ash Grey', hexCode: '#808080' },
+  ];
+  for (const c of colours) {
+    await prisma.colour.upsert({
+      where: { code: c.code },
+      update: {},
+      create: { code: c.code, name: c.name, hexCode: c.hexCode, isActive: true },
+    });
+  }
+  console.log(`✓ Seeded ${colours.length} standard colours`);
+
+  // 10. Seed Default Brands & Categories
+  const brands = [
+    { code: 'FV', name: 'Forty V', description: 'Forty V Flagship Retail Footwear' },
+    { code: 'NK', name: 'Nike', description: 'Nike Athletic & Performance' },
+    { code: 'ADI', name: 'Adidas', description: 'Adidas Originals & Sportswear' },
+    { code: 'PMA', name: 'Puma', description: 'Puma Lifestyle & Running' },
+  ];
+  for (const b of brands) {
+    await prisma.brand.upsert({
+      where: { code: b.code },
+      update: {},
+      create: { code: b.code, name: b.name, description: b.description, isActive: true },
+    });
+  }
+
+  const categories = [
+    { code: 'RUN', name: 'Running Footwear', description: 'High performance running & training' },
+    { code: 'CAS', name: 'Casual Sneakers', description: 'Daily lifestyle & street footwear' },
+    { code: 'FOR', name: 'Formal Shoes', description: 'Dress & formal leather shoes' },
+    { code: 'BTS', name: 'Boots', description: 'Rugged outdoor leather boots' },
+  ];
+  for (const cat of categories) {
+    await prisma.category.upsert({
+      where: { code: cat.code },
+      update: {},
+      create: { code: cat.code, name: cat.name, description: cat.description, isActive: true },
+    });
+  }
+  console.log('✓ Seeded default brands and categories');
+
+  // 11. Seed Default Store Location hierarchy
+  const floor1 = await prisma.location.upsert({
+    where: { storeId_code: { storeId: store.id, code: 'FLR-01' } },
+    update: {},
+    create: { storeId: store.id, code: 'FLR-01', name: 'Main Sales Floor', type: 'FLOOR', isActive: true },
+  });
+
+  await prisma.location.upsert({
+    where: { storeId_code: { storeId: store.id, code: 'DISP-MAIN' } },
+    update: {},
+    create: { storeId: store.id, parentId: floor1.id, code: 'DISP-MAIN', name: 'Front Showcase Window', type: 'POSITION', isActive: true },
+  });
+
+  await prisma.location.upsert({
+    where: { storeId_code: { storeId: store.id, code: 'RCK-R1' } },
+    update: {},
+    create: { storeId: store.id, parentId: floor1.id, code: 'RCK-R1', name: 'Shoe Rack R1', type: 'RACK', isActive: true },
+  });
+
+  // 12. Seed Chart of Accounts
   const initialAccounts = [
     { id: 'acc-1000', code: '1000', name: 'Cash in Hand', type: 'ASSET' },
     { id: 'acc-1300', code: '1300', name: 'Stock Inventory', type: 'ASSET' },

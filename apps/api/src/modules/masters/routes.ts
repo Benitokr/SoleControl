@@ -204,6 +204,20 @@ mastersRoutes.get('/articles/:id', requirePermission('masters.view'), async (req
   } catch (err) { next(err); }
 });
 
+mastersRoutes.get('/variants', requirePermission('masters.view'), async (req: AuthRequest, res: Response, next: NextFunction) => {
+  try {
+    const variants = await prisma.productVariant.findMany({
+      include: {
+        article: { include: { brand: true, category: true } },
+        size: true,
+        colour: true,
+      },
+      orderBy: { createdAt: 'desc' }
+    });
+    return res.json({ data: variants });
+  } catch (err) { next(err); }
+});
+
 mastersRoutes.get('/articles/:id/variants', requirePermission('masters.view'), async (req: AuthRequest, res: Response, next: NextFunction) => {
   try {
     const variants = await prisma.productVariant.findMany({ where: { articleId: req.params.id }, include: { size: true, colour: true } });

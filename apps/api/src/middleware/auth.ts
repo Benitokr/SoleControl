@@ -23,10 +23,11 @@ export async function authenticate(req: AuthRequest, _res: Response, next: NextF
   const jwtSecret = process.env.JWT_SECRET || 'solecontrol_super_secret_access_jwt_key_2026_change_in_production';
 
   try {
-    const decoded = jwt.verify(token, jwtSecret) as JwtPayload;
+    const decoded = jwt.verify(token, jwtSecret) as any;
+    const targetUserId = decoded.userId || decoded.sub;
 
     const user = await prisma.user.findUnique({
-      where: { id: decoded.userId },
+      where: { id: targetUserId },
       include: {
         role: {
           include: {

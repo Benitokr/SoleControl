@@ -32,16 +32,45 @@ export async function getUser(id: string) {
 }
 
 export async function createUser(data: {
-  name: string; email: string; phone?: string; password: string; roleId: string;
+  name: string; email: string; phone?: string; password?: string; roleId?: string; roleName?: string; isActive?: boolean;
 }, actorId: string) {
   const existing = await prisma.user.findUnique({ where: { email: data.email } });
   if (existing) throw new AppError('Email already in use.', 409, 'DUPLICATE_EMAIL');
 
-  const passwordHash = await bcrypt.hash(data.password, 12);
+  let resolvedRoleId = data.roleId;
+  if (!resolvedRoleId && data.roleName) {
+    const role = await prisma.role.findFirst({
+      where: {
+        OR: [
+          { code: data.roleName },
+          { code: data.roleName.toUpperCase().replace(/\s+/g, '_') },
+          { name: data.roleName }
+        ]
+      }
+    });
+    if (role) resolvedRoleId = role.id;
+  }
+  if (!resolvedRoleId) {
+    const defaultRole = await prisma.role.findFirst({ where: { code: 'SALES_EXECUTIVE' } }) ||
+                        await prisma.role.findFirst();
+    resolvedRoleId = defaultRole?.id;
+  }
+
+  const passwordHash = await bcrypt.hash(data.password || 'ChangeMe@123', 12);
   const store = await prisma.store.findFirst({ where: { isActive: true } });
 
+  const status = data.isActive === false ? 'INACTIVE' : 'ACTIVE';
+
   const user = await prisma.user.create({
-    data: { name: data.name, email: data.email, phone: data.phone, passwordHash, roleId: data.roleId, status: 'ACTIVE', mustChangePassword: true },
+    data: {
+      name: data.name,
+      email: data.email,
+      phone: data.phone,
+      passwordHash,
+      roleId: resolvedRoleId!,
+      status,
+      mustChangePassword: true
+    },
     include: DEFAULT_INCLUDE,
   });
 
@@ -57,13 +86,36 @@ export async function createUser(data: {
   return prisma.user.findUnique({ where: { id: user.id }, include: DEFAULT_INCLUDE });
 }
 
-export async function updateUser(id: string, data: { name?: string; email?: string; phone?: string; roleId?: string }, actorId: string) {
+export async function updateUser(id: string, data: { name?: string; email?: string; phone?: string; roleId?: string; roleName?: string; isActive?: boolean; status?: string }, actorId: string) {
   const before = await getUser(id);
   if (data.email && data.email !== before.email) {
     const existing = await prisma.user.findUnique({ where: { email: data.email } });
     if (existing) throw new AppError('Email already in use.', 409, 'DUPLICATE_EMAIL');
   }
-  const user = await prisma.user.update({ where: { id }, data, include: DEFAULT_INCLUDE });
+
+  const updateData: any = {};
+  if (data.name) updateData.name = data.name;
+  if (data.email) updateData.email = data.email;
+  if (data.phone !== undefined) updateData.phone = data.phone;
+  if (data.status) updateData.status = data.status;
+  if (data.isActive !== undefined) updateData.status = data.isActive ? 'ACTIVE' : 'INACTIVE';
+
+  if (data.roleId) {
+    updateData.roleId = data.roleId;
+  } else if (data.roleName) {
+    const role = await prisma.role.findFirst({
+      where: {
+        OR: [
+          { code: data.roleName },
+          { code: data.roleName.toUpperCase().replace(/\s+/g, '_') },
+          { name: data.roleName }
+        ]
+      }
+    });
+    if (role) updateData.roleId = role.id;
+  }
+
+  const user = await prisma.user.update({ where: { id }, data: updateData, include: DEFAULT_INCLUDE });
   await writeAudit({ entity: 'User', entityId: id, action: 'UPDATE', actorId, beforeState: { name: before.name, email: before.email, roleId: before.roleId }, afterState: { name: user.name, email: user.email, roleId: user.roleId } });
   return user;
 }

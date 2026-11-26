@@ -46,7 +46,30 @@ inventoryRoutes.get('/stock', requirePermission('inventory.view'), async (req, r
       [...vals, ps, skip]
     );
 
-    res.json({ data: dataRes.rows, meta: { total, page: pg, pageSize: ps } });
+    let rows = dataRes.rows;
+    if (rows.length === 0 && !variantId && !locationId) {
+      const allVariantsRes = await pglite.query(
+        `SELECT pv.id as variant_id, COALESCE(sb.id, 'bal-' || pv.id) as id,
+                COALESCE(sb.location_id, 'loc-wh-01') as location_id,
+                COALESCE(sb.quantity, 0) as quantity,
+                pv.sku, pv.mrp, pv.cost_price, pv.barcode, pv.selling_price,
+                a.name as article_name,
+                COALESCE(si.name, 'Free Size') as size_label,
+                COALESCE(c.name, 'Standard') as colour_name,
+                COALESCE(l.name, 'Main Warehouse') as location_name
+           FROM "product_variants" pv
+           JOIN "articles" a ON a.id = pv.article_id
+           LEFT JOIN "sizes" si ON si.id = pv.size_id
+           LEFT JOIN "colours" c ON c.id = pv.colour_id
+           LEFT JOIN "stock_balances" sb ON sb.variant_id = pv.id
+           LEFT JOIN "locations" l ON l.id = sb.location_id
+           ORDER BY a.name, pv.sku
+           LIMIT 100`
+      );
+      rows = allVariantsRes.rows;
+    }
+
+    res.json({ data: rows, meta: { total: total || rows.length, page: pg, pageSize: ps } });
   } catch (err) { next(err); }
 });
 

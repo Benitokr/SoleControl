@@ -7,23 +7,28 @@ const CreateUserSchema = z.object({
   name: z.string().min(2),
   email: z.string().email(),
   phone: z.string().optional(),
-  password: z.string().min(8),
-  roleId: z.string().uuid(),
+  password: z.string().min(6).default('ChangeMe@123'),
+  roleId: z.string().optional(),
+  roleName: z.string().optional(),
+  isActive: z.boolean().optional(),
 });
 
 const UpdateUserSchema = z.object({
   name: z.string().min(2).optional(),
   email: z.string().email().optional(),
   phone: z.string().optional(),
-  roleId: z.string().uuid().optional(),
+  roleId: z.string().optional(),
+  roleName: z.string().optional(),
+  isActive: z.boolean().optional(),
+  status: z.string().optional(),
 });
 
-const ResetPasswordSchema = z.object({ newPassword: z.string().min(8) });
+const ResetPasswordSchema = z.object({ newPassword: z.string().min(6).default('ChangeMe@123') });
 
 export async function listUsers(req: AuthRequest, res: Response, next: NextFunction) {
   try {
     const { page, limit, search, roleId, status } = req.query as any;
-    const result = await service.listUsers({ page: +page || 1, limit: +limit || 20, search, roleId, status });
+    const result = await service.listUsers({ page: +page || 1, limit: +limit || 50, search, roleId, status });
     return res.json({ data: result.users, meta: { total: result.total, page: result.page, limit: result.limit, totalPages: result.totalPages } });
   } catch (err) { next(err); }
 }
