@@ -27,6 +27,7 @@ const STORAGE_KEYS = {
   ADJUSTMENTS: 'solecontrol_adjustments_v2',
   STOCK: 'solecontrol_stock_v2',
   USERS: 'solecontrol_users_v2',
+  VENDORS: 'solecontrol_vendors_v2',
 }
 
 const DEFAULT_NOTIFICATIONS: SystemNotification[] = []
@@ -504,6 +505,38 @@ export const MasterStorage = {
     const map = new Map<string, any>()
     raw.forEach((d: any) => map.set(d.id || d.name || d.code, d))
     local.forEach((d: any) => map.set(d.id || d.name || d.code, d))
+    return Array.from(map.values())
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Vendor Storage
+// ---------------------------------------------------------------------------
+export const VendorStorage = {
+  getAll(): any[] {
+    return getLocal<any[]>(STORAGE_KEYS.VENDORS, [])
+  },
+
+  add(vendor: any): any[] {
+    const list = this.getAll()
+    const item = {
+      ...vendor,
+      id: vendor.id || ('vnd-' + Date.now().toString().slice(-4)),
+      isActive: vendor.isActive ?? true,
+      balance: Number(vendor.balance || 0),
+      createdAt: vendor.createdAt || new Date().toISOString()
+    }
+    list.unshift(item)
+    setLocal(STORAGE_KEYS.VENDORS, list)
+    return list
+  },
+
+  mergeWith(serverVendors: any[]): any[] {
+    const raw = Array.isArray(serverVendors) ? serverVendors : Array.isArray((serverVendors as any)?.data) ? (serverVendors as any).data : []
+    const local = this.getAll()
+    const map = new Map<string, any>()
+    raw.forEach((v: any) => map.set(v.id || v.name, v))
+    local.forEach((v: any) => map.set(v.id || v.name, v))
     return Array.from(map.values())
   }
 }

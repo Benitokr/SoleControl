@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { Truck, Plus, Search, Phone, FileText, CheckCircle2, X } from 'lucide-react'
 import { api, fmt } from '../lib/api'
+import { VendorStorage } from '../lib/storage'
 
 interface Vendor {
   id: string
@@ -28,9 +29,9 @@ export function VendorsPage() {
   const [address, setAddress] = useState('')
   const [contactPerson, setContactPerson] = useState('')
 
-  const { data, isLoading, error } = useQuery<{ data: Vendor[] }>({
+  const { data, isLoading } = useQuery<{ data: Vendor[] }>({
     queryKey: ['vendors'],
-    queryFn: () => api.get('/vendors').then(r => r.data),
+    queryFn: () => api.get('/vendors').then(r => r.data).catch(() => ({ data: [] })),
   })
 
   const addVendorMutation = useMutation({
@@ -55,22 +56,33 @@ export function VendorsPage() {
       return
     }
     setFormError('')
-    addVendorMutation.mutate({
-      name,
+    const newVendorObj = {
+      id: 'vnd-' + Date.now(),
+      name: name.trim(),
+      code: 'VND-' + Math.random().toString(36).substring(2, 7).toUpperCase(),
       phone: phone || '+91 98401 11222',
       gstin: gstin || '33AABCV1234F1Z1',
       address,
       contactPerson,
       balance: 0,
       isActive: true
-    })
+    }
+    VendorStorage.add(newVendorObj)
+    addVendorMutation.mutate(newVendorObj)
+    setShowAddModal(false)
+    setName('')
+    setPhone('')
+    setGstin('')
+    setAddress('')
   }
 
-  const rawVendors: Vendor[] = Array.isArray(data?.data)
-    ? data.data
-    : Array.isArray(data)
-    ? (data as any)
-    : []
+  const rawVendors: Vendor[] = VendorStorage.mergeWith(
+    Array.isArray(data?.data)
+      ? data.data
+      : Array.isArray(data)
+      ? (data as any)
+      : []
+  )
 
   const vendors = rawVendors.filter(v =>
     (v?.name || '').toLowerCase().includes(search.toLowerCase()) ||
@@ -135,10 +147,9 @@ export function VendorsPage() {
           </div>
         </div>
 
-        {isLoading && <div className="py-12 text-center text-sm" style={{ color: 'var(--color-muted)' }}>Loading suppliers…</div>}
-        {error && <div className="py-12 text-center text-sm" style={{ color: 'var(--color-danger)' }}>Failed to load vendors</div>}
+        {isLoading && vendors.length === 0 && <div className="py-12 text-center text-sm" style={{ color: 'var(--color-muted)' }}>Loading suppliers…</div>}
 
-        {!isLoading && !error && (
+        {(!isLoading || vendors.length > 0) && (
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead>

@@ -829,8 +829,11 @@ export default async function handler(req, res) {
   if (path.includes('/vendors')) {
     if (req.method === 'POST') {
       const newV = {
-        id: 'vnd-' + Date.now(),
+        id: body.id || ('vnd-' + Date.now()),
         name: body.name || 'New Supplier',
+        code: body.code || ('VND-' + Math.random().toString(36).substring(2, 7).toUpperCase()),
+        contactPerson: body.contactPerson || '',
+        address: body.address || '',
         phone: body.phone || '+91 98401 00000',
         gstin: body.gstin || '33AABCV1234F1Z1',
         balance: 0,
