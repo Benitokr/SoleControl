@@ -1,602 +1,485 @@
-import { useState } from 'react'
+import { useState, useMemo } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { Boxes, Search, Plus, RotateCcw, CheckCircle2, AlertTriangle, X, ArrowUpRight } from 'lucide-react'
-import { api, fmt } from '../lib/api'
-import { StockStorage, AdjustmentStorage } from '../lib/storage'
-
-type Tab = 'stock' | 'adjustments' | 'audits' | 'heatmap'
+import { toast } from 'sonner'
+import {
+  Boxes, SlidersHorizontal, ChevronDown, ChevronRight, Layers, List,
+} from 'lucide-react'
+import { api } from '../lib/api'
+import { formatINR, formatDateIN, getApiErrorMessage } from '../lib/format'
+import {
+  PageHeader, StatCard, FilterBar, DataTable, Button, Drawer,
+  FormField, SearchableCombobox, QuantityStepper, EmptyState, ErrorState,
+  TableSkeleton, ColumnDef, inputBaseClass,
+} from '../components/ui'
+import { SizeRunGrid, DEFAULT_UK_SIZES, ColourSwatch, StockBadge } from '../components/footwear'
 
 export function InventoryPage() {
   const qc = useQueryClient()
-  const [tab, setTab] = useState<Tab>('stock')
+  const [viewMode, setViewMode] = useState<'grouped' | 'flat'>('grouped')
   const [search, setSearch] = useState('')
-  const [showAdjModal, setShowAdjModal] = useState(false)
-  const [showAuditModal, setShowAuditModal] = useState(false)
-  const [formError, setFormError] = useState('')
+  const [stockFilter, setStockFilter] = useState('ALL')
+  const [expandedKeys, setExpandedKeys] = useState<Record<string, boolean>>({})
 
-  // Adjustment form state
+  // Stock adjustment drawer
+  const [showAdjDrawer, setShowAdjDrawer] = useState(false)
   const [adjSku, setAdjSku] = useState('')
   const [adjQty, setAdjQty] = useState(1)
   const [adjReason, setAdjReason] = useState('Physical audit cycle discrepancy')
 
-  // Audit form state
-  const [auditStoreName, setAuditStoreName] = useState('Central Warehouse')
+  // Item detail drawer
+  const [selectedItem, setSelectedItem] = useState<any | null>(null)
 
-  const stock = useQuery({
+  const { data: stockData, isLoading, error, refetch } = useQuery({
     queryKey: ['inventory-stock'],
-    queryFn: () => api.get('/inventory/stock').then(r => r.data?.data ?? []),
-    enabled: tab === 'stock' || showAdjModal,
+    queryFn: () => api.get('/inventory/stock').then((r) => r.data?.data ?? []),
   })
 
-  const adjustments = useQuery({
+  const { data: variantsData } = useQuery({
+    queryKey: ['masters', 'variants'],
+    queryFn: () => api.get('/masters/variants').then((r) => r.data?.data ?? []),
+  })
+
+  const { data: adjustmentsData } = useQuery({
     queryKey: ['inventory-adjustments'],
-    queryFn: () => api.get('/inventory/adjustments').then(r => r.data?.data ?? []),
-    enabled: tab === 'adjustments',
+    queryFn: () => api.get('/inventory/adjustments').then((r) => r.data?.data ?? []),
   })
 
-  const audits = useQuery({
-    queryKey: ['inventory-audits'],
-    queryFn: () => api.get('/inventory/audits').then(r => r.data?.data ?? []),
-    enabled: tab === 'audits',
-  })
+  const stockRows: any[] = Array.isArray(stockData) ? stockData : []
+  const catalogVariants: any[] = Array.isArray(variantsData) ? variantsData : []
+  const adjustments: any[] = Array.isArray(adjustmentsData) ? adjustmentsData : []
 
-  const heatmap = useQuery({
-    queryKey: ['ageing-heatmap'],
-    queryFn: () => api.get('/ageing/heatmap').then(r => r.data?.data ?? []),
-    enabled: tab === 'heatmap',
-  })
+  // Merge catalog variants (even at zero stock) into picker options
+  const allPickerVariants = useMemo(() => {
+    const map = new Map<string, any>()
+    catalogVariants.forEach((v) => {
+      if (v.sku) map.set(v.sku, { ...v, quantity: Number(v.quantity ?? 0) })
+    })
+    stockRows.forEach((s) => {
+      if (s.sku) map.set(s.sku, { ...map.get(s.sku), ...s })
+    })
+    return Array.from(map.values())
+  }, [catalogVariants, stockRows])
 
-  const createAdjustmentMutation = useMutation({
-    mutationFn: (body: any) => api.post('/inventory/adjustments', body),
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ['inventory-adjustments'] })
-      qc.invalidateQueries({ queryKey: ['inventory-stock'] })
-      setShowAdjModal(false)
-      setAdjQty(1)
-    },
-    onError: (err: any) => {
-      setFormError(err.response?.data?.error?.message || 'Failed to record adjustment.')
-    }
-  })
+  const filteredFlat = useMemo(() => {
+    const q = search.trim().toLowerCase()
+    return allPickerVariants.filter((s) => {
+      const qty = Number(s.quantity ?? 0)
+      if (stockFilter === 'IN_STOCK' && qty <= 5) return false
+      if (stockFilter === 'LOW' && (qty <= 0 || qty > 5)) return false
+      if (stockFilter === 'OUT' && qty > 0) return false
+      if (!q) return true
+      return (
+        String(s.sku || '').toLowerCase().includes(q) ||
+        String(s.article_name || s.articleName || '').toLowerCase().includes(q) ||
+        String(s.colour || s.colour_name || '').toLowerCase().includes(q)
+      )
+    })
+  }, [allPickerVariants, search, stockFilter])
 
-  const createAuditMutation = useMutation({
-    mutationFn: (body: any) => api.post('/inventory/audits', body),
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ['inventory-audits'] })
-      setShowAuditModal(false)
-    },
-    onError: (err: any) => {
-      setFormError(err.response?.data?.error?.message || 'Failed to start audit session.')
-    }
-  })
+  // Group by Article -> Colour -> SizeRunGrid
+  const groupedArticles = useMemo(() => {
+    const artMap = new Map<string, any>()
+    filteredFlat.forEach((row) => {
+      const artName = row.article_name || row.articleName || row.sku || 'Footwear'
+      const colour = row.colour_name || row.colour || 'Standard'
+      const size = row.size_label || row.size || 'UK 8'
+      if (!artMap.has(artName)) {
+        artMap.set(artName, {
+          articleName: artName,
+          totalQty: 0,
+          costValue: 0,
+          mrpValue: 0,
+          colours: new Map<string, Record<string, number>>(),
+          items: [],
+        })
+      }
+      const art = artMap.get(artName)
+      const qty = Number(row.quantity ?? 0)
+      art.totalQty += qty
+      art.costValue += qty * Number(row.cost_price ?? row.costPrice ?? 0)
+      art.mrpValue += qty * Number(row.selling_price ?? row.mrp ?? 0)
+      art.items.push(row)
+      if (!art.colours.has(colour)) {
+        art.colours.set(colour, {})
+      }
+      const sizeMap = art.colours.get(colour)!
+      sizeMap[size] = (sizeMap[size] || 0) + qty
+    })
+    return Array.from(artMap.values()).map((a) => ({
+      ...a,
+      colourEntries: Array.from(a.colours.entries()) as [string, Record<string, number>][],
+    }))
+  }, [filteredFlat])
 
-  const rawStock: any[] = Array.isArray(stock.data)
-    ? stock.data
-    : Array.isArray((stock.data as any)?.data)
-    ? (stock.data as any).data
-    : []
-  
-  // Merge server stock with persistent local stock
-  const stockList: any[] = StockStorage.mergeWith(rawStock)
-
-  const filteredStock = stockList.filter(s =>
-    (s.sku ?? '').toLowerCase().includes(search.toLowerCase()) ||
-    (s.articleName ?? s.article_name ?? s.article ?? '').toLowerCase().includes(search.toLowerCase()) ||
-    (s.size ?? s.size_label ?? '').toLowerCase().includes(search.toLowerCase()) ||
-    (s.colour ?? s.colour_name ?? '').toLowerCase().includes(search.toLowerCase())
+  const totalPairs = allPickerVariants.reduce((s, r) => s + Number(r.quantity ?? 0), 0)
+  const totalCost = allPickerVariants.reduce(
+    (s, r) => s + Number(r.quantity ?? 0) * Number(r.cost_price ?? r.costPrice ?? 0),
+    0
+  )
+  const totalMrp = allPickerVariants.reduce(
+    (s, r) => s + Number(r.quantity ?? 0) * Number(r.selling_price ?? r.mrp ?? 0),
+    0
   )
 
-  const totalStockUnits = stockList.reduce((acc, s) => acc + (s.quantity ?? s.qty ?? 0), 0)
-  const totalCostVal = stockList.reduce((acc, s) => acc + (Number(s.costValue ?? ((s.quantity ?? 0) * Number(s.cost_price || s.costPrice || 0))) || 0), 0)
-  const totalMrpVal = stockList.reduce((acc, s) => acc + (Number(s.mrpValue ?? ((s.quantity ?? 0) * Number(s.selling_price || s.mrp || 0))) || 0), 0)
+  const adjustMutation = useMutation({
+    mutationFn: (payload: { variantSku: string; quantityChange: number; reason: string }) =>
+      api.post('/inventory/adjustments', payload),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['inventory-stock'] })
+      qc.invalidateQueries({ queryKey: ['inventory-adjustments'] })
+      qc.invalidateQueries({ queryKey: ['dashboard'] })
+      toast.success('Stock adjustment posted')
+      setShowAdjDrawer(false)
+      setAdjSku('')
+      setAdjQty(1)
+    },
+    onError: (err) => toast.error(getApiErrorMessage(err, 'Failed to post stock adjustment')),
+  })
 
-  const handleAdjSubmit = (e: React.FormEvent) => {
-    e.preventDefault()
-    setFormError('')
-    const targetSku = (adjSku || stockList[0]?.sku || '').trim().toUpperCase()
-    if (!targetSku) {
-      setFormError('Please enter or select a Footwear SKU.')
-      return
-    }
-    const delta = Number(adjQty)
-    StockStorage.adjust(targetSku, delta)
-    AdjustmentStorage.add({
-      variant_sku: targetSku,
-      variantSku: targetSku,
-      quantity_change: delta,
-      quantityChange: delta,
-      reason: adjReason,
-      adjusted_at: new Date().toISOString()
-    })
-    createAdjustmentMutation.mutate({
-      variantSku: targetSku,
-      quantityChange: delta,
-      reason: adjReason,
-    })
-  }
-
-  const handleAuditSubmit = (e: React.FormEvent) => {
-    e.preventDefault()
-    setFormError('')
-    createAuditMutation.mutate({
-      storeName: auditStoreName
-    })
-  }
-
-  const tabs: { key: Tab; label: string }[] = [
-    { key: 'stock', label: 'Stock Explorer' },
-    { key: 'adjustments', label: 'Cycle Adjustments' },
-    { key: 'audits', label: 'Audit Sessions' },
-    { key: 'heatmap', label: 'Ageing Heatmap' },
+  const columns: ColumnDef<any>[] = [
+    {
+      id: 'sku',
+      header: 'SKU',
+      sortable: true,
+      accessor: (r) => r.sku,
+      cell: (r) => <span className="font-mono text-xs font-medium text-teal-700">{r.sku}</span>,
+    },
+    {
+      id: 'article',
+      header: 'Article',
+      sortable: true,
+      accessor: (r) => r.article_name || r.articleName || '',
+      cell: (r) => (
+        <span className="font-medium text-slate-900">
+          {r.article_name || r.articleName || 'Footwear'}
+        </span>
+      ),
+    },
+    {
+      id: 'size',
+      header: 'Size',
+      sortable: true,
+      accessor: (r) => r.size_label || r.size || '',
+      cell: (r) => <span className="text-slate-700">{r.size_label || r.size || 'UK 8'}</span>,
+    },
+    {
+      id: 'colour',
+      header: 'Colour',
+      cell: (r) => <ColourSwatch name={r.colour_name || r.colour || 'Standard'} />,
+    },
+    {
+      id: 'qty',
+      header: 'On hand',
+      align: 'right',
+      sortable: true,
+      accessor: (r) => Number(r.quantity ?? 0),
+      cell: (r) => <StockBadge quantity={Number(r.quantity ?? 0)} />,
+    },
+    {
+      id: 'mrp',
+      header: 'Retail MRP',
+      align: 'right',
+      sortable: true,
+      accessor: (r) => Number(r.selling_price ?? r.mrp ?? 0),
+      cell: (r) => formatINR(r.selling_price ?? r.mrp ?? 0),
+    },
   ]
 
   return (
-    <div className="p-6 space-y-6">
-      {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-        <div>
-          <h1 className="text-2xl font-bold tracking-tight flex items-center gap-2" style={{ color: 'var(--color-text)' }}>
-            <Boxes size={24} className="text-indigo-600" /> Warehouse Inventory & Stock
-          </h1>
-          <p className="text-sm mt-1" style={{ color: 'var(--color-muted)' }}>
-            Physical balances, stock movements, cycle adjustments, and bi-monthly audit sessions
-          </p>
-        </div>
-        <div className="flex gap-2">
-          {tab === 'adjustments' ? (
+    <div className="space-y-5">
+      <PageHeader
+        title="Warehouse Inventory & Stock"
+        description="Live footwear balances grouped by article and size run, with location tracking and cycle adjustments."
+        breadcrumbs={[{ label: 'Inventory' }, { label: 'Stock' }]}
+        secondaryActions={
+          <div className="inline-flex rounded-lg border border-slate-200 bg-white p-0.5">
             <button
-              onClick={() => { setShowAdjModal(true); setFormError('') }}
-              className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-semibold text-white shadow-xs transition-all hover:opacity-95"
-              style={{ background: 'var(--color-primary)' }}
+              type="button"
+              onClick={() => setViewMode('grouped')}
+              className={
+                viewMode === 'grouped'
+                  ? 'px-2.5 py-1.5 rounded-md text-xs font-medium bg-teal-600 text-white inline-flex items-center gap-1'
+                  : 'px-2.5 py-1.5 rounded-md text-xs font-medium text-slate-600 hover:text-slate-900 inline-flex items-center gap-1'
+              }
             >
-              <Plus size={16} /> Record Adjustment
+              <Layers className="w-3.5 h-3.5" />
+              Size Run
             </button>
-          ) : tab === 'audits' ? (
             <button
-              onClick={() => { setShowAuditModal(true); setFormError('') }}
-              className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-semibold text-white shadow-xs transition-all hover:opacity-95"
-              style={{ background: 'var(--color-primary)' }}
+              type="button"
+              onClick={() => setViewMode('flat')}
+              className={
+                viewMode === 'flat'
+                  ? 'px-2.5 py-1.5 rounded-md text-xs font-medium bg-teal-600 text-white inline-flex items-center gap-1'
+                  : 'px-2.5 py-1.5 rounded-md text-xs font-medium text-slate-600 hover:text-slate-900 inline-flex items-center gap-1'
+              }
             >
-              <Plus size={16} /> Start Audit Session
+              <List className="w-3.5 h-3.5" />
+              Flat SKUs
             </button>
-          ) : (
-            <button
-              onClick={() => { setShowAdjModal(true); setFormError('') }}
-              className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-semibold text-white shadow-xs transition-all hover:opacity-95"
-              style={{ background: 'var(--color-primary)' }}
-            >
-              <Plus size={16} /> Adjust Stock
-            </button>
-          )}
-        </div>
-      </div>
-
-      {/* KPI Cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-        <div className="p-5 rounded-xl border flex flex-col justify-between" style={{ background: 'var(--color-surface)', borderColor: 'var(--color-border)' }}>
-          <span className="text-xs font-semibold uppercase tracking-wider" style={{ color: 'var(--color-muted)' }}>Total Pairs on Hand</span>
-          <span className="text-2xl font-bold font-mono mt-2" style={{ color: 'var(--color-text)' }}>
-            {totalStockUnits.toLocaleString('en-IN')} pairs
-          </span>
-          <span className="text-xs mt-1" style={{ color: 'var(--color-muted)' }}>Active warehouse & display stock</span>
-        </div>
-        <div className="p-5 rounded-xl border flex flex-col justify-between" style={{ background: 'var(--color-surface)', borderColor: 'var(--color-border)' }}>
-          <span className="text-xs font-semibold uppercase tracking-wider text-indigo-600 dark:text-indigo-400">Total Cost Valuation</span>
-          <span className="text-2xl font-bold font-mono mt-2 text-indigo-600 dark:text-indigo-400">
-            {fmt(totalCostVal)}
-          </span>
-          <span className="text-xs mt-1" style={{ color: 'var(--color-muted)' }}>Weighted average cost valuation</span>
-        </div>
-        <div className="p-5 rounded-xl border flex flex-col justify-between" style={{ background: 'var(--color-surface)', borderColor: 'var(--color-border)' }}>
-          <span className="text-xs font-semibold uppercase tracking-wider text-emerald-600 dark:text-emerald-400">Total Retail MRP Value</span>
-          <span className="text-2xl font-bold font-mono mt-2 text-emerald-600 dark:text-emerald-400">
-            {fmt(totalMrpVal)}
-          </span>
-          <span className="text-xs mt-1" style={{ color: 'var(--color-muted)' }}>Gross retail shelf valuation</span>
-        </div>
-      </div>
-
-      {/* Tabs */}
-      <div className="flex gap-1 p-1 rounded-xl w-fit" style={{ background: 'var(--color-bg)', border: '1px solid var(--color-border)' }}>
-        {tabs.map(t => (
-          <button
-            key={t.key}
-            onClick={() => setTab(t.key)}
-            className="px-4 py-2 text-xs font-bold rounded-lg transition-all"
-            style={tab === t.key
-              ? { background: 'var(--color-surface)', color: 'var(--color-primary)', boxShadow: '0 1px 2px rgba(0,0,0,.08)' }
-              : { color: 'var(--color-muted)' }}
-          >
-            {t.label}
-          </button>
-        ))}
-      </div>
-
-      {/* Main Tab Content */}
-      <div className="rounded-xl border overflow-hidden shadow-xs" style={{ background: 'var(--color-surface)', borderColor: 'var(--color-border)' }}>
-        {tab === 'stock' && (
-          <div>
-            <div className="p-4 border-b flex items-center justify-between gap-4" style={{ borderColor: 'var(--color-border)' }}>
-              <div className="relative flex-1 max-w-md">
-                <Search size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" />
-                <input
-                  value={search}
-                  onChange={e => setSearch(e.target.value)}
-                  placeholder="Filter by SKU, footwear model, size or colour…"
-                  className="w-full pl-10 pr-4 py-2 rounded-xl text-sm outline-none border transition-all focus:ring-2 focus:ring-indigo-500/20"
-                  style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }}
-                />
-              </div>
-              <span className="text-xs text-slate-400 font-mono">{filteredStock.length} variants listed</span>
-            </div>
-
-            {stock.isLoading ? <Spinner /> : stock.error ? <Err /> : (
-              <div className="overflow-x-auto">
-                <table className="w-full text-sm">
-                  <thead>
-                    <tr className="border-b text-xs uppercase tracking-wider text-slate-400" style={{ borderColor: 'var(--color-border)' }}>
-                      <th className="text-left px-5 py-3 font-semibold">SKU</th>
-                      <th className="text-left px-5 py-3 font-semibold">Footwear Model</th>
-                      <th className="text-left px-5 py-3 font-semibold">Size</th>
-                      <th className="text-left px-5 py-3 font-semibold">Colour</th>
-                      <th className="text-right px-5 py-3 font-semibold">Units on Hand</th>
-                      <th className="text-right px-5 py-3 font-semibold">Cost Price</th>
-                      <th className="text-right px-5 py-3 font-semibold">Selling MRP</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y" style={{ borderColor: 'var(--color-border)' }}>
-                    {filteredStock.length === 0 && (
-                      <tr><td colSpan={7} className="py-12 text-center text-xs text-slate-400">No stock variants matching search</td></tr>
-                    )}
-                    {filteredStock.map((s: any, i: number) => (
-                      <tr key={i} className="hover:bg-slate-50/50 dark:hover:bg-slate-800/40 transition-colors">
-                        <td className="px-5 py-3.5 font-mono text-xs font-bold text-indigo-600 dark:text-indigo-400">{s.sku}</td>
-                        <td className="px-5 py-3.5 font-semibold text-xs" style={{ color: 'var(--color-text)' }}>
-                          {s.articleName ?? s.article_name ?? s.article ?? 'Air Max Pulse'}
-                        </td>
-                        <td className="px-5 py-3.5 text-xs text-slate-500">{s.size ?? s.size_label ?? 'UK 8'}</td>
-                        <td className="px-5 py-3.5 text-xs text-slate-500">{s.colour ?? s.colour_name ?? 'Black'}</td>
-                        <td className="px-5 py-3.5 text-right font-mono font-bold text-xs" style={{ color: 'var(--color-text)' }}>
-                          {s.quantity ?? s.qty ?? 0}
-                        </td>
-                        <td className="px-5 py-3.5 text-right font-mono text-xs text-slate-500">
-                          {fmt(Number(s.cost_price || s.costValue || 2400))}
-                        </td>
-                        <td className="px-5 py-3.5 text-right font-mono font-bold text-xs text-emerald-600 dark:text-emerald-400">
-                          {fmt(Number(s.selling_price || s.mrpValue || 4999))}
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            )}
           </div>
-        )}
+        }
+        primaryAction={
+          <Button
+            variant="primary"
+            icon={<SlidersHorizontal className="w-4 h-4" />}
+            onClick={() => setShowAdjDrawer(true)}
+          >
+            Adjust Stock
+          </Button>
+        }
+      />
 
-        {tab === 'adjustments' && (() => {
-          const rawAdj = Array.isArray(adjustments.data) ? adjustments.data : []
-          const localAdj = AdjustmentStorage.getAll()
-          const adjMap = new Map<string, any>()
-          rawAdj.forEach((a: any) => adjMap.set(a.id, a))
-          localAdj.forEach((a: any) => adjMap.set(a.id, a))
-          const adjList = Array.from(adjMap.values())
-
-          return adjustments.isLoading ? <Spinner /> : adjustments.error ? <Err /> : (
-            <div className="overflow-x-auto">
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="border-b text-xs uppercase tracking-wider text-slate-400" style={{ borderColor: 'var(--color-border)' }}>
-                    <th className="text-left px-5 py-3 font-semibold">Adjustment Doc</th>
-                    <th className="text-left px-5 py-3 font-semibold">Variant SKU</th>
-                    <th className="text-right px-5 py-3 font-semibold">Qty Change</th>
-                    <th className="text-left px-5 py-3 font-semibold">Reason</th>
-                    <th className="text-left px-5 py-3 font-semibold">Status</th>
-                    <th className="text-left px-5 py-3 font-semibold">Date</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y" style={{ borderColor: 'var(--color-border)' }}>
-                  {adjList.length === 0 && (
-                    <tr><td colSpan={6} className="py-12 text-center text-xs text-slate-400">No adjustments logged</td></tr>
-                  )}
-                  {adjList.map((a: any) => (
-                    <tr key={a.id} className="hover:bg-slate-50/50 dark:hover:bg-slate-800/40 transition-colors">
-                      <td className="px-5 py-3.5 font-mono text-xs font-bold text-indigo-600 dark:text-indigo-400">
-                        {a.docNumber ?? a.reference ?? a.id.substring(0, 8).toUpperCase()}
-                      </td>
-                      <td className="px-5 py-3.5 font-mono text-xs text-slate-600 dark:text-slate-300">
-                        {a.variant_sku || a.variantSku || 'NK-AM-A5-8-BLK'}
-                      </td>
-                      <td className="px-5 py-3.5 text-right font-mono font-bold text-xs"
-                          style={{ color: (a.quantity_change ?? a.quantityChange ?? 0) >= 0 ? 'var(--color-success)' : 'var(--color-danger)' }}>
-                        {(a.quantity_change ?? a.quantityChange ?? 0) >= 0 ? `+${a.quantity_change ?? a.quantityChange}` : (a.quantity_change ?? a.quantityChange)}
-                      </td>
-                      <td className="px-5 py-3.5 text-xs text-slate-500">{a.reason ?? '—'}</td>
-                      <td className="px-5 py-3.5">
-                        <span className="text-xs px-2.5 py-0.5 rounded-full font-semibold bg-emerald-100 text-emerald-700 dark:bg-emerald-950/50 dark:text-emerald-300">
-                          {a.status || 'POSTED'}
-                        </span>
-                      </td>
-                      <td className="px-5 py-3.5 text-xs text-slate-400 font-mono">
-                        {a.createdAt || a.created_at || a.adjusted_at ? new Date(a.createdAt || a.created_at || a.adjusted_at).toLocaleDateString('en-IN') : 'Today'}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          )
-        })()}
-
-        {tab === 'audits' && (
-          audits.isLoading ? <Spinner /> : audits.error ? <Err /> : (
-            <div className="overflow-x-auto">
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="border-b text-xs uppercase tracking-wider text-slate-400" style={{ borderColor: 'var(--color-border)' }}>
-                    <th className="text-left px-5 py-3 font-semibold">Session Number</th>
-                    <th className="text-left px-5 py-3 font-semibold">Store Location</th>
-                    <th className="text-right px-5 py-3 font-semibold">Total Scanned</th>
-                    <th className="text-right px-5 py-3 font-semibold">Discrepancy</th>
-                    <th className="text-left px-5 py-3 font-semibold">Status</th>
-                    <th className="text-left px-5 py-3 font-semibold">Started</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y" style={{ borderColor: 'var(--color-border)' }}>
-                  {(Array.isArray(audits.data) ? audits.data : []).length === 0 && (
-                    <tr><td colSpan={6} className="py-12 text-center text-xs text-slate-400">No audit sessions recorded</td></tr>
-                  )}
-                  {(Array.isArray(audits.data) ? audits.data : []).map((a: any) => (
-                    <tr key={a.id} className="hover:bg-slate-50/50 dark:hover:bg-slate-800/40 transition-colors">
-                      <td className="px-5 py-3.5 font-mono text-xs font-bold text-indigo-600 dark:text-indigo-400">
-                        {a.sessionNumber ?? a.audit_number ?? a.id.substring(0, 8)}
-                      </td>
-                      <td className="px-5 py-3.5 text-xs font-medium" style={{ color: 'var(--color-text)' }}>
-                        {a.store_name ?? 'Central Warehouse'}
-                      </td>
-                      <td className="px-5 py-3.5 text-right font-mono font-bold text-xs" style={{ color: 'var(--color-text)' }}>
-                        {a.total_scanned ?? 640} pairs
-                      </td>
-                      <td className="px-5 py-3.5 text-right font-mono font-bold text-xs text-amber-600">
-                        {a.discrepancy_count ?? 0}
-                      </td>
-                      <td className="px-5 py-3.5">
-                        <span className="text-xs px-2.5 py-0.5 rounded-full font-semibold bg-emerald-100 text-emerald-700 dark:bg-emerald-950/50 dark:text-emerald-300">
-                          {a.status}
-                        </span>
-                      </td>
-                      <td className="px-5 py-3.5 text-xs text-slate-400 font-mono">
-                        {new Date(a.createdAt || a.started_at).toLocaleDateString('en-IN')}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          )
-        )}
-
-        {tab === 'heatmap' && (
-          heatmap.isLoading ? <Spinner /> : heatmap.error ? <Err /> : (
-            <div className="p-5">
-              <div className="mb-4">
-                <h3 className="text-sm font-bold" style={{ color: 'var(--color-text)' }}>Category × Age Bucket Heatmap</h3>
-                <p className="text-xs text-slate-400">Inventory age distribution mapped to automated markdown rules</p>
-              </div>
-              {(heatmap.data as any[]).length === 0 ? (
-                <p className="text-sm text-center py-12 text-slate-400">No ageing data</p>
-              ) : (
-                <div className="overflow-x-auto">
-                  <table className="w-full text-xs border-collapse">
-                    <thead>
-                      <tr className="border-b text-slate-400 text-left font-bold" style={{ borderColor: 'var(--color-border)' }}>
-                        <th className="p-3">Category</th>
-                        {['0-30d (Fresh)', '31-60d (Normal)', '61-90d (Slow)', '91-180d (Stagnant)', '180d+ (Clearance)'].map(b => (
-                          <th key={b} className="p-3 text-center">{b}</th>
-                        ))}
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y" style={{ borderColor: 'var(--color-border)' }}>
-                      {(Array.isArray(heatmap.data) ? heatmap.data : []).map((row: any, i: number) => (
-                        <tr key={i} className="hover:bg-slate-50/50 dark:hover:bg-slate-800/40">
-                          <td className="p-3 font-semibold text-xs" style={{ color: 'var(--color-text)' }}>{row.category || row.category_name}</td>
-                          {[row.d30 ?? 24, row.d60 ?? 12, row.d90 ?? 8, row.d180 ?? 14, row.d180plus ?? 0].map((v: number, j: number) => (
-                            <td key={j} className="p-3 text-center font-mono font-bold">
-                              <span className={`px-3 py-1 rounded-lg inline-block ${
-                                v > 20 ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300' :
-                                v > 10 ? 'bg-sky-100 text-sky-800 dark:bg-sky-950 dark:text-sky-300' :
-                                v > 0  ? 'bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-300' :
-                                'text-slate-400'
-                              }`}>
-                                {v} pairs
-                              </span>
-                            </td>
-                          ))}
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              )}
-            </div>
-          )
-        )}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+        <StatCard label="Active SKUs" value={allPickerVariants.length} icon={<Boxes className="w-4 h-4" />} tone="teal" />
+        <StatCard label="Total pairs on hand" value={totalPairs.toLocaleString('en-IN')} tone="success" />
+        <StatCard label="Weighted cost value" value={formatINR(totalCost)} />
+        <StatCard label="Retail MRP value" value={formatINR(totalMrp)} />
       </div>
 
-      {/* Record Stock Adjustment Modal */}
-      {showAdjModal && (
-        <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="w-full max-w-md rounded-2xl p-6 shadow-2xl border space-y-4 animate-in fade-in"
-               style={{ background: 'var(--color-surface)', borderColor: 'var(--color-border)' }}>
-            <div className="flex items-center justify-between border-b pb-3" style={{ borderColor: 'var(--color-border)' }}>
-              <h3 className="font-bold text-lg" style={{ color: 'var(--color-text)' }}>Record Stock Adjustment</h3>
-              <button onClick={() => setShowAdjModal(false)} className="p-1 hover:opacity-75"><X size={18} /></button>
-            </div>
+      <FilterBar
+        search={search}
+        onSearchChange={setSearch}
+        searchPlaceholder="Search by SKU, article name, or colour…"
+        chips={[
+          { key: 'ALL', label: 'All SKUs', count: allPickerVariants.length },
+          {
+            key: 'IN_STOCK',
+            label: 'In stock',
+            count: allPickerVariants.filter((x) => Number(x.quantity ?? 0) > 5).length,
+          },
+          {
+            key: 'LOW',
+            label: 'Low stock (1–5)',
+            count: allPickerVariants.filter((x) => {
+              const q = Number(x.quantity ?? 0)
+              return q > 0 && q <= 5
+            }).length,
+          },
+          {
+            key: 'OUT',
+            label: 'Out of stock',
+            count: allPickerVariants.filter((x) => Number(x.quantity ?? 0) <= 0).length,
+          },
+        ]}
+        activeChip={stockFilter}
+        onChipChange={setStockFilter}
+        onReset={() => {
+          setSearch('')
+          setStockFilter('ALL')
+        }}
+      />
 
-            {formError && (
-              <div className="p-3 rounded-xl text-xs font-semibold bg-rose-50 text-rose-600 dark:bg-rose-950/40 dark:text-rose-300 border border-rose-200">
-                {formError}
-              </div>
-            )}
-
-            <form onSubmit={handleAdjSubmit} className="space-y-4 text-sm">
-              <div>
-                <label className="block text-xs font-semibold mb-1" style={{ color: 'var(--color-muted)' }}>
-                  Select Footwear SKU
-                </label>
-                <select
-                  value={adjSku}
-                  onChange={e => setAdjSku(e.target.value)}
-                  className="w-full px-3 py-2 rounded-xl border text-sm outline-none font-mono"
-                  style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }}
+      {viewMode === 'flat' ? (
+        <DataTable
+          data={filteredFlat}
+          columns={columns}
+          getRowId={(r, i) => r.sku || r.id || String(i)}
+          isLoading={isLoading}
+          error={error}
+          onRetry={refetch}
+          onRowClick={(r) => setSelectedItem(r)}
+          exportFilename="solecontrol-stock"
+        />
+      ) : isLoading ? (
+        <TableSkeleton rows={5} cols={4} />
+      ) : error ? (
+        <ErrorState message={getApiErrorMessage(error)} onRetry={refetch} />
+      ) : groupedArticles.length === 0 ? (
+        <EmptyState
+          icon={<Boxes className="w-6 h-6" />}
+          title="No stock items match"
+          description="Adjust your search filter or inward footwear stock via Purchase Bills."
+        />
+      ) : (
+        <div className="space-y-3">
+          {groupedArticles.map((art) => {
+            const expanded = expandedKeys[art.articleName] !== false
+            return (
+              <div
+                key={art.articleName}
+                className="bg-white rounded-lg border border-slate-200 overflow-hidden"
+              >
+                <button
+                  type="button"
+                  onClick={() =>
+                    setExpandedKeys((p) => ({ ...p, [art.articleName]: !expanded }))
+                  }
+                  className="w-full px-4 py-3 flex flex-wrap items-center justify-between gap-3 bg-slate-50/70 hover:bg-slate-50 text-left border-b border-slate-100"
                 >
-                  <option value="">-- Choose Footwear SKU / Variant --</option>
-                  {stockList.map((s: any) => (
-                    <option key={s.sku} value={s.sku}>
-                      {s.sku} — {s.articleName || s.article_name || s.article || 'Footwear'} ({s.size || s.size_label || 'UK 8'}, {s.colour || s.colour_name || 'Standard'}) — Current On-Hand: {s.quantity ?? s.qty ?? 0} pairs
-                    </option>
-                  ))}
-                </select>
+                  <div className="flex items-center gap-2.5">
+                    {expanded ? (
+                      <ChevronDown className="w-4 h-4 text-slate-400" />
+                    ) : (
+                      <ChevronRight className="w-4 h-4 text-slate-400" />
+                    )}
+                    <span className="text-sm font-semibold text-slate-900">{art.articleName}</span>
+                    <span className="text-xs text-slate-500">
+                      ({art.colourEntries.length} {art.colourEntries.length === 1 ? 'colour' : 'colours'})
+                    </span>
+                  </div>
+                  <div className="flex items-center gap-4 text-xs">
+                    <StockBadge quantity={art.totalQty} />
+                    <span className="tabular-nums text-slate-600">
+                      Cost: <strong className="text-slate-900">{formatINR(art.costValue)}</strong>
+                    </span>
+                  </div>
+                </button>
 
-                <div className="mt-2">
-                  <span className="text-[11px] text-slate-400 block mb-1">Or enter a custom / new SKU:</span>
-                  <input
-                    type="text"
-                    placeholder="e.g. NI-AIR-8-BLK"
-                    value={adjSku}
-                    onChange={e => setAdjSku(e.target.value.toUpperCase())}
-                    className="w-full px-3 py-1.5 rounded-lg border text-xs outline-none font-mono"
-                    style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }}
-                  />
-                </div>
-
-                {stockList.length > 0 && (
-                  <div className="flex flex-wrap items-center gap-1.5 mt-2">
-                    <span className="text-[11px] text-slate-400">Quick select:</span>
-                    {stockList.slice(0, 5).map((s: any) => (
-                      <button
-                        key={s.sku}
-                        type="button"
-                        onClick={() => setAdjSku(s.sku)}
-                        className={`text-[11px] px-2 py-0.5 rounded border font-mono transition-colors ${
-                          adjSku === s.sku ? 'bg-indigo-600 text-white border-indigo-600' : 'hover:bg-slate-100 dark:hover:bg-slate-800'
-                        }`}
-                        style={adjSku === s.sku ? {} : { borderColor: 'var(--color-border)', color: 'var(--color-primary)' }}
-                      >
-                        {s.sku}
-                      </button>
+                {expanded && (
+                  <div className="p-4 space-y-3">
+                    {art.colourEntries.map(([colour, sizeMap]) => (
+                      <div key={colour} className="space-y-1.5">
+                        <ColourSwatch name={colour} />
+                        <SizeRunGrid
+                          readOnly
+                          sizes={Array.from(new Set([...DEFAULT_UK_SIZES, ...Object.keys(sizeMap)]))}
+                          values={sizeMap}
+                        />
+                      </div>
                     ))}
                   </div>
                 )}
               </div>
-
-              <div>
-                <label className="block text-xs font-semibold mb-1" style={{ color: 'var(--color-muted)' }}>Quantity Adjustment (+ / -)</label>
-                <input
-                  type="number"
-                  value={adjQty}
-                  onChange={e => setAdjQty(parseInt(e.target.value) || 0)}
-                  className="w-full px-3 py-2 rounded-xl border text-sm outline-none font-mono font-bold"
-                  style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }}
-                />
-                <span className="text-[11px] text-slate-400 mt-1 block">Positive numbers increase on-hand stock; negative numbers write off units.</span>
-              </div>
-
-              <div>
-                <label className="block text-xs font-semibold mb-1" style={{ color: 'var(--color-muted)' }}>Reason / Audit Category</label>
-                <select
-                  value={adjReason}
-                  onChange={e => setAdjReason(e.target.value)}
-                  className="w-full px-3 py-2 rounded-xl border text-sm outline-none"
-                  style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }}
-                >
-                  <option value="Physical audit cycle discrepancy">Physical audit cycle discrepancy</option>
-                  <option value="Damaged in display shelf transfer">Damaged in display shelf transfer</option>
-                  <option value="Supplier consignment excess inward">Supplier consignment excess inward</option>
-                  <option value="Customer sample test write-off">Customer sample test write-off</option>
-                </select>
-              </div>
-
-              <div className="flex justify-end gap-2 pt-3 border-t" style={{ borderColor: 'var(--color-border)' }}>
-                <button
-                  type="button"
-                  onClick={() => setShowAdjModal(false)}
-                  className="px-4 py-2 rounded-xl border text-xs font-semibold"
-                  style={{ borderColor: 'var(--color-border)', color: 'var(--color-muted)' }}
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  disabled={createAdjustmentMutation.isPending}
-                  className="px-5 py-2.5 rounded-xl text-xs font-semibold text-white shadow-xs"
-                  style={{ background: 'var(--color-primary)' }}
-                >
-                  {createAdjustmentMutation.isPending ? 'Posting…' : 'Post Adjustment'}
-                </button>
-              </div>
-            </form>
-          </div>
+            )
+          })}
         </div>
       )}
 
-      {/* Start Audit Session Modal */}
-      {showAuditModal && (
-        <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="w-full max-w-md rounded-2xl p-6 shadow-2xl border space-y-4 animate-in fade-in"
-               style={{ background: 'var(--color-surface)', borderColor: 'var(--color-border)' }}>
-            <div className="flex items-center justify-between border-b pb-3" style={{ borderColor: 'var(--color-border)' }}>
-              <h3 className="font-bold text-lg" style={{ color: 'var(--color-text)' }}>Start Physical Audit Session</h3>
-              <button onClick={() => setShowAuditModal(false)} className="p-1 hover:opacity-75"><X size={18} /></button>
+      {/* Stock Adjustment Drawer */}
+      <Drawer
+        open={showAdjDrawer}
+        onClose={() => setShowAdjDrawer(false)}
+        title="Record Stock Adjustment"
+        subtitle="Adjust warehouse balances with a mandatory audit reason."
+        isDirty={Boolean(adjSku)}
+        footer={
+          <>
+            <Button variant="outline" onClick={() => setShowAdjDrawer(false)}>
+              Cancel
+            </Button>
+            <Button
+              variant="primary"
+              loading={adjustMutation.isPending}
+              onClick={() => {
+                if (!adjSku) {
+                  toast.error('Please select a footwear SKU')
+                  return
+                }
+                if (!adjReason.trim()) {
+                  toast.error('Reason is required')
+                  return
+                }
+                adjustMutation.mutate({
+                  variantSku: adjSku,
+                  quantityChange: adjQty,
+                  reason: adjReason.trim(),
+                })
+              }}
+            >
+              Post Adjustment
+            </Button>
+          </>
+        }
+      >
+        <FormField label="Footwear SKU / Variant" required helperText="Includes catalog variants even at 0 stock.">
+          <SearchableCombobox
+            options={allPickerVariants.map((v) => ({
+              value: v.sku,
+              label: `${v.sku} — ${v.article_name || v.articleName || 'Footwear'}`,
+              sublabel: `${v.size_label || v.size || 'UK 8'} · ${v.colour_name || v.colour || 'Standard'} · On-hand: ${v.quantity ?? 0}`,
+            }))}
+            value={adjSku}
+            onChange={setAdjSku}
+            placeholder="Select footwear SKU…"
+            searchPlaceholder="Search by SKU or article…"
+          />
+        </FormField>
+
+        <FormField label="Quantity adjustment (+ / -)" required helperText="Positive adds stock; negative writes off units.">
+          <QuantityStepper value={adjQty} onChange={setAdjQty} min={-500} max={500} />
+        </FormField>
+
+        <FormField label="Reason" required>
+          <SearchableCombobox
+            options={[
+              { value: 'Physical audit cycle discrepancy', label: 'Physical audit cycle discrepancy' },
+              { value: 'Opening stock entry', label: 'Opening stock entry' },
+              { value: 'Damaged in display shelf transfer', label: 'Damaged in display shelf transfer' },
+              { value: 'Supplier consignment excess inward', label: 'Supplier consignment excess inward' },
+              { value: 'Customer sample test write-off', label: 'Customer sample test write-off' },
+            ]}
+            value={adjReason}
+            onChange={setAdjReason}
+          />
+        </FormField>
+
+        {adjustments.length > 0 && (
+          <div className="pt-3 border-t border-slate-200 space-y-2">
+            <h4 className="text-xs font-semibold text-slate-700">Recent adjustments</h4>
+            <div className="divide-y divide-slate-100 border border-slate-200 rounded-lg">
+              {adjustments.slice(0, 5).map((a: any, i: number) => (
+                <div key={a.id || i} className="px-3 py-2 flex items-center justify-between text-xs">
+                  <div>
+                    <span className="font-mono text-slate-800">{a.variant_sku || a.variantSku}</span>
+                    <p className="text-slate-500">{a.reason}</p>
+                  </div>
+                  <span className="font-semibold tabular-nums">
+                    {Number(a.quantity_change ?? a.quantityChange ?? 0) > 0 ? '+' : ''}
+                    {a.quantity_change ?? a.quantityChange ?? 0}
+                  </span>
+                </div>
+              ))}
             </div>
-
-            <form onSubmit={handleAuditSubmit} className="space-y-4 text-sm">
-              <div>
-                <label className="block text-xs font-semibold mb-1" style={{ color: 'var(--color-muted)' }}>Store Location</label>
-                <input
-                  type="text"
-                  value={auditStoreName}
-                  onChange={e => setAuditStoreName(e.target.value)}
-                  className="w-full px-3 py-2 rounded-xl border text-sm outline-none"
-                  style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }}
-                />
-              </div>
-
-              <div className="p-3.5 rounded-xl border text-xs text-slate-500 space-y-1" style={{ borderColor: 'var(--color-border)' }}>
-                <div className="font-bold text-slate-700 dark:text-slate-200">Bi-Monthly Physical Cycle Audit:</div>
-                <p>Creates a live barcode scanning session to reconcile floor racks against ERP stock balances.</p>
-              </div>
-
-              <div className="flex justify-end gap-2 pt-3 border-t" style={{ borderColor: 'var(--color-border)' }}>
-                <button
-                  type="button"
-                  onClick={() => setShowAuditModal(false)}
-                  className="px-4 py-2 rounded-xl border text-xs font-semibold"
-                  style={{ borderColor: 'var(--color-border)', color: 'var(--color-muted)' }}
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  disabled={createAuditMutation.isPending}
-                  className="px-5 py-2.5 rounded-xl text-xs font-semibold text-white shadow-xs"
-                  style={{ background: 'var(--color-primary)' }}
-                >
-                  {createAuditMutation.isPending ? 'Starting…' : 'Start Session'}
-                </button>
-              </div>
-            </form>
           </div>
-        </div>
-      )}
+        )}
+      </Drawer>
+
+      {/* Item Detail Drawer */}
+      <Drawer
+        open={!!selectedItem}
+        onClose={() => setSelectedItem(null)}
+        title={selectedItem?.article_name || selectedItem?.articleName || 'SKU Details'}
+        subtitle={selectedItem?.sku}
+      >
+        {selectedItem && (
+          <div className="space-y-4 text-sm">
+            <div className="grid grid-cols-2 gap-3 p-3.5 rounded-lg bg-slate-50 border border-slate-200">
+              <div>
+                <p className="text-xs text-slate-500">SKU</p>
+                <p className="font-mono font-medium text-slate-900 mt-0.5">{selectedItem.sku}</p>
+              </div>
+              <div>
+                <p className="text-xs text-slate-500">On hand</p>
+                <div className="mt-0.5">
+                  <StockBadge quantity={Number(selectedItem.quantity ?? 0)} />
+                </div>
+              </div>
+              <div>
+                <p className="text-xs text-slate-500">Cost price</p>
+                <p className="font-medium tabular-nums mt-0.5">
+                  {formatINR(selectedItem.cost_price ?? selectedItem.costPrice ?? 0)}
+                </p>
+              </div>
+              <div>
+                <p className="text-xs text-slate-500">Retail MRP</p>
+                <p className="font-medium tabular-nums mt-0.5">
+                  {formatINR(selectedItem.selling_price ?? selectedItem.mrp ?? 0)}
+                </p>
+              </div>
+            </div>
+            <div className="p-3.5 rounded-lg border border-slate-200">
+              <p className="text-xs text-slate-500">Location</p>
+              <p className="font-medium text-slate-900 mt-0.5">
+                {selectedItem.location_name || 'Main Warehouse'}
+              </p>
+              <p className="text-xs text-slate-400 mt-1">
+                Updated: {formatDateIN(selectedItem.updated_at || new Date())}
+              </p>
+            </div>
+          </div>
+        )}
+      </Drawer>
     </div>
   )
-}
-
-function Spinner() {
-  return <div className="py-12 text-center text-sm" style={{ color: 'var(--color-muted)' }}>Loading inventory balances…</div>
-}
-
-function Err() {
-  return <div className="py-12 text-center text-sm" style={{ color: 'var(--color-danger)' }}>Failed to load inventory records</div>
 }

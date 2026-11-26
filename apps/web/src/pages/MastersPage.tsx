@@ -1,315 +1,297 @@
-import { useState } from 'react'
+import { useState, useMemo } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { Database, Plus, Search, X, CheckCircle2 } from 'lucide-react'
+import { toast } from 'sonner'
+import { Database, Plus, LayoutGrid, List } from 'lucide-react'
 import { api } from '../lib/api'
-import { MasterStorage } from '../lib/storage'
+import { formatINR, getApiErrorMessage } from '../lib/format'
+import {
+  PageHeader, FilterBar, DataTable, StatusBadge, Button, Drawer,
+  FormField, inputBaseClass, ColumnDef, EmptyState,
+} from '../components/ui'
+import { ArticleCard, ColourSwatch } from '../components/footwear'
 
-type Tab = 'brands' | 'categories' | 'sizes' | 'colours' | 'articles'
+type MasterTab = 'articles' | 'brands' | 'categories' | 'sizes' | 'colours' | 'hsn'
 
 export function MastersPage() {
+  const navigate = useNavigate()
   const qc = useQueryClient()
-  const [tab, setTab] = useState<Tab>('brands')
+  const [tab, setTab] = useState<MasterTab>('articles')
   const [search, setSearch] = useState('')
-  const [showAddModal, setShowAddModal] = useState(false)
-  const [formError, setFormError] = useState('')
+  const [articleView, setArticleView] = useState<'table' | 'cards'>('table')
 
-  // Form states
+  // Drawer form for simple masters (brand, category, size, colour)
+  const [showDrawer, setShowDrawer] = useState(false)
   const [name, setName] = useState('')
   const [code, setCode] = useState('')
-  const [hex, setHex] = useState('#0F172A')
-  const [sortOrder, setSortOrder] = useState(1)
+  const [hex, setHex] = useState('#0D9488')
 
-  const brands = useQuery({ queryKey: ['brands'], queryFn: () => api.get('/masters/brands').then(r => r.data?.data ?? []) })
-  const categories = useQuery({ queryKey: ['categories'], queryFn: () => api.get('/masters/categories').then(r => r.data?.data ?? []) })
-  const sizes = useQuery({ queryKey: ['sizes'], queryFn: () => api.get('/masters/sizes').then(r => r.data?.data ?? []) })
-  const colours = useQuery({ queryKey: ['colours'], queryFn: () => api.get('/masters/colours').then(r => r.data?.data ?? []) })
-  const articles = useQuery({ queryKey: ['articles'], queryFn: () => api.get('/masters/articles').then(r => r.data?.data ?? []) })
+  const endpoint = tab === 'hsn' ? 'categories' : tab
+  const { data, isLoading, error, refetch } = useQuery({
+    queryKey: ['masters', endpoint],
+    queryFn: () => api.get(`/masters/${endpoint}`).then((r) => r.data?.data ?? []),
+  })
 
-  const tabs: { key: Tab; label: string }[] = [
+  const items: any[] = Array.isArray(data) ? data : []
+
+  const filtered = useMemo(() => {
+    const q = search.trim().toLowerCase()
+    if (!q) return items
+    return items.filter(
+      (i) =>
+        String(i.name || '').toLowerCase().includes(q) ||
+        String(i.code || i.hsn || '').toLowerCase().includes(q)
+    )
+  }, [items, search])
+
+  const duplicateWarning = useMemo(() => {
+    const n = name.trim().toLowerCase()
+    if (!n) return false
+    return items.some((i) => String(i.name || '').trim().toLowerCase() === n)
+  }, [name, items])
+
+  const createMutation = useMutation({
+    mutationFn: (payload: any) => api.post(`/masters/${endpoint}`, payload),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['masters', endpoint] })
+      toast.success('Master record saved')
+      setShowDrawer(false)
+      setName('')
+      setCode('')
+    },
+    onError: (err) => toast.error(getApiErrorMessage(err, 'Failed to save master record')),
+  })
+
+  const columns: ColumnDef<any>[] = [
+    {
+      id: 'name',
+      header: 'Name',
+      sortable: true,
+      accessor: (r) => r.name || '',
+      cell: (r) => (
+        <div className="flex items-center gap-2">
+          {tab === 'colours' && <ColourSwatch name={r.name} hex={r.hex} />}
+          {tab !== 'colours' && <span className="font-medium text-slate-900">{r.name}</span>}
+        </div>
+      ),
+    },
+    {
+      id: 'code',
+      header: tab === 'hsn' ? 'HSN / GST' : 'Code',
+      sortable: true,
+      accessor: (r) => r.code || r.hsn || '',
+      cell: (r) => (
+        <span className="font-mono text-xs text-slate-600">{r.code || r.hsn || '6404'}</span>
+      ),
+    },
+    ...(tab === 'articles'
+      ? [
+          {
+            id: 'mrp',
+            header: 'Default MRP',
+            align: 'right' as const,
+            accessor: (r: any) => Number(r.mrp ?? r.selling_price ?? 0),
+            cell: (r: any) => formatINR(r.mrp ?? r.selling_price ?? 0),
+          },
+        ]
+      : []),
+    {
+      id: 'status',
+      header: 'Status',
+      cell: (r) => <StatusBadge status={r.is_active === false || r.isActive === false ? 'INACTIVE' : 'ACTIVE'} />,
+    },
+  ]
+
+  const TABS: { key: MasterTab; label: string }[] = [
+    { key: 'articles', label: 'Articles' },
     { key: 'brands', label: 'Brands' },
     { key: 'categories', label: 'Categories' },
     { key: 'sizes', label: 'Sizes' },
     { key: 'colours', label: 'Colours' },
-    { key: 'articles', label: 'Articles' },
+    { key: 'hsn', label: 'HSN & GST' },
   ]
 
-  const queries: Record<Tab, typeof brands> = { brands, categories, sizes, colours, articles }
-  const q = queries[tab]
-  const rawData: any[] = MasterStorage.mergeWith(tab, q.data || [])
-  const rows: any[] = rawData.filter((r: any) =>
-    (r?.name ?? '').toLowerCase().includes(search.toLowerCase()) ||
-    (r?.code ?? '').toLowerCase().includes(search.toLowerCase())
-  )
-
-  const createMasterMutation = useMutation({
-    mutationFn: (body: any) => api.post(`/masters/${tab}`, body),
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: [tab] })
-      setShowAddModal(false)
-      setName('')
-      setCode('')
-    },
-    onError: (err: any) => {
-      setFormError(err.response?.data?.error?.message || `Failed to add ${tab.slice(0, -1)}.`)
-    }
-  })
-
-  const handleCreateSubmit = (e: React.FormEvent) => {
-    e.preventDefault()
-    if (!name.trim()) {
-      setFormError('Name is required.')
-      return
-    }
-    setFormError('')
-    const newMasterObj = {
-      name: name.trim(),
-      code: (code || name.toUpperCase().slice(0, 4)).trim(),
-      hex,
-      sortOrder: Number(sortOrder),
-      sort_order: Number(sortOrder),
-      isActive: true,
-      is_active: true
-    }
-    MasterStorage.add(tab, newMasterObj)
-    createMasterMutation.mutate(newMasterObj)
-    setShowAddModal(false)
-  }
-
   return (
-    <div className="p-6 space-y-6">
-      {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-        <div>
-          <h1 className="text-2xl font-bold tracking-tight flex items-center gap-2" style={{ color: 'var(--color-text)' }}>
-            <Database size={24} className="text-indigo-600" /> Master Data Catalog
-          </h1>
-          <p className="text-sm mt-1" style={{ color: 'var(--color-muted)' }}>
-            Core catalog taxonomies: Brands, Categories, Sizes, Colours, and Footwear Articles
-          </p>
-        </div>
-        <button
-          onClick={() => { setShowAddModal(true); setFormError('') }}
-          className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-semibold text-white shadow-xs transition-all hover:opacity-95"
-          style={{ background: 'var(--color-primary)' }}
-        >
-          <Plus size={16} /> Add {tab === 'categories' ? 'Category' : tab.charAt(0).toUpperCase() + tab.slice(1, -1)}
-        </button>
-      </div>
+    <div className="space-y-5">
+      <PageHeader
+        title="Master Data"
+        description="Manage footwear brands, categories, articles, size ranges, colours, and HSN GST slabs."
+        breadcrumbs={[{ label: 'Administration' }, { label: 'Master Data' }]}
+        secondaryActions={
+          tab === 'articles' ? (
+            <div className="inline-flex rounded-lg border border-slate-200 bg-white p-0.5">
+              <button
+                type="button"
+                onClick={() => setArticleView('table')}
+                className={
+                  articleView === 'table'
+                    ? 'px-2.5 py-1.5 rounded-md text-xs font-medium bg-teal-600 text-white inline-flex items-center gap-1'
+                    : 'px-2.5 py-1.5 rounded-md text-xs font-medium text-slate-600'
+                }
+              >
+                <List className="w-3.5 h-3.5" />
+                Table
+              </button>
+              <button
+                type="button"
+                onClick={() => setArticleView('cards')}
+                className={
+                  articleView === 'cards'
+                    ? 'px-2.5 py-1.5 rounded-md text-xs font-medium bg-teal-600 text-white inline-flex items-center gap-1'
+                    : 'px-2.5 py-1.5 rounded-md text-xs font-medium text-slate-600'
+                }
+              >
+                <LayoutGrid className="w-3.5 h-3.5" />
+                Cards
+              </button>
+            </div>
+          ) : undefined
+        }
+        primaryAction={
+          <Button
+            variant="primary"
+            icon={<Plus className="w-4 h-4" />}
+            onClick={() => {
+              if (tab === 'articles') navigate('/masters/articles/new')
+              else setShowDrawer(true)
+            }}
+          >
+            {tab === 'articles' ? 'New Article' : `Add ${tab.slice(0, -1)}`}
+          </Button>
+        }
+      />
 
-      {/* Tabs */}
-      <div className="flex gap-1 p-1 rounded-xl w-fit" style={{ background: 'var(--color-bg)', border: '1px solid var(--color-border)' }}>
-        {tabs.map(t => (
+      <div className="flex items-center gap-1 bg-white border border-slate-200 rounded-lg p-1 overflow-x-auto">
+        {TABS.map((t) => (
           <button
             key={t.key}
-            onClick={() => { setTab(t.key); setSearch('') }}
-            className="px-4 py-2 text-xs font-bold rounded-lg transition-all"
-            style={tab === t.key
-              ? { background: 'var(--color-surface)', color: 'var(--color-primary)', boxShadow: '0 1px 2px rgba(0,0,0,.08)' }
-              : { color: 'var(--color-muted)' }}
+            type="button"
+            onClick={() => {
+              setTab(t.key)
+              setSearch('')
+            }}
+            className={
+              tab === t.key
+                ? 'px-3.5 py-1.5 rounded-md text-xs font-medium bg-teal-600 text-white whitespace-nowrap'
+                : 'px-3.5 py-1.5 rounded-md text-xs font-medium text-slate-600 hover:text-slate-900 whitespace-nowrap'
+            }
           >
             {t.label}
           </button>
         ))}
       </div>
 
-      {/* Table Card */}
-      <div className="rounded-xl border overflow-hidden shadow-xs" style={{ background: 'var(--color-surface)', borderColor: 'var(--color-border)' }}>
-        <div className="p-4 border-b flex items-center justify-between gap-4" style={{ borderColor: 'var(--color-border)' }}>
-          <div className="relative flex-1 max-w-md">
-            <Search size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" />
-            <input
-              value={search}
-              onChange={e => setSearch(e.target.value)}
-              placeholder={`Search ${tab}…`}
-              className="w-full pl-10 pr-4 py-2 rounded-xl text-sm outline-none border transition-all focus:ring-2 focus:ring-indigo-500/20"
-              style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }}
-            />
+      <FilterBar
+        search={search}
+        onSearchChange={setSearch}
+        searchPlaceholder={`Search ${tab}…`}
+        onReset={() => setSearch('')}
+      />
+
+      {tab === 'articles' && articleView === 'cards' ? (
+        filtered.length === 0 ? (
+          <EmptyState
+            icon={<Database className="w-6 h-6" />}
+            title="No articles found"
+            description="Create a footwear article to generate size-colour SKU variants."
+            action={
+              <Button variant="primary" onClick={() => navigate('/masters/articles/new')}>
+                New Article
+              </Button>
+            }
+          />
+        ) : (
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+            {filtered.map((art) => (
+              <ArticleCard
+                key={art.id || art.name}
+                name={art.name}
+                brand={art.brand?.name || art.brandName || 'Footwear'}
+                sku={art.code}
+                mrp={Number(art.mrp ?? art.selling_price ?? 3999)}
+                stockQty={Number(art.stockQty ?? 0)}
+              />
+            ))}
           </div>
-          <span className="text-xs text-slate-400 font-mono">
-            {rows.length} {rows.length === 1 ? (tab === 'categories' ? 'category' : tab.slice(0, -1)) : tab} recorded
-          </span>
-        </div>
-
-        {q.isLoading && <div className="py-12 text-center text-sm" style={{ color: 'var(--color-muted)' }}>Loading {tab}…</div>}
-        {q.error && <div className="py-12 text-center text-sm" style={{ color: 'var(--color-danger)' }}>Failed to load {tab}</div>}
-
-        {!q.isLoading && !q.error && (
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="border-b text-xs uppercase tracking-wider text-slate-400" style={{ borderColor: 'var(--color-border)' }}>
-                  <th className="text-left px-5 py-3 font-semibold">Name</th>
-                  {tab === 'articles' && (
-                    <>
-                      <th className="text-left px-5 py-3 font-semibold">Model Code</th>
-                      <th className="text-right px-5 py-3 font-semibold">SKU Variants</th>
-                    </>
-                  )}
-                  {tab === 'sizes' && <th className="text-left px-5 py-3 font-semibold">Sort Index</th>}
-                  {tab === 'colours' && <th className="text-left px-5 py-3 font-semibold">Colour Swatch</th>}
-                  <th className="text-left px-5 py-3 font-semibold">Status</th>
-                  <th className="text-right px-5 py-3 font-semibold">Actions</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y" style={{ borderColor: 'var(--color-border)' }}>
-                {rows.length === 0 && (
-                  <tr><td colSpan={6} className="py-12 text-center text-xs text-slate-400">No {tab} found matching search</td></tr>
-                )}
-                {rows.map((r: any) => {
-                  const colorHex = r.hex || r.hex_code || '#4F46E5'
-                  const sortRank = r.sortOrder ?? r.sort_order ?? r.sequence ?? 1
-                  return (
-                    <tr key={r.id} className="hover:bg-slate-50/50 dark:hover:bg-slate-800/40 transition-colors">
-                      <td className="px-5 py-3.5 font-semibold text-xs" style={{ color: 'var(--color-text)' }}>{r.name}</td>
-                      {tab === 'articles' && (
-                        <>
-                          <td className="px-5 py-3.5 font-mono text-xs text-indigo-600 dark:text-indigo-400 font-bold">{r.code}</td>
-                          <td className="px-5 py-3.5 text-right font-mono text-xs text-slate-500 font-bold">{r._count?.variants ?? 8} variants</td>
-                        </>
-                      )}
-                      {tab === 'sizes' && (
-                        <td className="px-5 py-3.5 font-mono text-xs text-slate-500">Rank {sortRank}</td>
-                      )}
-                      {tab === 'colours' && (
-                        <td className="px-5 py-3.5">
-                          <span className="flex items-center gap-2">
-                            <span className="w-4 h-4 rounded-full border shadow-2xs" style={{ background: colorHex, borderColor: 'var(--color-border)' }} />
-                            <span className="font-mono text-xs text-slate-500">{colorHex}</span>
-                          </span>
-                        </td>
-                      )}
-                      <td className="px-5 py-3.5">
-                        <span className="text-xs px-2.5 py-0.5 rounded-full font-semibold bg-emerald-100 text-emerald-700 dark:bg-emerald-950/50 dark:text-emerald-300">
-                          Active
-                        </span>
-                      </td>
-                      <td className="px-5 py-3.5 text-right">
-                        <div className="flex items-center justify-end gap-2">
-                          <button
-                            onClick={() => {
-                              const newName = prompt(`Edit ${tab.slice(0, -1)} name:`, r.name)
-                              if (newName && newName !== r.name) {
-                                api.put(`/masters/${tab}/${r.id}`, { name: newName }).then(() => qc.invalidateQueries({ queryKey: ['masters', tab] }))
-                              }
-                            }}
-                            className="text-xs px-2 py-1 rounded border hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
-                            style={{ borderColor: 'var(--color-border)', color: 'var(--color-text)' }}
-                          >
-                            Edit
-                          </button>
-                        </div>
-                      </td>
-                    </tr>
-                  )
-                })}
-              </tbody>
-            </table>
-          </div>
-        )}
-      </div>
-
-      {/* Add Modal */}
-      {showAddModal && (
-        <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="w-full max-w-md rounded-2xl p-6 shadow-2xl border space-y-4 animate-in fade-in"
-               style={{ background: 'var(--color-surface)', borderColor: 'var(--color-border)' }}>
-            <div className="flex items-center justify-between border-b pb-3" style={{ borderColor: 'var(--color-border)' }}>
-              <h3 className="font-bold text-lg" style={{ color: 'var(--color-text)' }}>
-                Add {tab.charAt(0).toUpperCase() + tab.slice(1, -1)}
-              </h3>
-              <button onClick={() => setShowAddModal(false)} className="p-1 hover:opacity-75"><X size={18} /></button>
-            </div>
-
-            {formError && (
-              <div className="p-3 rounded-xl text-xs font-semibold bg-rose-50 text-rose-600 dark:bg-rose-950/40 dark:text-rose-300 border border-rose-200">
-                {formError}
-              </div>
-            )}
-
-            <form onSubmit={handleCreateSubmit} className="space-y-4 text-sm">
-              <div>
-                <label className="block text-xs font-semibold mb-1" style={{ color: 'var(--color-muted)' }}>Name</label>
-                <input
-                  type="text"
-                  required
-                  placeholder={`e.g. ${tab === 'brands' ? 'New Balance' : tab === 'sizes' ? 'UK 10.5' : tab === 'colours' ? 'Olive Green' : 'Running Pro'}`}
-                  value={name}
-                  onChange={e => setName(e.target.value)}
-                  className="w-full px-3 py-2 rounded-xl border text-sm outline-none"
-                  style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }}
-                />
-              </div>
-
-              {tab === 'articles' && (
-                <div>
-                  <label className="block text-xs font-semibold mb-1" style={{ color: 'var(--color-muted)' }}>Article Model Code</label>
-                  <input
-                    type="text"
-                    placeholder="e.g. NB-574-GRY"
-                    value={code}
-                    onChange={e => setCode(e.target.value.toUpperCase())}
-                    className="w-full px-3 py-2 rounded-xl border text-sm outline-none font-mono"
-                    style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }}
-                  />
-                </div>
-              )}
-
-              {tab === 'colours' && (
-                <div>
-                  <label className="block text-xs font-semibold mb-1" style={{ color: 'var(--color-muted)' }}>Hex Colour Code</label>
-                  <div className="flex gap-2">
-                    <input
-                      type="color"
-                      value={hex}
-                      onChange={e => setHex(e.target.value)}
-                      className="w-12 h-10 rounded-lg cursor-pointer border p-1"
-                    />
-                    <input
-                      type="text"
-                      value={hex}
-                      onChange={e => setHex(e.target.value)}
-                      className="flex-1 px-3 py-2 rounded-xl border text-sm outline-none font-mono"
-                      style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }}
-                    />
-                  </div>
-                </div>
-              )}
-
-              {tab === 'sizes' && (
-                <div>
-                  <label className="block text-xs font-semibold mb-1" style={{ color: 'var(--color-muted)' }}>Sort Sequence Order</label>
-                  <input
-                    type="number"
-                    value={sortOrder}
-                    onChange={e => setSortOrder(parseInt(e.target.value) || 1)}
-                    className="w-full px-3 py-2 rounded-xl border text-sm outline-none font-mono"
-                    style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }}
-                  />
-                </div>
-              )}
-
-              <div className="flex justify-end gap-2 pt-3 border-t" style={{ borderColor: 'var(--color-border)' }}>
-                <button
-                  type="button"
-                  onClick={() => setShowAddModal(false)}
-                  className="px-4 py-2 rounded-xl border text-xs font-semibold"
-                  style={{ borderColor: 'var(--color-border)', color: 'var(--color-muted)' }}
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  disabled={createMasterMutation.isPending}
-                  className="px-5 py-2.5 rounded-xl text-xs font-semibold text-white shadow-xs"
-                  style={{ background: 'var(--color-primary)' }}
-                >
-                  {createMasterMutation.isPending ? 'Saving…' : 'Save Item'}
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
+        )
+      ) : (
+        <DataTable
+          data={filtered}
+          columns={columns}
+          getRowId={(r, i) => r.id || r.name || String(i)}
+          isLoading={isLoading}
+          error={error}
+          onRetry={refetch}
+          exportFilename={`solecontrol-${tab}`}
+          emptyIcon={<Database className="w-6 h-6" />}
+          emptyTitle={`No ${tab} found`}
+          emptyDescription={`Add your first ${tab.slice(0, -1)} record to build your footwear catalog.`}
+        />
       )}
+
+      <Drawer
+        open={showDrawer}
+        onClose={() => setShowDrawer(false)}
+        title={`Add ${tab.slice(0, -1)}`}
+        isDirty={Boolean(name || code)}
+        footer={
+          <>
+            <Button variant="outline" onClick={() => setShowDrawer(false)}>
+              Cancel
+            </Button>
+            <Button
+              variant="primary"
+              loading={createMutation.isPending}
+              onClick={() => {
+                if (!name.trim()) {
+                  toast.error('Name is required')
+                  return
+                }
+                createMutation.mutate({
+                  name: name.trim(),
+                  code: (code || name.slice(0, 4)).toUpperCase(),
+                  hex: tab === 'colours' ? hex : undefined,
+                })
+              }}
+            >
+              Save
+            </Button>
+          </>
+        }
+      >
+        <FormField
+          label="Name"
+          required
+          error={duplicateWarning ? 'An entry with this name already exists' : undefined}
+        >
+          <input
+            type="text"
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            placeholder="Enter name…"
+            className={inputBaseClass}
+          />
+        </FormField>
+        <FormField label="Short code" helperText="Used when auto-generating SKU codes">
+          <input
+            type="text"
+            value={code}
+            onChange={(e) => setCode(e.target.value.toUpperCase())}
+            placeholder="e.g. NK"
+            className={inputBaseClass}
+          />
+        </FormField>
+        {tab === 'colours' && (
+          <FormField label="Swatch colour">
+            <input
+              type="color"
+              value={hex}
+              onChange={(e) => setHex(e.target.value)}
+              className="h-10 w-20 rounded border border-slate-200 cursor-pointer"
+            />
+          </FormField>
+        )}
+      </Drawer>
     </div>
   )
 }

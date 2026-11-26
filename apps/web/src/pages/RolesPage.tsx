@@ -1,239 +1,228 @@
-import { useState } from 'react'
+import { useState, useMemo } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { ShieldCheck, Lock, Shield, Check, X, ChevronRight, Save } from 'lucide-react'
+import { toast } from 'sonner'
+import { ShieldCheck, Lock, Eye, Save } from 'lucide-react'
 import { api } from '../lib/api'
+import { getApiErrorMessage } from '../lib/format'
+import { PageHeader, Button, StatusBadge, ErrorState, Skeleton } from '../components/ui'
 
-interface Role {
-  id: string
-  name: string
-  code: string
-  isSystem: boolean
-  _count?: { users: number; rolePermissions: number }
-}
-
-const DEFAULT_MODULE_PERMISSIONS: Record<string, { key: string; label: string }[]> = {
-  'Purchasing & Inward': [
-    { key: 'purchases.create', label: 'Create and inward purchase consignment bills' },
-    { key: 'purchases.finalise', label: 'Finalise bills and post to general ledger' },
-    { key: 'vendors.manage', label: 'Manage vendor suppliers and payment terms' },
-  ],
-  'Inventory & Storage': [
-    { key: 'inventory.stock.view', label: 'View live warehouse stock balances & valuation' },
-    { key: 'inventory.adjust', label: 'Execute physical cycle stock adjustments' },
-    { key: 'inventory.audits', label: 'Initiate and complete store audit sessions' },
-    { key: 'transfers.execute', label: 'Dispatch and receive stock transfer manifests' },
-    { key: 'barcodes.print', label: 'Generate and print thermal barcode labels' },
-  ],
-  'Sales & Counter POS': [
-    { key: 'sales.create', label: 'Create customer counter sales & issue receipts' },
-    { key: 'sales.return', label: 'Process customer returns and credit notes' },
-    { key: 'offers.manage', label: 'Create and configure promotional discount rules' },
-    { key: 'customers.manage', label: 'Manage customer records and credit limits' },
-  ],
-  'Finance & Accounting': [
-    { key: 'accounting.journals.view', label: 'Inspect general journal entries & ledgers' },
-    { key: 'accounting.journals.post', label: 'Post manual journal vouchers & adjustments' },
-    { key: 'bank.reconcile', label: 'Perform statement bank reconciliations' },
-    { key: 'capital.manage', label: 'Manage partner capital & drawings advances' },
-    { key: 'gst.reports', label: 'Access statutory GST Class A/B returns & GSTR registers' },
-  ],
-  'System & Control': [
-    { key: 'users.manage', label: 'Provision users, reset passwords and assign roles' },
-    { key: 'reports.export', label: 'Export financial, tax, and inventory reports' },
-    { key: 'integrations.manage', label: 'Configure WhatsApp, printer, and GST gateways' },
-    { key: 'audit.view', label: 'Inspect append-only security logs and active sessions' },
-  ]
-}
+const MODULES = [
+  'dashboard', 'sales', 'customers', 'offers', 'inventory', 'display_stock',
+  'stock_transfers', 'ageing', 'damaged_goods', 'barcodes', 'purchases',
+  'vendors', 'accounting', 'capital', 'bank_gst', 'reports', 'masters',
+  'company', 'locations', 'users', 'roles', 'audit',
+]
+const ACTIONS = ['view', 'create', 'edit', 'delete', 'approve', 'export'] as const
 
 export function RolesPage() {
   const qc = useQueryClient()
-  const [selectedRole, setSelectedRole] = useState<Role | null>(null)
-  const [rolePerms, setRolePerms] = useState<Record<string, boolean>>({})
-  const [saveSuccessMsg, setSaveSuccessMsg] = useState('')
+  const [selectedRoleId, setSelectedRoleId] = useState('')
+  const [compareMode, setCompareMode] = useState(false)
+  const [draftPerms, setDraftPerms] = useState<string[] | null>(null)
 
-  const { data, isLoading, error } = useQuery<{ data: Role[] }>({
+  const { data: rolesData, isLoading, error, refetch } = useQuery({
     queryKey: ['roles'],
-    queryFn: () => api.get('/roles').then(r => r.data),
+    queryFn: () => api.get('/roles').then((r) => r.data?.data ?? []),
   })
 
-  const roles: Role[] = Array.isArray(data?.data)
-    ? data.data
-    : Array.isArray(data)
-    ? (data as any)
-    : []
+  const roles: any[] = Array.isArray(rolesData) ? rolesData : []
+  const activeRole = roles.find((r) => r.id === selectedRoleId) || roles[0]
 
-  const handleOpenMatrix = (role: Role) => {
-    setSelectedRole(role)
-    const isSuper = role.code === 'SUPER_ADMIN'
-    const isSales = role.code === 'SALES_EXECUTIVE'
-    const isInventory = role.code === 'INVENTORY_USER'
+  const currentPerms: string[] = useMemo(() => {
+    if (draftPerms) return draftPerms
+    const rp = activeRole?.permissions || []
+    return rp.map((p: any) => (typeof p === 'string' ? p : p.key || p.permission?.key)).filter(Boolean)
+  }, [activeRole, draftPerms])
 
-    // Preset sensible effective matrix
-    const initialPerms: Record<string, boolean> = {}
-    Object.values(DEFAULT_MODULE_PERMISSIONS).flat().forEach(p => {
-      if (isSuper) initialPerms[p.key] = true
-      else if (isSales) initialPerms[p.key] = p.key.startsWith('sales.') || p.key.startsWith('customers.')
-      else if (isInventory) initialPerms[p.key] = p.key.startsWith('inventory.') || p.key.startsWith('barcodes.') || p.key.startsWith('transfers.')
-      else initialPerms[p.key] = !p.key.startsWith('system.') && !p.key.startsWith('capital.')
-    })
-    setRolePerms(initialPerms)
-    setSaveSuccessMsg('')
-  }
+  const isLocked = String(activeRole?.code || '').toUpperCase() === 'SUPER_ADMIN'
 
   const togglePerm = (key: string) => {
-    if (selectedRole?.isSystem) return
-    setRolePerms(prev => ({ ...prev, [key]: !prev[key] }))
+    if (isLocked) return
+    const next = currentPerms.includes(key)
+      ? currentPerms.filter((k) => k !== key)
+      : [...currentPerms, key]
+    setDraftPerms(next)
   }
 
-  const handleSavePerms = () => {
-    setSaveSuccessMsg(`Permissions for ${selectedRole?.name} successfully updated.`)
-    setTimeout(() => {
-      setSaveSuccessMsg('')
-      setSelectedRole(null)
-    }, 1500)
+  const saveMutation = useMutation({
+    mutationFn: () =>
+      api.put(`/roles/${activeRole.id}/permissions`, { permissions: currentPerms }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['roles'] })
+      setDraftPerms(null)
+      toast.success(`Updated permissions for ${activeRole.name}`)
+    },
+    onError: (err) => toast.error(getApiErrorMessage(err, 'Failed to update permissions')),
+  })
+
+  if (error) {
+    return (
+      <div className="space-y-5">
+        <PageHeader title="Roles & Permissions" breadcrumbs={[{ label: 'Administration' }, { label: 'Roles' }]} />
+        <ErrorState message={getApiErrorMessage(error)} onRetry={refetch} />
+      </div>
+    )
   }
 
   return (
-    <div className="p-6 space-y-6">
-      {/* Header */}
-      <div>
-        <h1 className="text-2xl font-bold tracking-tight flex items-center gap-2" style={{ color: 'var(--color-text)' }}>
-          <ShieldCheck size={24} className="text-indigo-600" /> Roles & Permissions
-        </h1>
-        <p className="text-sm mt-1" style={{ color: 'var(--color-muted)' }}>
-          Configure granular role-based access control (RBAC), security guard policies, and effective-access preview
-        </p>
-      </div>
-
-      {isLoading && <div className="text-sm py-12 text-center" style={{ color: 'var(--color-muted)' }}>Loading roles…</div>}
-      {error && <div className="text-sm py-12 text-center" style={{ color: 'var(--color-danger)' }}>Failed to load roles</div>}
-
-      {/* Roles Grid */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-        {roles.map(r => (
-          <div
-            key={r.id}
-            onClick={() => handleOpenMatrix(r)}
-            className="p-5 rounded-2xl border flex flex-col justify-between cursor-pointer transition-all hover:border-indigo-400 hover:shadow-md group"
-            style={{ background: 'var(--color-surface)', borderColor: 'var(--color-border)' }}
+    <div className="space-y-5">
+      <PageHeader
+        title="Roles & Permissions"
+        description="Configure module-level access rights across View, Create, Edit, Delete, Approve, and Export."
+        breadcrumbs={[{ label: 'Administration' }, { label: 'Roles & Permissions' }]}
+        secondaryActions={
+          <Button
+            variant={compareMode ? 'primary' : 'outline'}
+            size="sm"
+            icon={<Eye className="w-3.5 h-3.5" />}
+            onClick={() => setCompareMode((c) => !c)}
           >
-            <div>
-              <div className="flex items-center justify-between mb-3">
-                <span className="p-2 rounded-xl bg-indigo-50 dark:bg-indigo-950/40 text-indigo-600 dark:text-indigo-400">
-                  <Shield size={18} />
-                </span>
-                {r.isSystem ? (
-                  <span className="inline-flex items-center gap-1 text-[11px] font-semibold px-2 py-0.5 rounded-full bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300">
-                    <Lock size={11} /> Locked System Role
-                  </span>
-                ) : (
-                  <span className="text-[11px] font-semibold px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300">
-                    Configurable
-                  </span>
-                )}
-              </div>
-              <h3 className="font-bold text-base" style={{ color: 'var(--color-text)' }}>{r.name}</h3>
-              <p className="text-xs font-mono mt-0.5 text-slate-400">{r.code}</p>
-            </div>
+            {compareMode ? 'Matrix view' : 'Compare roles'}
+          </Button>
+        }
+        primaryAction={
+          draftPerms && !isLocked ? (
+            <Button
+              variant="primary"
+              icon={<Save className="w-4 h-4" />}
+              loading={saveMutation.isPending}
+              onClick={() => saveMutation.mutate()}
+            >
+              Save Permissions
+            </Button>
+          ) : undefined
+        }
+      />
 
-            <div className="pt-4 mt-4 border-t flex items-center justify-between text-xs" style={{ borderColor: 'var(--color-border)' }}>
-              <span className="text-slate-400">{r._count?.users ?? (r.code === 'SUPER_ADMIN' ? 1 : 2)} staff assigned</span>
-              <span className="font-semibold text-indigo-600 dark:text-indigo-400 flex items-center gap-1 group-hover:translate-x-0.5 transition-transform">
-                Configure Matrix <ChevronRight size={13} />
+      {isLoading ? (
+        <Skeleton className="h-96 w-full" />
+      ) : compareMode ? (
+        <div className="bg-white rounded-lg border border-slate-200 overflow-x-auto">
+          <table className="w-full text-[13px]">
+            <thead className="bg-slate-50 border-b border-slate-200">
+              <tr>
+                <th className="px-4 py-2.5 text-left font-medium text-slate-600">Module</th>
+                {roles.map((r) => (
+                  <th key={r.id} className="px-3 py-2.5 text-center font-medium text-slate-700">
+                    {r.name}
+                  </th>
+                ))}
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-100">
+              {MODULES.map((m) => (
+                <tr key={m}>
+                  <td className="px-4 py-2.5 font-medium text-slate-800 capitalize">
+                    {m.replace(/_/g, ' ')}
+                  </td>
+                  {roles.map((r) => {
+                    const perms = (r.permissions || []).map((p: any) =>
+                      typeof p === 'string' ? p : p.key || p.permission?.key
+                    )
+                    const isSuper = r.code === 'SUPER_ADMIN'
+                    const count = isSuper
+                      ? ACTIONS.length
+                      : ACTIONS.filter((a) => perms.includes(`${m}.${a}`)).length
+                    return (
+                      <td key={r.id} className="px-3 py-2.5 text-center tabular-nums">
+                        <StatusBadge
+                          status={count > 0 ? 'ACTIVE' : 'INACTIVE'}
+                          label={`${count}/${ACTIONS.length}`}
+                          tone={count === ACTIONS.length ? 'success' : count > 0 ? 'teal' : 'neutral'}
+                        />
+                      </td>
+                    )
+                  })}
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      ) : (
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 items-start">
+          {/* Left Role List */}
+          <div className="lg:col-span-3 bg-white rounded-lg border border-slate-200 p-2 space-y-1">
+            {roles.map((r) => {
+              const selected = activeRole?.id === r.id
+              return (
+                <button
+                  key={r.id}
+                  type="button"
+                  onClick={() => {
+                    setSelectedRoleId(r.id)
+                    setDraftPerms(null)
+                  }}
+                  className={
+                    selected
+                      ? 'w-full px-3 py-2.5 rounded-lg bg-teal-50 text-teal-900 border border-teal-200 text-left flex items-center justify-between'
+                      : 'w-full px-3 py-2.5 rounded-lg hover:bg-slate-50 text-slate-700 text-left flex items-center justify-between'
+                  }
+                >
+                  <div>
+                    <div className="text-sm font-medium">{r.name}</div>
+                    <div className="text-xs text-slate-500">{r.code}</div>
+                  </div>
+                  {r.code === 'SUPER_ADMIN' && <Lock className="w-3.5 h-3.5 text-slate-400" />}
+                </button>
+              )
+            })}
+          </div>
+
+          {/* Right Matrix */}
+          <div className="lg:col-span-9 bg-white rounded-lg border border-slate-200 overflow-hidden">
+            <div className="px-4 py-3 border-b border-slate-200 bg-slate-50 flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <ShieldCheck className="w-4 h-4 text-teal-600" />
+                <span className="text-sm font-semibold text-slate-900">{activeRole?.name}</span>
+                {isLocked && <StatusBadge status="ACTIVE" label="Locked system role" tone="neutral" />}
+              </div>
+              <span className="text-xs text-slate-500">
+                Can view{' '}
+                {isLocked
+                  ? MODULES.length
+                  : MODULES.filter((m) => currentPerms.includes(`${m}.view`)).length}{' '}
+                of {MODULES.length} modules
               </span>
             </div>
-          </div>
-        ))}
-      </div>
 
-      {/* Signature Feature #8: Permission Matrix Drawer */}
-      {selectedRole && (
-        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex justify-end">
-          <div className="w-full max-w-xl h-full shadow-2xl p-6 flex flex-col justify-between overflow-y-auto animate-in slide-in-from-right"
-               style={{ background: 'var(--color-surface)' }}>
-            <div className="space-y-6">
-              <div className="flex items-center justify-between border-b pb-4" style={{ borderColor: 'var(--color-border)' }}>
-                <div>
-                  <div className="flex items-center gap-2">
-                    <h3 className="font-bold text-lg" style={{ color: 'var(--color-text)' }}>{selectedRole.name}</h3>
-                    {selectedRole.isSystem && (
-                      <span className="text-[11px] font-mono px-2 py-0.5 rounded bg-slate-100 dark:bg-slate-800 text-slate-500">
-                        System Protected
-                      </span>
-                    )}
-                  </div>
-                  <p className="text-xs text-slate-400 mt-0.5">Effective Permissions & Module Access Matrix</p>
-                </div>
-                <button onClick={() => setSelectedRole(null)} className="p-1 hover:opacity-75"><X size={18} /></button>
-              </div>
-
-              {saveSuccessMsg && (
-                <div className="p-3 rounded-xl text-xs font-semibold bg-emerald-50 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300 border border-emerald-200 flex items-center gap-2">
-                  <Check size={16} />
-                  <span>{saveSuccessMsg}</span>
-                </div>
-              )}
-
-              {selectedRole.isSystem && (
-                <div className="p-3.5 rounded-xl border flex items-center gap-2.5 text-xs bg-amber-50 dark:bg-amber-950/30 text-amber-800 dark:text-amber-300 border-amber-200">
-                  <Lock size={16} className="flex-shrink-0" />
-                  <span>SUPER_ADMIN is a locked root system role with non-revocable bypass rights across all modules.</span>
-                </div>
-              )}
-
-              {/* Module Groups */}
-              <div className="space-y-5">
-                {Object.entries(DEFAULT_MODULE_PERMISSIONS).map(([moduleTitle, perms]) => (
-                  <div key={moduleTitle} className="space-y-2">
-                    <h4 className="text-xs font-bold uppercase tracking-wider text-slate-400 px-1">{moduleTitle}</h4>
-                    <div className="rounded-xl border divide-y overflow-hidden" style={{ borderColor: 'var(--color-border)' }}>
-                      {perms.map(p => {
-                        const enabled = rolePerms[p.key] ?? false
+            <div className="overflow-x-auto">
+              <table className="w-full text-[13px]">
+                <thead className="bg-slate-50 border-b border-slate-200">
+                  <tr>
+                    <th className="px-4 py-2.5 text-left font-medium text-slate-600">Module</th>
+                    {ACTIONS.map((a) => (
+                      <th key={a} className="px-3 py-2.5 text-center font-medium text-slate-600 capitalize">
+                        {a}
+                      </th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100">
+                  {MODULES.map((m) => (
+                    <tr key={m} className="hover:bg-slate-50/50">
+                      <td className="px-4 py-2.5 font-medium text-slate-800 capitalize">
+                        {m.replace(/_/g, ' ')}
+                      </td>
+                      {ACTIONS.map((a) => {
+                        const key = `${m}.${a}`
+                        const checked = isLocked || currentPerms.includes(key)
                         return (
-                          <div
-                            key={p.key}
-                            onClick={() => togglePerm(p.key)}
-                            className={`p-3 flex items-center justify-between text-xs transition-colors ${
-                              selectedRole.isSystem ? 'cursor-not-allowed opacity-90' : 'cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-800/40'
-                            }`}
-                          >
-                            <div className="space-y-0.5 pr-4">
-                              <div className="font-semibold" style={{ color: 'var(--color-text)' }}>{p.label}</div>
-                              <div className="font-mono text-[10px] text-slate-400">{p.key}</div>
-                            </div>
-                            <div className={`w-5 h-5 rounded-md flex items-center justify-center transition-colors ${
-                              enabled ? 'bg-indigo-600 text-white' : 'border border-slate-300 dark:border-slate-700'
-                            }`}>
-                              {enabled && <Check size={13} strokeWidth={2.5} />}
-                            </div>
-                          </div>
+                          <td key={a} className="px-3 py-2.5 text-center">
+                            <input
+                              type="checkbox"
+                              disabled={isLocked}
+                              checked={checked}
+                              onChange={() => togglePerm(key)}
+                              aria-label={`${m} ${a}`}
+                              className="rounded border-slate-300 text-teal-600 focus:ring-teal-600 disabled:opacity-60"
+                            />
+                          </td>
                         )
                       })}
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-
-            <div className="pt-4 border-t flex justify-end gap-2 mt-6" style={{ borderColor: 'var(--color-border)' }}>
-              <button
-                type="button"
-                onClick={() => setSelectedRole(null)}
-                className="px-4 py-2 rounded-xl border text-xs font-semibold"
-                style={{ borderColor: 'var(--color-border)', color: 'var(--color-muted)' }}
-              >
-                Close
-              </button>
-              {!selectedRole.isSystem && (
-                <button
-                  type="button"
-                  onClick={handleSavePerms}
-                  className="px-5 py-2.5 rounded-xl text-xs font-semibold text-white shadow-xs flex items-center gap-2"
-                  style={{ background: 'var(--color-primary)' }}
-                >
-                  <Save size={14} /> Save Permissions
-                </button>
-              )}
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
             </div>
           </div>
         </div>

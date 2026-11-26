@@ -1,396 +1,316 @@
-import { useState } from 'react'
+import { useState, useMemo } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { ArrowLeftRight, Plus, CheckCircle, Clock, Truck, ShieldAlert } from 'lucide-react'
+import { toast } from 'sonner'
+import { ArrowLeftRight, Plus, Truck, CheckCircle2 } from 'lucide-react'
 import { api } from '../lib/api'
-import { StockStorage } from '../lib/storage'
-import { TransferStorage } from '../lib/storage'
-import { format } from 'date-fns'
+import { formatDateIN, getApiErrorMessage } from '../lib/format'
+import {
+  PageHeader, StatCard, FilterBar, DataTable, StatusBadge, Button,
+  FullPageForm, FormField, SearchableCombobox, StatusTracker, ColumnDef, inputBaseClass,
+} from '../components/ui'
+import { SizeRunGrid, DEFAULT_UK_SIZES } from '../components/footwear'
 
 export function TransfersPage() {
-  const queryClient = useQueryClient()
-  const [showModal, setShowModal] = useState(false)
-  const [fromStoreId, setFromStoreId] = useState('')
-  const [toStoreId, setToStoreId] = useState('')
-  const [variantId, setVariantId] = useState('')
-  const [quantity, setQuantity] = useState(1)
+  const qc = useQueryClient()
+  const [mode, setMode] = useState<'list' | 'new'>('list')
+  const [search, setSearch] = useState('')
+  const [statusFilter, setStatusFilter] = useState('ALL')
+
+  // Full-page transfer form state
+  const [fromLoc, setFromLoc] = useState('Main Warehouse')
+  const [toLoc, setToLoc] = useState('Sales Floor Rack R1')
+  const [articleSku, setArticleSku] = useState('')
+  const [sizes, setSizes] = useState<Record<string, number>>({
+    'UK 6': 0, 'UK 7': 1, 'UK 8': 2, 'UK 9': 1, 'UK 10': 0, 'UK 11': 0,
+  })
   const [notes, setNotes] = useState('')
-  const [formError, setFormError] = useState('')
 
-  const { data: transfers, isLoading } = useQuery({
+  const { data: transfersData, isLoading, error, refetch } = useQuery({
     queryKey: ['transfers'],
-    queryFn: () => api.get('/transfers').then(r => r.data?.data ?? []),
+    queryFn: () => api.get('/transfers').then((r) => r.data?.data ?? []),
   })
 
-  const { data: stores } = useQuery({
-    queryKey: ['stores'],
-    queryFn: () => api.get('/company/stores').then(r => r.data?.data ?? []),
+  const { data: stockData } = useQuery({
+    queryKey: ['inventory-stock'],
+    queryFn: () => api.get('/inventory/stock').then((r) => r.data?.data ?? []),
   })
 
-  const { data: variants } = useQuery({
-    queryKey: ['variants-list'],
-    queryFn: () => api.get('/inventory/stock').then(r => r.data?.data ?? []),
+  const { data: locationsData } = useQuery({
+    queryKey: ['locations'],
+    queryFn: () => api.get('/locations').then((r) => r.data?.data ?? []),
   })
 
-  const rawTransfers: any[] = Array.isArray(transfers)
-    ? transfers
-    : Array.isArray((transfers as any)?.data)
-    ? (transfers as any).data
-    : []
+  const transfers: any[] = Array.isArray(transfersData) ? transfersData : []
+  const stockList: any[] = Array.isArray(stockData) ? stockData : []
+  const locations: any[] = Array.isArray(locationsData) ? locationsData : []
 
-  const localTransfers = TransferStorage.getAll()
-  const transferList: any[] = [
-    ...localTransfers,
-    ...rawTransfers.filter((t: any) => !localTransfers.some(lt => lt.id === t.id))
-  ]
+  const locationOptions =
+    locations.length > 0
+      ? locations.map((l) => ({ value: l.name, label: l.name, sublabel: l.type }))
+      : [
+          { value: 'Main Warehouse', label: 'Main Warehouse' },
+          { value: 'Sales Floor Rack R1', label: 'Sales Floor Rack R1' },
+          { value: 'Display Counter', label: 'Display Counter' },
+        ]
 
-  const storeList: any[] = Array.isArray(stores)
-    ? stores
-    : Array.isArray((stores as any)?.data)
-    ? (stores as any).data
-    : []
+  const filtered = useMemo(() => {
+    const q = search.trim().toLowerCase()
+    return transfers.filter((t) => {
+      const st = String(t.status || 'REQUESTED').toUpperCase()
+      if (statusFilter !== 'ALL' && st !== statusFilter) return false
+      if (!q) return true
+      return (
+        String(t.id || '').toLowerCase().includes(q) ||
+        String(t.notes || '').toLowerCase().includes(q)
+      )
+    })
+  }, [transfers, search, statusFilter])
 
-  const variantList: any[] = StockStorage.mergeWith(variants || [])
+  const totalPairs = DEFAULT_UK_SIZES.reduce((s, sz) => s + (Number(sizes[sz]) || 0), 0)
 
   const createMutation = useMutation({
-    mutationFn: async (data: any) => {
-      try {
-        const res = await api.post('/transfers', data)
-        const created = res.data?.data || {
-          id: `tr-${Date.now()}`,
-          transferNumber: `TR-2026-${Math.floor(1000 + Math.random() * 9000)}`,
-          status: 'REQUESTED',
-          fromStore: { name: 'Main Flagship' },
-          toStore: { name: 'Express Outlet' },
-          createdAt: new Date().toISOString(),
-          ...data
-        }
-        TransferStorage.add(created)
-        return res
-      } catch (e: any) {
-        const created = {
-          id: `tr-${Date.now()}`,
-          transferNumber: `TR-2026-${Math.floor(1000 + Math.random() * 9000)}`,
-          status: 'REQUESTED',
-          fromStore: { name: 'Main Flagship' },
-          toStore: { name: 'Express Outlet' },
-          createdAt: new Date().toISOString(),
-          ...data
-        }
-        TransferStorage.add(created)
-        return { data: { data: created } }
-      }
-    },
+    mutationFn: () =>
+      api.post('/transfers', {
+        fromLocation: fromLoc,
+        toLocation: toLoc,
+        variantId: articleSku,
+        quantity: totalPairs,
+        sizes,
+        notes,
+      }),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['transfers'] })
-      setShowModal(false)
+      qc.invalidateQueries({ queryKey: ['transfers'] })
+      toast.success('Stock transfer requested')
+      setMode('list')
       setNotes('')
-      setQuantity(1)
     },
-    onError: (err: any) => {
-      setFormError(err.response?.data?.error?.message || 'Failed to initiate stock transfer.')
-    }
+    onError: (err) => toast.error(getApiErrorMessage(err, 'Failed to create transfer')),
   })
 
   const dispatchMutation = useMutation({
-    mutationFn: async (id: string) => {
-      TransferStorage.updateStatus(id, 'DISPATCHED')
-      return api.post(`/transfers/${id}/dispatch`).catch(() => ({ data: { success: true } }))
+    mutationFn: (id: string) => api.post(`/transfers/${id}/dispatch`, {}),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['transfers'] })
+      toast.success('Transfer dispatched')
     },
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['transfers'] }),
+    onError: (err) => toast.error(getApiErrorMessage(err, 'Failed to dispatch transfer')),
   })
 
   const receiveMutation = useMutation({
-    mutationFn: async (id: string) => {
-      TransferStorage.updateStatus(id, 'RECEIVED')
-      return api.post(`/transfers/${id}/receive`).catch(() => ({ data: { success: true } }))
+    mutationFn: (id: string) => api.post(`/transfers/${id}/receive`, {}),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['transfers'] })
+      qc.invalidateQueries({ queryKey: ['inventory-stock'] })
+      toast.success('Transfer received and stock updated')
     },
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['transfers'] }),
+    onError: (err) => toast.error(getApiErrorMessage(err, 'Failed to receive transfer')),
   })
 
-  const handleCreate = (e: React.FormEvent) => {
-    e.preventDefault()
-    setFormError('')
-    const targetVariant = (variantId || variantList[0]?.variant_id || variantList[0]?.sku || '').trim()
-    if (!targetVariant) {
-      setFormError('Please enter or select a Footwear Variant / SKU.')
-      return
-    }
-    const defaultStore = stores?.[0]?.id || 'STORE-01'
-    const targetStore = toStoreId || defaultStore
-    createMutation.mutate({
-      fromStoreId: fromStoreId || defaultStore,
-      toStoreId: targetStore,
-      items: [{ variantId: targetVariant, quantity: Number(quantity) }],
-      notes
+  if (mode === 'new') {
+    const selectedVar = stockList.find((s) => s.sku === articleSku)
+    const sourceAvail = Number(selectedVar?.quantity ?? 0)
+    const stockLimits: Record<string, number> = {}
+    DEFAULT_UK_SIZES.forEach((sz) => {
+      stockLimits[sz] = selectedVar ? sourceAvail : 99
     })
+
+    return (
+      <FullPageForm
+        title="New Stock Transfer"
+        subtitle="Move footwear pairs between warehouse racks, display counters, or store branches."
+        backLabel="Transfers"
+        onCancel={() => setMode('list')}
+        isDirty={Boolean(articleSku || notes)}
+        primaryActionLabel="Submit Transfer"
+        onPrimaryAction={() => {
+          if (!articleSku) {
+            toast.error('Please select a footwear SKU')
+            return
+          }
+          if (fromLoc === toLoc) {
+            toast.error('Origin and destination must be different')
+            return
+          }
+          if (totalPairs <= 0) {
+            toast.error('Enter at least 1 pair to transfer')
+            return
+          }
+          createMutation.mutate()
+        }}
+        primaryLoading={createMutation.isPending}
+        headerFields={
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <FormField label="From location" required>
+              <SearchableCombobox options={locationOptions} value={fromLoc} onChange={setFromLoc} />
+            </FormField>
+            <FormField label="To location" required>
+              <SearchableCombobox options={locationOptions} value={toLoc} onChange={setToLoc} />
+            </FormField>
+          </div>
+        }
+        summaryPanel={
+          <div className="space-y-4 text-sm">
+            <h2 className="text-base font-semibold text-slate-900 border-b border-slate-100 pb-2">
+              Transfer Summary
+            </h2>
+            <div className="flex justify-between">
+              <span className="text-slate-600">Route</span>
+              <span className="font-medium text-slate-900 text-right">{fromLoc} → {toLoc}</span>
+            </div>
+            <div className="flex justify-between">
+              <span className="text-slate-600">Total pairs</span>
+              <span className="font-semibold tabular-nums text-teal-700">{totalPairs} pairs</span>
+            </div>
+            <StatusTracker
+              steps={['Requested', 'Approved', 'Dispatched', 'Received']}
+              currentStep="Requested"
+            />
+          </div>
+        }
+      >
+        <div className="bg-white rounded-lg border border-slate-200 p-5 space-y-4">
+          <FormField label="Footwear SKU / Article" required>
+            <SearchableCombobox
+              options={stockList.map((s) => ({
+                value: s.sku,
+                label: `${s.sku} — ${s.article_name || s.articleName || 'Footwear'}`,
+                sublabel: `Available at source: ${s.quantity ?? 0} pairs`,
+              }))}
+              value={articleSku}
+              onChange={setArticleSku}
+              placeholder="Select footwear SKU…"
+            />
+          </FormField>
+
+          <div className="space-y-1.5">
+            <label className="block text-sm font-medium text-slate-700">Quantity per size</label>
+            <SizeRunGrid
+              values={sizes}
+              stockLimits={stockLimits}
+              onChange={(sz, qty) => setSizes((p) => ({ ...p, [sz]: qty }))}
+            />
+          </div>
+
+          <FormField label="Transfer notes">
+            <input
+              type="text"
+              value={notes}
+              onChange={(e) => setNotes(e.target.value)}
+              placeholder="e.g. Weekend floor replenishment"
+              className={inputBaseClass}
+            />
+          </FormField>
+        </div>
+      </FullPageForm>
+    )
   }
 
-  const getStatusBadge = (status: string) => {
-    switch (status) {
-      case 'RECEIVED':
-        return <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-emerald-100 text-emerald-700 dark:bg-emerald-950/50 dark:text-emerald-300"><CheckCircle size={12} /> Received</span>
-      case 'DISPATCHED':
-        return <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-sky-100 text-sky-700 dark:bg-sky-950/50 dark:text-sky-300"><Truck size={12} /> In Transit</span>
-      case 'APPROVED':
-        return <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-indigo-100 text-indigo-700 dark:bg-indigo-950/50 dark:text-indigo-300"><CheckCircle size={12} /> Approved</span>
-      default:
-        return <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-amber-100 text-amber-700 dark:bg-amber-950/50 dark:text-amber-300"><Clock size={12} /> Requested</span>
-    }
-  }
+  const columns: ColumnDef<any>[] = [
+    {
+      id: 'id',
+      header: 'Transfer ID',
+      cell: (r) => <span className="font-mono text-xs text-teal-700">{String(r.id).slice(0, 10)}</span>,
+    },
+    {
+      id: 'route',
+      header: 'From → To',
+      cell: (r) => `${r.fromLocation || 'Main Warehouse'} → ${r.toLocation || 'Sales Floor Rack R1'}`,
+    },
+    {
+      id: 'qty',
+      header: 'Pairs',
+      align: 'right',
+      cell: (r) => <span className="font-medium tabular-nums">{r.quantity ?? 1}</span>,
+    },
+    {
+      id: 'date',
+      header: 'Date',
+      cell: (r) => formatDateIN(r.created_at || r.createdAt),
+    },
+    {
+      id: 'status',
+      header: 'Status',
+      cell: (r) => <StatusBadge status={r.status || 'REQUESTED'} />,
+    },
+    {
+      id: 'actions',
+      header: 'Action',
+      align: 'right',
+      cell: (r) => (
+        <div className="flex justify-end gap-1.5">
+          {r.status === 'REQUESTED' && (
+            <Button
+              size="sm"
+              variant="outline"
+              icon={<Truck className="w-3.5 h-3.5" />}
+              loading={dispatchMutation.isPending}
+              onClick={() => dispatchMutation.mutate(r.id)}
+            >
+              Dispatch
+            </Button>
+          )}
+          {r.status === 'DISPATCHED' && (
+            <Button
+              size="sm"
+              variant="primary"
+              icon={<CheckCircle2 className="w-3.5 h-3.5" />}
+              loading={receiveMutation.isPending}
+              onClick={() => receiveMutation.mutate(r.id)}
+            >
+              Receive
+            </Button>
+          )}
+        </div>
+      ),
+    },
+  ]
 
   return (
-    <div className="p-6 space-y-6">
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-        <div>
-          <h1 className="text-2xl font-bold tracking-tight flex items-center gap-2" style={{ color: 'var(--color-text)' }}>
-            <ArrowLeftRight size={24} className="text-indigo-600" /> Stock Transfers
-          </h1>
-          <p className="text-sm mt-1" style={{ color: 'var(--color-muted)' }}>
-            Manage warehouse-to-store, rack-to-rack, and inter-branch transfer consignments
-          </p>
-        </div>
-        <button
-          onClick={() => setShowModal(true)}
-          className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-semibold text-white shadow-sm transition-all hover:opacity-95"
-          style={{ background: 'var(--color-primary)' }}
-        >
-          <Plus size={16} /> New Transfer Request
-        </button>
-      </div>
+    <div className="space-y-5">
+      <PageHeader
+        title="Stock Transfers"
+        description="Coordinate stock movements between warehouse racks, display zones, and stores."
+        breadcrumbs={[{ label: 'Inventory' }, { label: 'Stock Transfers' }]}
+        primaryAction={
+          <Button variant="primary" icon={<Plus className="w-4 h-4" />} onClick={() => setMode('new')}>
+            New Stock Transfer
+          </Button>
+        }
+      />
 
-      {/* KPI Cards */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-        <div className="p-5 rounded-xl border flex flex-col justify-between" style={{ background: 'var(--color-surface)', borderColor: 'var(--color-border)' }}>
-          <span className="text-xs font-semibold uppercase tracking-wider" style={{ color: 'var(--color-muted)' }}>Total Consignments</span>
-          <span className="text-2xl font-bold font-mono mt-2" style={{ color: 'var(--color-text)' }}>{transferList.length}</span>
-          <span className="text-xs mt-1" style={{ color: 'var(--color-muted)' }}>Recorded transfers in system</span>
-        </div>
-        <div className="p-5 rounded-xl border flex flex-col justify-between" style={{ background: 'var(--color-surface)', borderColor: 'var(--color-border)' }}>
-          <span className="text-xs font-semibold uppercase tracking-wider text-amber-600 dark:text-amber-400">Pending Approvals</span>
-          <span className="text-2xl font-bold font-mono mt-2 text-amber-600 dark:text-amber-400">
-            {transferList.filter((t: any) => t.status === 'REQUESTED').length}
-          </span>
-          <span className="text-xs mt-1" style={{ color: 'var(--color-muted)' }}>Awaiting warehouse authorization</span>
-        </div>
-        <div className="p-5 rounded-xl border flex flex-col justify-between" style={{ background: 'var(--color-surface)', borderColor: 'var(--color-border)' }}>
-          <span className="text-xs font-semibold uppercase tracking-wider text-emerald-600 dark:text-emerald-400">Completed Deliveries</span>
-          <span className="text-2xl font-bold font-mono mt-2 text-emerald-600 dark:text-emerald-400">
-            {transferList.filter((t: any) => t.status === 'RECEIVED').length}
-          </span>
-          <span className="text-xs mt-1" style={{ color: 'var(--color-muted)' }}>Successfully received & verified</span>
-        </div>
+        <StatCard label="Total transfers" value={transfers.length} icon={<ArrowLeftRight className="w-4 h-4" />} tone="teal" />
+        <StatCard label="In transit" value={transfers.filter((t) => t.status === 'DISPATCHED').length} tone="warning" />
+        <StatCard label="Received" value={transfers.filter((t) => t.status === 'RECEIVED').length} tone="success" />
       </div>
 
-      {/* Transfer List */}
-      <div className="rounded-xl border overflow-hidden shadow-sm" style={{ background: 'var(--color-surface)', borderColor: 'var(--color-border)' }}>
-        <div className="px-5 py-4 border-b flex items-center justify-between" style={{ borderColor: 'var(--color-border)' }}>
-          <h2 className="text-sm font-semibold" style={{ color: 'var(--color-text)' }}>Transfer Manifest History</h2>
-        </div>
+      <FilterBar
+        search={search}
+        onSearchChange={setSearch}
+        searchPlaceholder="Search by transfer ID or notes…"
+        chips={[
+          { key: 'ALL', label: 'All', count: transfers.length },
+          { key: 'REQUESTED', label: 'Requested', count: transfers.filter((t) => t.status === 'REQUESTED').length },
+          { key: 'DISPATCHED', label: 'In transit', count: transfers.filter((t) => t.status === 'DISPATCHED').length },
+          { key: 'RECEIVED', label: 'Received', count: transfers.filter((t) => t.status === 'RECEIVED').length },
+        ]}
+        activeChip={statusFilter}
+        onChipChange={setStatusFilter}
+        onReset={() => { setSearch(''); setStatusFilter('ALL') }}
+      />
 
-        {isLoading ? (
-          <div className="p-12 text-center text-sm" style={{ color: 'var(--color-muted)' }}>Loading transfer records…</div>
-        ) : transferList.length === 0 ? (
-          <div className="p-12 text-center space-y-3">
-            <ArrowLeftRight size={36} className="mx-auto text-slate-300 dark:text-slate-600" />
-            <div className="text-base font-semibold" style={{ color: 'var(--color-text)' }}>No stock transfers found</div>
-            <p className="text-xs max-w-sm mx-auto" style={{ color: 'var(--color-muted)' }}>
-              Transfer stock between storage racks, display shelves, or branch locations to optimize stock density.
-            </p>
-          </div>
-        ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="border-b text-xs uppercase tracking-wider" style={{ borderColor: 'var(--color-border)', color: 'var(--color-muted)' }}>
-                  <th className="px-5 py-3 text-left font-medium">Consignment ID</th>
-                  <th className="px-5 py-3 text-left font-medium">From / Origin</th>
-                  <th className="px-5 py-3 text-left font-medium">Destination</th>
-                  <th className="px-5 py-3 text-left font-medium">Status</th>
-                  <th className="px-5 py-3 text-left font-medium">Date</th>
-                  <th className="px-5 py-3 text-left font-medium">Notes</th>
-                  <th className="px-5 py-3 text-right font-medium">Action</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y" style={{ borderColor: 'var(--color-border)' }}>
-                {transferList.map((t: any) => (
-                  <tr key={t.id} className="hover:bg-slate-50/50 dark:hover:bg-slate-800/40 transition-colors">
-                    <td className="px-5 py-3.5 font-mono text-xs font-semibold" style={{ color: 'var(--color-primary)' }}>
-                      {String(t?.id || '').slice(0, 8).toUpperCase()}
-                    </td>
-                    <td className="px-5 py-3.5 text-xs font-medium" style={{ color: 'var(--color-text)' }}>
-                      Main Warehouse (CBE)
-                    </td>
-                    <td className="px-5 py-3.5 text-xs font-medium" style={{ color: 'var(--color-text)' }}>
-                      Sales Floor Rack R1
-                    </td>
-                    <td className="px-5 py-3.5">
-                      {getStatusBadge(t.status)}
-                    </td>
-                    <td className="px-5 py-3.5 text-xs font-mono" style={{ color: 'var(--color-muted)' }}>
-                      {t.created_at || t.createdAt ? format(new Date(t.created_at || t.createdAt), 'd MMM yyyy') : 'Recent'}
-                    </td>
-                    <td className="px-5 py-3.5 text-xs" style={{ color: 'var(--color-muted)' }}>
-                      {t.notes || '—'}
-                    </td>
-                    <td className="px-5 py-3.5 text-right">
-                      {t.status === 'REQUESTED' && (
-                        <button
-                          onClick={() => dispatchMutation.mutate(t.id)}
-                          disabled={dispatchMutation.isPending}
-                          className="inline-flex items-center gap-1 text-xs px-2.5 py-1 rounded-lg border font-semibold hover:border-sky-500 hover:text-sky-600 transition-colors"
-                          style={{ borderColor: 'var(--color-border)', color: 'var(--color-text)' }}
-                        >
-                          <Truck size={12} /> Dispatch
-                        </button>
-                      )}
-                      {t.status === 'DISPATCHED' && (
-                        <button
-                          onClick={() => receiveMutation.mutate(t.id)}
-                          disabled={receiveMutation.isPending}
-                          className="inline-flex items-center gap-1 text-xs px-2.5 py-1 rounded-lg border font-semibold hover:border-emerald-500 hover:text-emerald-600 transition-colors"
-                          style={{ borderColor: 'var(--color-border)', color: 'var(--color-text)' }}
-                        >
-                          <CheckCircle size={12} /> Receive
-                        </button>
-                      )}
-                      {t.status === 'RECEIVED' && (
-                        <span className="text-xs text-slate-400 font-medium">Completed</span>
-                      )}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        )}
-      </div>
-
-      {/* Modal */}
-      {showModal && (
-        <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="w-full max-w-lg rounded-2xl p-6 shadow-2xl border space-y-4 animate-in fade-in" style={{ background: 'var(--color-surface)', borderColor: 'var(--color-border)' }}>
-            <div className="flex items-center justify-between border-b pb-3" style={{ borderColor: 'var(--color-border)' }}>
-              <h3 className="font-bold text-lg" style={{ color: 'var(--color-text)' }}>Initiate Stock Transfer</h3>
-              <button onClick={() => setShowModal(false)} className="text-sm font-semibold" style={{ color: 'var(--color-muted)' }}>✕</button>
-            </div>
-
-            {formError && (
-              <div className="p-3 rounded-lg text-xs font-medium bg-rose-50 text-rose-600 dark:bg-rose-950/40 dark:text-rose-300">
-                {formError}
-              </div>
-            )}
-
-            <form onSubmit={handleCreate} className="space-y-4 text-sm">
-              <div>
-                <label className="block text-xs font-semibold mb-1" style={{ color: 'var(--color-muted)' }}>
-                  Select Footwear SKU
-                </label>
-                <select
-                  value={variantId}
-                  onChange={e => setVariantId(e.target.value)}
-                  className="w-full px-3 py-2 rounded-lg border text-sm outline-none font-mono"
-                  style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }}
-                >
-                  <option value="">-- Choose Footwear SKU / Variant --</option>
-                  {variantList.map((v: any) => (
-                    <option key={v.sku || v.variant_id || v.id} value={v.sku || v.variant_id || v.id}>
-                      {v.sku} — {v.article_name || v.articleName || 'Footwear'} ({v.size || v.size_name || 'UK 8'} / {v.colour || v.colour_name || 'Standard'}) — Stock: {v.quantity ?? 0}
-                    </option>
-                  ))}
-                </select>
-
-                <div className="mt-2">
-                  <span className="text-[11px] text-slate-400 block mb-1">Or enter custom SKU:</span>
-                  <input
-                    type="text"
-                    placeholder="e.g. NI-AIR-8-BLK"
-                    value={variantId}
-                    onChange={e => setVariantId(e.target.value.toUpperCase())}
-                    className="w-full px-3 py-1.5 rounded-lg border text-xs outline-none font-mono"
-                    style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }}
-                  />
-                </div>
-
-                {variantList.length > 0 && (
-                  <div className="flex flex-wrap items-center gap-1.5 mt-2">
-                    <span className="text-[11px] text-slate-400">Quick select:</span>
-                    {variantList.slice(0, 5).map((v: any) => (
-                      <button
-                        key={v.sku || v.id}
-                        type="button"
-                        onClick={() => setVariantId(v.sku || v.id)}
-                        className={`text-[11px] px-2 py-0.5 rounded border font-mono transition-colors ${
-                          variantId === (v.sku || v.id) ? 'bg-indigo-600 text-white border-indigo-600' : 'hover:bg-slate-100 dark:hover:bg-slate-800'
-                        }`}
-                        style={variantId === (v.sku || v.id) ? {} : { borderColor: 'var(--color-border)', color: 'var(--color-primary)' }}
-                      >
-                        {v.sku}
-                      </button>
-                    ))}
-                  </div>
-                )}
-              </div>
-
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-xs font-semibold mb-1" style={{ color: 'var(--color-muted)' }}>Transfer Quantity</label>
-                  <input
-                    type="number"
-                    min="1"
-                    value={quantity}
-                    onChange={e => setQuantity(Math.max(1, parseInt(e.target.value) || 1))}
-                    className="w-full px-3 py-2 rounded-lg border text-sm outline-none"
-                    style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }}
-                  />
-                </div>
-                <div>
-                  <label className="block text-xs font-semibold mb-1" style={{ color: 'var(--color-muted)' }}>Target Location</label>
-                  <select
-                    className="w-full px-3 py-2 rounded-lg border text-sm outline-none"
-                    style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }}
-                  >
-                    <option value="RCK-R1">Rack R1 (Running Aisle)</option>
-                    <option value="RCK-S1">Rack S1 (Sneaker Wall)</option>
-                    <option value="DISP-MAIN">Front Display Showcase</option>
-                  </select>
-                </div>
-              </div>
-
-              <div>
-                <label className="block text-xs font-semibold mb-1" style={{ color: 'var(--color-muted)' }}>Reason / Transfer Notes</label>
-                <textarea
-                  value={notes}
-                  onChange={e => setNotes(e.target.value)}
-                  placeholder="e.g. Replenishing high-demand sneaker sizes for weekend surge"
-                  className="w-full px-3 py-2 rounded-lg border text-sm outline-none"
-                  rows={3}
-                  style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }}
-                />
-              </div>
-
-              <div className="flex justify-end gap-2 pt-2">
-                <button
-                  type="button"
-                  onClick={() => setShowModal(false)}
-                  className="px-4 py-2 rounded-lg border text-xs font-semibold"
-                  style={{ borderColor: 'var(--color-border)', color: 'var(--color-muted)' }}
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  disabled={createMutation.isPending}
-                  className="px-4 py-2 rounded-lg text-xs font-semibold text-white shadow-sm"
-                  style={{ background: 'var(--color-primary)' }}
-                >
-                  {createMutation.isPending ? 'Submitting…' : 'Create Transfer Request'}
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
+      <DataTable
+        data={filtered}
+        columns={columns}
+        getRowId={(r, i) => r.id || String(i)}
+        isLoading={isLoading}
+        error={error}
+        onRetry={refetch}
+        exportFilename="solecontrol-transfers"
+        emptyIcon={<ArrowLeftRight className="w-6 h-6" />}
+        emptyTitle="No stock transfers found"
+        emptyDescription="Create a transfer to move footwear size runs between locations."
+      />
     </div>
   )
 }
-

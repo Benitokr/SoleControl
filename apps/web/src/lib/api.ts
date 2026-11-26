@@ -1,5 +1,6 @@
 import axios from 'axios'
 import { useAuthStore } from '../store/authStore'
+import { formatINR } from './format'
 
 const metaEnv = (import.meta as unknown as { env?: Record<string, string> })?.env
 const apiBase = metaEnv?.VITE_API_URL 
@@ -47,4 +48,4 @@ api.interceptors.response.use(
   }
 )
 
-export const fmt = (n: number) => `₹${Number(n).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+export const fmt = (n: number) => formatINR(n)

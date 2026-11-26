@@ -1,7 +1,6 @@
 import { Routes, Route, Navigate } from 'react-router-dom'
-import { useEffect, Component, ErrorInfo, ReactNode } from 'react'
+import { Component, ErrorInfo, ReactNode } from 'react'
 import { useAuthStore } from './store/authStore'
-import { useThemeStore } from './store/themeStore'
 import { LoginPage } from './pages/LoginPage'
 import { AppShell } from './components/AppShell'
 import { DashboardPage } from './pages/DashboardPage'
@@ -9,11 +8,14 @@ import { UsersPage } from './pages/UsersPage'
 import { RolesPage } from './pages/RolesPage'
 import { CompanyConfigPage } from './pages/CompanyConfigPage'
 import { MastersPage } from './pages/MastersPage'
+import { ArticleNewPage } from './pages/ArticleNewPage'
 import { LocationsPage } from './pages/LocationsPage'
 import { VendorsPage } from './pages/VendorsPage'
 import { PurchasesPage } from './pages/PurchasesPage'
+import { PurchaseNewPage } from './pages/PurchaseNewPage'
 import { InventoryPage } from './pages/InventoryPage'
 import { SalesPage } from './pages/SalesPage'
+import { PosBillingPage } from './pages/PosBillingPage'
 import { CustomersPage } from './pages/CustomersPage'
 import { OffersPage } from './pages/OffersPage'
 import { BarcodesPage } from './pages/BarcodesPage'
@@ -22,6 +24,7 @@ import { CapitalPage } from './pages/CapitalPage'
 import { BankGSTPage } from './pages/BankGSTPage'
 import { ReportsPage } from './pages/ReportsPage'
 import { AuditPage } from './pages/AuditPage'
+import { NotificationsPage } from './pages/NotificationsPage'
 import { IntegrationsPage } from './pages/IntegrationsPage'
 import { TransfersPage } from './pages/TransfersPage'
 import { DisplayStockPage } from './pages/DisplayStockPage'
@@ -48,27 +51,27 @@ class ErrorBoundary extends Component<{ children: ReactNode }, { hasError: boole
   render() {
     if (this.state.hasError) {
       return (
-        <div className="min-h-screen flex items-center justify-center p-6 bg-slate-50 dark:bg-slate-900 text-slate-800 dark:text-slate-200">
-          <div className="max-w-md w-full p-8 rounded-2xl bg-white dark:bg-slate-800 shadow-xl border border-slate-200 dark:border-slate-700 text-center space-y-4">
-            <div className="w-12 h-12 mx-auto rounded-full bg-rose-100 dark:bg-rose-950 flex items-center justify-center text-rose-500 font-bold text-xl">
+        <div className="min-h-screen flex items-center justify-center p-6 bg-[#F7F8FA] text-slate-900">
+          <div className="max-w-md w-full p-8 rounded-xl bg-white shadow-lg border border-slate-200 text-center space-y-4">
+            <div className="w-12 h-12 mx-auto rounded-full bg-red-50 text-red-600 flex items-center justify-center font-bold text-xl">
               !
             </div>
-            <h2 className="text-xl font-bold">Something went wrong</h2>
-            <p className="text-sm text-slate-500 dark:text-slate-400">
-              {this.state.error?.message || 'An unexpected error occurred while rendering the page.'}
+            <h2 className="text-lg font-semibold">Something went wrong</h2>
+            <p className="text-sm text-slate-500">
+              {this.state.error?.message || 'An unexpected error occurred while rendering this page.'}
             </p>
             <div className="pt-2 flex gap-3 justify-center">
               <button
-                onClick={() => { this.setState({ hasError: false, error: null }); window.location.href = '/login' }}
-                className="px-4 py-2 text-sm font-semibold rounded-lg bg-indigo-600 text-white hover:bg-indigo-700 transition-colors"
+                onClick={() => { this.setState({ hasError: false, error: null }); window.location.href = '/dashboard' }}
+                className="px-4 py-2 text-sm font-medium rounded-lg bg-teal-600 text-white hover:bg-teal-700"
               >
-                Back to Sign In
+                Go to Dashboard
               </button>
               <button
                 onClick={() => { this.setState({ hasError: false, error: null }); window.location.reload() }}
-                className="px-4 py-2 text-sm font-semibold rounded-lg border border-slate-300 dark:border-slate-600 hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors"
+                className="px-4 py-2 text-sm font-medium rounded-lg border border-slate-200 hover:bg-slate-50"
               >
-                Reload Page
+                Reload
               </button>
             </div>
           </div>
@@ -80,17 +83,12 @@ class ErrorBoundary extends Component<{ children: ReactNode }, { hasError: boole
 }
 
 function RequireAuth({ children }: { children: React.ReactNode }) {
-  const user = useAuthStore(s => s.user)
+  const user = useAuthStore((s) => s.user)
   if (!user) return <Navigate to="/login" replace />
   return <>{children}</>
 }
 
 export default function App() {
-  const { theme } = useThemeStore()
-  useEffect(() => {
-    document.documentElement.classList.toggle('dark', theme === 'dark')
-  }, [theme])
-
   return (
     <ErrorBoundary>
       <Routes>
@@ -102,15 +100,18 @@ export default function App() {
           <Route path="roles" element={<RolesPage />} />
           <Route path="company" element={<CompanyConfigPage />} />
           <Route path="masters" element={<MastersPage />} />
+          <Route path="masters/articles/new" element={<ArticleNewPage />} />
           <Route path="locations" element={<LocationsPage />} />
           <Route path="vendors" element={<VendorsPage />} />
           <Route path="purchases" element={<PurchasesPage />} />
+          <Route path="purchases/new" element={<PurchaseNewPage />} />
           <Route path="inventory" element={<InventoryPage />} />
           <Route path="display" element={<DisplayStockPage />} />
           <Route path="transfers" element={<TransfersPage />} />
           <Route path="ageing" element={<AgeingPage />} />
           <Route path="damage" element={<DamagedGoodsPage />} />
           <Route path="sales" element={<SalesPage />} />
+          <Route path="sales/pos" element={<PosBillingPage />} />
           <Route path="customers" element={<CustomersPage />} />
           <Route path="offers" element={<OffersPage />} />
           <Route path="barcodes" element={<BarcodesPage />} />
@@ -118,15 +119,15 @@ export default function App() {
           <Route path="capital" element={<CapitalPage />} />
           <Route path="bank-gst" element={<BankGSTPage />} />
           <Route path="reports" element={<ReportsPage />} />
+          <Route path="notifications" element={<NotificationsPage />} />
           <Route path="audit" element={<AuditPage />} />
           <Route path="integrations" element={<IntegrationsPage />} />
           <Route path="database" element={<DatabasePage />} />
           <Route path="insights" element={<InsightsPage />} />
           <Route path="system-health" element={<SystemHealthPage />} />
-          <Route path="*" element={<div className="p-8 text-center"><p className="text-2xl font-semibold mb-2">Page not found</p><a href="/dashboard" className="text-primary underline">Go to Dashboard</a></div>} />
+          <Route path="*" element={<div className="p-8 text-center"><p className="text-xl font-semibold mb-2">Page not found</p><a href="/dashboard" className="text-teal-700 underline">Go to Dashboard</a></div>} />
         </Route>
       </Routes>
     </ErrorBoundary>
   )
 }
-

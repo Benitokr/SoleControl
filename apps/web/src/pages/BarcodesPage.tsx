@@ -1,403 +1,202 @@
 import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { ScanBarcode, Printer, Plus, Eye, X, CheckCircle2, Sliders, Layers } from 'lucide-react'
-import { api, fmt } from '../lib/api'
-import { StockStorage } from '../lib/storage'
-
-interface BarcodeJob {
-  id: string
-  sku: string
-  article_name?: string
-  size?: string
-  colour?: string
-  mrp?: number
-  copies?: number
-  quantity: number
-  status: string
-  createdAt: string
-}
+import { toast } from 'sonner'
+import { ScanBarcode, Printer, Plus } from 'lucide-react'
+import { api } from '../lib/api'
+import { formatINR, getApiErrorMessage } from '../lib/format'
+import {
+  PageHeader, Button, FormField, SearchableCombobox, QuantityStepper,
+  PrintPreview, DataTable, ColumnDef,
+} from '../components/ui'
 
 export function BarcodesPage() {
   const qc = useQueryClient()
-  const [showAddModal, setShowAddModal] = useState(false)
-  const [selectedSku, setSelectedSku] = useState('NK-AM-A5-8-BLK')
-  const [copies, setCopies] = useState(12)
-  const [formError, setFormError] = useState('')
+  const [selectedSku, setSelectedSku] = useState('')
+  const [copies, setCopies] = useState(4)
+  const [templateSize, setTemplateSize] = useState('50x25')
+  const [showPrint, setShowPrint] = useState(false)
 
-  // Live WYSIWYG toggles
-  const [showMrp, setShowMrp] = useState(true)
-  const [showSize, setShowSize] = useState(true)
-  const [showBrand, setShowBrand] = useState(true)
-
-  const { data: queueData, isLoading, error } = useQuery<{ data: BarcodeJob[] }>({
-    queryKey: ['barcodes-queue'],
-    queryFn: () => api.get('/barcodes/queue').then(r => r.data),
-  })
-
-  const { data: stockItems } = useQuery({
+  const { data: stockData } = useQuery({
     queryKey: ['inventory-stock'],
-    queryFn: () => api.get('/inventory/stock').then(r => r.data?.data ?? []),
+    queryFn: () => api.get('/inventory/stock').then((r) => r.data?.data ?? []),
   })
 
-  const markPrinted = useMutation({
-    mutationFn: (id: string) => api.post(`/barcodes/jobs/${id}/mark-printed`),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['barcodes-queue'] }),
+  const { data: queueData, isLoading, error, refetch } = useQuery({
+    queryKey: ['barcode-queue'],
+    queryFn: () => api.get('/barcodes/queue').then((r) => r.data?.data ?? []),
   })
 
-  const addJobMutation = useMutation({
-    mutationFn: (body: any) => api.post('/barcodes/queue', body),
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ['barcodes-queue'] }),
-      setShowAddModal(false)
-    },
-    onError: (err: any) => {
-      setFormError(err.response?.data?.error?.message || 'Failed to queue barcode label.')
+  const stockList: any[] = Array.isArray(stockData) ? stockData : []
+  const queue: any[] = Array.isArray(queueData) ? queueData : []
+
+  const activeVariant =
+    stockList.find((s) => s.sku === selectedSku) || stockList[0] || {
+      sku: 'NI-AIR-8-BLK',
+      article_name: 'Footwear Sample',
+      size: 'UK 8',
+      selling_price: 4999,
+      barcode: '890100100001',
     }
+
+  const addQueueMutation = useMutation({
+    mutationFn: () =>
+      api.post('/barcodes/queue', {
+        variantSku: activeVariant.sku,
+        copies,
+        templateSize,
+      }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['barcode-queue'] })
+      toast.success(`Added ${copies} labels to print queue`)
+    },
+    onError: (err) => toast.error(getApiErrorMessage(err, 'Failed to queue labels')),
   })
 
-  const jobs: BarcodeJob[] = Array.isArray(queueData?.data)
-    ? queueData.data
-    : Array.isArray(queueData)
-    ? (queueData as any)
-    : []
-
-  const stockList: any[] = StockStorage.mergeWith(stockItems || [])
-
-  // Resolve preview item (null when no stock items available)
-  const previewItem = stockList.find((v: any) => v.sku === selectedSku) || (stockList.length > 0 ? stockList[0] : null)
-
-  const handleQueueSubmit = (e: React.FormEvent) => {
-    e.preventDefault()
-    setFormError('')
-    addJobMutation.mutate({
-      sku: selectedSku,
-      copies: Number(copies),
-      quantity: Number(copies),
-      articleName: previewItem.article_name,
-      mrp: Number(previewItem.selling_price || 8999)
-    })
-  }
-
-  const handlePrint = () => {
-    window.print()
-  }
+  const columns: ColumnDef<any>[] = [
+    {
+      id: 'sku',
+      header: 'SKU',
+      cell: (r) => <span className="font-mono text-xs text-teal-700">{r.variant_sku || r.sku}</span>,
+    },
+    {
+      id: 'article',
+      header: 'Article',
+      cell: (r) => r.article_name || r.articleName || 'Footwear',
+    },
+    {
+      id: 'copies',
+      header: 'Copies',
+      align: 'right',
+      cell: (r) => <span className="font-semibold tabular-nums">{r.copies ?? 1}</span>,
+    },
+    {
+      id: 'template',
+      header: 'Label size',
+      cell: (r) => `${r.template_size || templateSize} mm`,
+    },
+  ]
 
   return (
-    <div className="p-6 space-y-6">
-      {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-        <div>
-          <h1 className="text-2xl font-bold tracking-tight flex items-center gap-2" style={{ color: 'var(--color-text)' }}>
-            <ScanBarcode size={24} className="text-indigo-600" /> Barcode & Label Management
-          </h1>
-          <p className="text-sm mt-1" style={{ color: 'var(--color-muted)' }}>
-            Thermal label designer, live WYSIWYG tag preview, and bulk footwear print queue orchestration
-          </p>
-        </div>
-        <div className="flex gap-2">
-          <button
-            onClick={handlePrint}
-            className="inline-flex items-center gap-2 px-3.5 py-2.5 rounded-xl text-xs font-semibold border transition-all hover:border-indigo-400"
-            style={{ borderColor: 'var(--color-border)', color: 'var(--color-text)', background: 'var(--color-surface)' }}
+    <div className="space-y-5">
+      <PageHeader
+        title="Barcodes & Thermal Labels"
+        description="Configure thermal box/sole stickers, preview barcode layout, and print batches."
+        breadcrumbs={[{ label: 'Inventory' }, { label: 'Barcodes & Labels' }]}
+        primaryAction={
+          <Button
+            variant="primary"
+            icon={<Printer className="w-4 h-4" />}
+            onClick={() => setShowPrint(true)}
           >
-            <Printer size={15} /> Print Label Sheet
-          </button>
-          <button
-            onClick={() => { setShowAddModal(true); setFormError('') }}
-            className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-semibold text-white shadow-xs transition-all hover:opacity-95"
-            style={{ background: 'var(--color-primary)' }}
+            Print Preview
+          </Button>
+        }
+      />
+
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 items-start">
+        <div className="lg:col-span-5 bg-white rounded-lg border border-slate-200 p-5 space-y-4">
+          <h2 className="text-sm font-semibold text-slate-900">Label Configuration</h2>
+
+          <FormField label="Footwear SKU" required>
+            <SearchableCombobox
+              options={stockList.map((s) => ({
+                value: s.sku,
+                label: `${s.sku} — ${s.article_name || s.articleName || 'Footwear'}`,
+                sublabel: `${s.size_label || s.size || 'UK 8'} · MRP ${formatINR(s.selling_price ?? s.mrp ?? 0)}`,
+              }))}
+              value={selectedSku || activeVariant.sku}
+              onChange={setSelectedSku}
+              placeholder="Select footwear SKU…"
+            />
+          </FormField>
+
+          <FormField label="Label template size">
+            <SearchableCombobox
+              options={[
+                { value: '50x25', label: '50 × 25 mm (Shoe Box Sticker)' },
+                { value: '38x25', label: '38 × 25 mm (Compact Sole Label)' },
+                { value: 'A4-24', label: 'A4 Sheet (24 Labels)' },
+              ]}
+              value={templateSize}
+              onChange={setTemplateSize}
+            />
+          </FormField>
+
+          <FormField label="Copies">
+            <QuantityStepper value={copies} onChange={setCopies} min={1} max={200} />
+          </FormField>
+
+          <Button
+            variant="primary"
+            className="w-full"
+            icon={<Plus className="w-4 h-4" />}
+            loading={addQueueMutation.isPending}
+            onClick={() => addQueueMutation.mutate()}
           >
-            <Plus size={16} /> Queue Labels
-          </button>
+            Add to Print Queue
+          </Button>
+        </div>
+
+        {/* Live WYSIWYG Preview */}
+        <div className="lg:col-span-7 space-y-5">
+          <div className="bg-white rounded-lg border border-slate-200 p-5 space-y-3">
+            <h2 className="text-sm font-semibold text-slate-900">Live Label Preview ({templateSize} mm)</h2>
+            <div className="bg-slate-50 border border-dashed border-slate-300 rounded-lg p-6 flex justify-center">
+              <div className="w-64 bg-white border border-slate-300 rounded p-3 shadow-xs space-y-1.5 text-slate-900">
+                <div className="flex justify-between items-start gap-2">
+                  <span className="text-xs font-bold leading-tight">
+                    {activeVariant.article_name || activeVariant.articleName}
+                  </span>
+                  <span className="text-xs font-semibold px-1.5 py-0.5 bg-slate-100 rounded">
+                    {activeVariant.size_label || activeVariant.size || 'UK 8'}
+                  </span>
+                </div>
+                <div className="py-2 flex flex-col items-center border-y border-slate-100">
+                  <ScanBarcode className="w-16 h-8 text-slate-800" />
+                  <span className="font-mono text-[11px] tracking-widest mt-0.5">
+                    {activeVariant.barcode || activeVariant.sku}
+                  </span>
+                </div>
+                <div className="flex justify-between items-baseline text-xs">
+                  <span className="font-mono text-[10px] text-slate-500">{activeVariant.sku}</span>
+                  <span className="font-bold tabular-nums">
+                    MRP {formatINR(activeVariant.selling_price ?? activeVariant.mrp ?? 0)}
+                  </span>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <DataTable
+            data={queue}
+            columns={columns}
+            getRowId={(r, i) => r.id || String(i)}
+            isLoading={isLoading}
+            error={error}
+            onRetry={refetch}
+            emptyIcon={<ScanBarcode className="w-6 h-6" />}
+            emptyTitle="Print queue is empty"
+            emptyDescription="Select a footwear SKU on the left to queue barcode stickers."
+          />
         </div>
       </div>
 
-      {/* Signature Feature #6: Live WYSIWYG Label Designer */}
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
-        {/* Left: Interactive Preview */}
-        <div className="lg:col-span-7 rounded-2xl border p-6 flex flex-col justify-between"
-             style={{ background: 'var(--color-surface)', borderColor: 'var(--color-border)' }}>
-          <div>
-            <div className="flex items-center justify-between mb-4">
-              <span className="text-xs font-bold uppercase tracking-wider text-slate-400">Live WYSIWYG Thermal Label (50mm × 25mm)</span>
-              <span className="text-[11px] font-mono px-2 py-0.5 rounded bg-indigo-50 text-indigo-700 dark:bg-indigo-950 dark:text-indigo-300 font-semibold">
-                EAN-13 / Code-128
-              </span>
+      <PrintPreview open={showPrint} onClose={() => setShowPrint(false)} title="Barcode Label Batch">
+        <div className="grid grid-cols-2 gap-3">
+          {Array.from({ length: Math.min(copies, 12) }).map((_, i) => (
+            <div key={i} className="border border-slate-300 p-2.5 rounded text-xs space-y-1">
+              <div className="font-bold truncate">
+                {activeVariant.article_name || activeVariant.articleName}
+              </div>
+              <div className="font-mono text-[11px]">{activeVariant.sku}</div>
+              <div className="flex justify-between font-semibold">
+                <span>{activeVariant.size_label || activeVariant.size || 'UK 8'}</span>
+                <span>{formatINR(activeVariant.selling_price ?? activeVariant.mrp ?? 0)}</span>
+              </div>
             </div>
-
-            {/* Label Card */}
-            {previewItem ? (
-              <div className="mx-auto max-w-sm rounded-xl border-2 border-dashed p-5 bg-white text-slate-900 shadow-md space-y-3 font-sans">
-                {showBrand && (
-                  <div className="flex items-center justify-between border-b pb-2">
-                    <span className="text-xs font-black tracking-widest uppercase">FOOTWEAR RETAIL</span>
-                    <span className="text-[10px] font-mono font-bold">GENUINE ARTICLE</span>
-                  </div>
-                )}
-
-                <div>
-                  <div className="font-extrabold text-sm tracking-tight">{previewItem.article_name || previewItem.article || 'Footwear Model'}</div>
-                  {showSize && (
-                    <div className="text-xs font-semibold text-slate-700 flex gap-2 mt-0.5">
-                      <span>Size: <strong>{previewItem.size_label || previewItem.size || 'UK 8'}</strong></span>
-                      <span>·</span>
-                      <span>Colour: <strong>{previewItem.colour_name || previewItem.colour || 'Standard'}</strong></span>
-                    </div>
-                  )}
-                </div>
-
-                {/* Barcode Graphic Simulation */}
-                <div className="space-y-1 text-center py-1">
-                  <div className="h-10 w-full flex items-center justify-between px-2 bg-slate-100 rounded">
-                    {[3,1,2,1,4,1,2,3,1,2,1,3,2,1,4,1,2,1,3,1,2,3,1,4,2,1,3,1,2,4,1,2].map((w, idx) => (
-                      <span key={idx} className="bg-slate-900 h-8 inline-block" style={{ width: `${w}px` }} />
-                    ))}
-                  </div>
-                  <div className="font-mono text-[11px] font-bold tracking-widest text-slate-800">
-                    {previewItem.sku}
-                  </div>
-                </div>
-
-                {showMrp && (
-                  <div className="border-t pt-2 flex items-center justify-between font-mono">
-                    <span className="text-[10px] uppercase font-bold text-slate-500">M.R.P. (Incl. of Taxes):</span>
-                    <span className="text-sm font-black text-slate-950">
-                      {fmt(Number(previewItem.selling_price || 0))}
-                    </span>
-                  </div>
-                )}
-              </div>
-            ) : (
-              <div className="mx-auto max-w-sm rounded-xl border-2 border-dashed p-8 bg-slate-50 dark:bg-slate-900/50 text-center space-y-2">
-                <ScanBarcode size={32} className="mx-auto text-slate-400 opacity-60" />
-                <p className="text-xs font-semibold text-slate-600 dark:text-slate-300">No Footwear Variant Selected</p>
-                <p className="text-[11px] text-slate-400">Inward stock or select an article from the inventory vault to render a live barcode preview.</p>
-              </div>
-            )}
-          </div>
-
-          {/* Toggles */}
-          <div className="pt-6 mt-6 border-t flex flex-wrap items-center gap-4 text-xs font-semibold" style={{ borderColor: 'var(--color-border)' }}>
-            <span className="text-slate-400">Tag Customization:</span>
-            <label className="flex items-center gap-1.5 cursor-pointer">
-              <input type="checkbox" checked={showMrp} onChange={e => setShowMrp(e.target.checked)} className="rounded" />
-              <span>Show MRP Price</span>
-            </label>
-            <label className="flex items-center gap-1.5 cursor-pointer">
-              <input type="checkbox" checked={showSize} onChange={e => setShowSize(e.target.checked)} className="rounded" />
-              <span>Show Size & Colour</span>
-            </label>
-            <label className="flex items-center gap-1.5 cursor-pointer">
-              <input type="checkbox" checked={showBrand} onChange={e => setShowBrand(e.target.checked)} className="rounded" />
-              <span>Show Retail Brand Header</span>
-            </label>
-          </div>
+          ))}
         </div>
-
-        {/* Right: Quick Queue Stats */}
-        <div className="lg:col-span-5 space-y-4">
-          <div className="rounded-2xl border p-5 space-y-3" style={{ background: 'var(--color-surface)', borderColor: 'var(--color-border)' }}>
-            <span className="text-xs font-bold uppercase tracking-wider text-slate-400">Thermal Printer Status</span>
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-xl bg-emerald-50 dark:bg-emerald-950/40 text-emerald-600 flex items-center justify-center">
-                <Printer size={20} />
-              </div>
-              <div>
-                <h4 className="font-bold text-sm" style={{ color: 'var(--color-text)' }}>TSC TE244 / Zebra ZD220</h4>
-                <p className="text-xs text-emerald-600 font-semibold flex items-center gap-1">
-                  <CheckCircle2 size={12} /> Ready for spooling (ESC/POS connected)
-                </p>
-              </div>
-            </div>
-          </div>
-
-          <div className="rounded-2xl border p-5 space-y-3" style={{ background: 'var(--color-surface)', borderColor: 'var(--color-border)' }}>
-            <span className="text-xs font-bold uppercase tracking-wider text-slate-400">Batch Summary</span>
-            <div className="flex justify-between text-xs font-mono">
-              <span className="text-slate-400">Pending Tags in Spooler:</span>
-              <span className="font-bold text-amber-600">{jobs.filter(j => j.status === 'PENDING').reduce((a, b) => a + (b.quantity || b.copies || 0), 0)} tags</span>
-            </div>
-            <div className="flex justify-between text-xs font-mono">
-              <span className="text-slate-400">Total Printed Today:</span>
-              <span className="font-bold text-emerald-600">30 tags</span>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {/* Spool Queue Table */}
-      <div className="rounded-xl border overflow-hidden shadow-xs" style={{ background: 'var(--color-surface)', borderColor: 'var(--color-border)' }}>
-        <div className="px-5 py-4 border-b flex items-center justify-between" style={{ borderColor: 'var(--color-border)' }}>
-          <h2 className="text-sm font-bold" style={{ color: 'var(--color-text)' }}>Print Spool Queue</h2>
-          <span className="text-xs text-slate-400 font-mono">{jobs.length} jobs in queue</span>
-        </div>
-
-        {isLoading && <div className="py-12 text-center text-sm" style={{ color: 'var(--color-muted)' }}>Loading print queue…</div>}
-        {error && <div className="py-12 text-center text-sm" style={{ color: 'var(--color-danger)' }}>Failed to load queue</div>}
-
-        {!isLoading && !error && (
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="border-b text-xs uppercase tracking-wider text-slate-400" style={{ borderColor: 'var(--color-border)' }}>
-                  <th className="text-left px-5 py-3 font-semibold">SKU / Variant</th>
-                  <th className="text-left px-5 py-3 font-semibold">Article Name</th>
-                  <th className="text-right px-5 py-3 font-semibold">Copies</th>
-                  <th className="text-left px-5 py-3 font-semibold">Status</th>
-                  <th className="text-left px-5 py-3 font-semibold">Queued At</th>
-                  <th className="text-right px-5 py-3 font-semibold">Action</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y" style={{ borderColor: 'var(--color-border)' }}>
-                {jobs.length === 0 && (
-                  <tr><td colSpan={6} className="py-12 text-center text-xs text-slate-400">Print queue is empty</td></tr>
-                )}
-                {jobs.map(j => (
-                  <tr key={j.id} className="hover:bg-slate-50/50 dark:hover:bg-slate-800/40 transition-colors">
-                    <td className="px-5 py-3.5 font-mono text-xs font-bold" style={{ color: 'var(--color-primary)' }}>
-                      {j.sku}
-                    </td>
-                    <td className="px-5 py-3.5 font-medium text-xs" style={{ color: 'var(--color-text)' }}>
-                      {j.article_name || 'Footwear Model'}
-                    </td>
-                    <td className="px-5 py-3.5 text-right font-mono font-bold text-xs" style={{ color: 'var(--color-text)' }}>
-                      {j.quantity || j.copies} tags
-                    </td>
-                    <td className="px-5 py-3.5">
-                      <span className={`inline-flex items-center gap-1 text-xs px-2.5 py-0.5 rounded-full font-semibold ${
-                        j.status === 'PENDING'
-                          ? 'bg-amber-100 text-amber-700 dark:bg-amber-950/50 dark:text-amber-300'
-                          : 'bg-emerald-100 text-emerald-700 dark:bg-emerald-950/50 dark:text-emerald-300'
-                      }`}>
-                        {j.status}
-                      </span>
-                    </td>
-                    <td className="px-5 py-3.5 text-xs text-slate-400 font-mono">
-                      {new Date(j.createdAt).toLocaleDateString('en-IN')}
-                    </td>
-                    <td className="px-5 py-3.5 text-right">
-                      {j.status === 'PENDING' ? (
-                        <button
-                          onClick={() => markPrinted.mutate(j.id)}
-                          className="inline-flex items-center gap-1 text-xs px-3 py-1 rounded-lg border font-semibold hover:border-emerald-500 hover:text-emerald-600 transition-colors"
-                          style={{ borderColor: 'var(--color-border)', color: 'var(--color-text)' }}
-                        >
-                          <Printer size={12} /> Mark Printed
-                        </button>
-                      ) : (
-                        <span className="text-xs text-slate-400 font-medium">Archived</span>
-                      )}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        )}
-      </div>
-
-      {/* Queue Barcode Modal */}
-      {showAddModal && (
-        <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="w-full max-w-md rounded-2xl p-6 shadow-2xl border space-y-4 animate-in fade-in"
-               style={{ background: 'var(--color-surface)', borderColor: 'var(--color-border)' }}>
-            <div className="flex items-center justify-between border-b pb-3" style={{ borderColor: 'var(--color-border)' }}>
-              <h3 className="font-bold text-lg" style={{ color: 'var(--color-text)' }}>Queue Barcode Label Print</h3>
-              <button onClick={() => setShowAddModal(false)} className="p-1 hover:opacity-75"><X size={18} /></button>
-            </div>
-
-            {formError && (
-              <div className="p-3 rounded-xl text-xs font-semibold bg-rose-50 text-rose-600 dark:bg-rose-950/40 dark:text-rose-300 border border-rose-200">
-                {formError}
-              </div>
-            )}
-
-            <form onSubmit={handleQueueSubmit} className="space-y-4 text-sm">
-              <div>
-                <label className="block text-xs font-semibold mb-1" style={{ color: 'var(--color-muted)' }}>
-                  Select Footwear SKU
-                </label>
-                <select
-                  value={selectedSku}
-                  onChange={e => setSelectedSku(e.target.value)}
-                  className="w-full px-3 py-2 rounded-xl border text-sm outline-none font-mono"
-                  style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }}
-                >
-                  <option value="">-- Choose Footwear SKU / Variant --</option>
-                  {stockList.map((s: any) => (
-                    <option key={s.sku} value={s.sku}>
-                      {s.sku} — {s.article_name || s.articleName || 'Footwear'} ({s.size_label || s.size || 'UK 8'}, {s.colour_name || s.colour || 'Standard'}) — Stock: {s.quantity ?? 0}
-                    </option>
-                  ))}
-                </select>
-
-                <div className="mt-2">
-                  <span className="text-[11px] text-slate-400 block mb-1">Or enter custom SKU:</span>
-                  <input
-                    type="text"
-                    placeholder="e.g. NI-AIR-8-BLK"
-                    value={selectedSku}
-                    onChange={e => setSelectedSku(e.target.value.toUpperCase())}
-                    className="w-full px-3 py-1.5 rounded-lg border text-xs outline-none font-mono"
-                    style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }}
-                  />
-                </div>
-
-                {stockList.length > 0 && (
-                  <div className="flex flex-wrap items-center gap-1.5 mt-2">
-                    <span className="text-[11px] text-slate-400">Quick select:</span>
-                    {stockList.slice(0, 5).map((s: any) => (
-                      <button
-                        key={s.sku}
-                        type="button"
-                        onClick={() => setSelectedSku(s.sku)}
-                        className={`text-[11px] px-2 py-0.5 rounded border font-mono transition-colors ${
-                          selectedSku === s.sku ? 'bg-indigo-600 text-white border-indigo-600' : 'hover:bg-slate-100 dark:hover:bg-slate-800'
-                        }`}
-                        style={selectedSku === s.sku ? {} : { borderColor: 'var(--color-border)', color: 'var(--color-primary)' }}
-                      >
-                        {s.sku}
-                      </button>
-                    ))}
-                  </div>
-                )}
-              </div>
-
-              <div>
-                <label className="block text-xs font-semibold mb-1" style={{ color: 'var(--color-muted)' }}>Copies / Tags Required</label>
-                <input
-                  type="number"
-                  min="1"
-                  max="500"
-                  value={copies}
-                  onChange={e => setCopies(Math.max(1, parseInt(e.target.value) || 1))}
-                  className="w-full px-3 py-2 rounded-xl border text-sm outline-none font-mono font-bold"
-                  style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }}
-                />
-              </div>
-
-              <div className="flex justify-end gap-2 pt-3 border-t" style={{ borderColor: 'var(--color-border)' }}>
-                <button
-                  type="button"
-                  onClick={() => setShowAddModal(false)}
-                  className="px-4 py-2 rounded-xl border text-xs font-semibold"
-                  style={{ borderColor: 'var(--color-border)', color: 'var(--color-muted)' }}
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  disabled={addJobMutation.isPending}
-                  className="px-5 py-2.5 rounded-xl text-xs font-semibold text-white shadow-xs"
-                  style={{ background: 'var(--color-primary)' }}
-                >
-                  {addJobMutation.isPending ? 'Queuing…' : 'Add to Spooler'}
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
+      </PrintPreview>
     </div>
   )
 }

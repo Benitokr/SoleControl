@@ -1,485 +1,148 @@
 import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { Landmark, Plus, FileText, Check, ArrowRightLeft, DollarSign } from 'lucide-react'
+import { toast } from 'sonner'
+import { Landmark, CheckCircle2 } from 'lucide-react'
 import { api } from '../lib/api'
-
-interface BankAccount {
-  id: string
-  name: string
-  accountNumber: string
-  ifsc?: string
-  bankName?: string
-  balance?: number
-}
-
-interface StatementLine {
-  id: string
-  bank_account_id: string
-  transaction_date: string
-  description?: string
-  debit: string | number
-  credit: string | number
-  balance: string | number
-  is_reconciled: boolean
-  reconciled_journal_line_id?: string
-}
-
-interface GSTTransaction {
-  id: string
-  transaction_date: string
-  type: 'INPUT' | 'OUTPUT'
-  taxable_amount: string | number
-  tax_amount: string | number
-  cgst: string | number
-  sgst: string | number
-  igst: string | number
-  purchase_doc?: string
-  sale_doc?: string
-  purchase_class?: string
-}
-
-interface GSTSummary {
-  month: string
-  output_taxable: string | number
-  output_tax: string | number
-  input_taxable: string | number
-  input_tax: string | number
-}
+import { formatINR, formatDateIN, getApiErrorMessage } from '../lib/format'
+import { PageHeader, StatCard, DataTable, StatusBadge, Button, ColumnDef } from '../components/ui'
 
 export function BankGSTPage() {
-  const [activeTab, setActiveTab] = useState<'banks' | 'gst-register' | 'gst-summary'>('banks')
-  const [selectedBankId, setSelectedBankId] = useState<string>('')
-  const [showNewBankModal, setShowNewBankModal] = useState(false)
-  const [newBank, setNewBank] = useState({ name: '', accountNumber: '', ifsc: '', bankName: '' })
+  const qc = useQueryClient()
+  const [tab, setTab] = useState<'bank' | 'gst'>('bank')
 
-  const queryClient = useQueryClient()
-
-  // Queries
-  const { data: bankData, isLoading: loadingBanks } = useQuery<{ data: BankAccount[] }>({
+  const { data: bankData, isLoading: loadingBank, error: bankErr, refetch: refetchBank } = useQuery({
     queryKey: ['bank-accounts'],
-    queryFn: () => api.get('/bank/accounts').then(r => r.data),
+    queryFn: () => api.get('/bank-gst/accounts').then((r) => r.data?.data ?? []),
   })
 
-  const bankAccounts = Array.isArray(bankData?.data) ? bankData.data : (Array.isArray(bankData) ? (bankData as any) : [])
-  const currentBankId = selectedBankId || bankAccounts[0]?.id
-
-  const { data: statementData, isLoading: loadingStatement } = useQuery<{ data: StatementLine[] }>({
-    queryKey: ['bank-statement', currentBankId],
-    queryFn: () => api.get(`/bank/accounts/${currentBankId}/statement`).then(r => r.data),
-    enabled: !!currentBankId && activeTab === 'banks',
-  })
-
-  const statementLines: StatementLine[] = Array.isArray(statementData?.data)
-    ? statementData.data
-    : Array.isArray(statementData)
-    ? (statementData as any)
-    : []
-
-  const { data: gstData, isLoading: loadingGST } = useQuery<{ data: GSTTransaction[] }>({
-    queryKey: ['gst-register'],
-    queryFn: () => api.get('/bank/gst-register').then(r => r.data),
-    enabled: activeTab === 'gst-register',
-  })
-
-  const { data: gstSummaryData, isLoading: loadingGSTSummary } = useQuery<{ data: GSTSummary[] }>({
+  const { data: gstData, isLoading: loadingGst, error: gstErr, refetch: refetchGst } = useQuery({
     queryKey: ['gst-summary'],
-    queryFn: () => api.get('/bank/gst-summary').then(r => r.data),
-    enabled: activeTab === 'gst-summary',
+    queryFn: () => api.get('/bank-gst/gst').then((r) => r.data?.data ?? {}),
   })
 
-  // Mutations
-  const createBankMutation = useMutation({
-    mutationFn: (data: typeof newBank) => api.post('/bank/accounts', data),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['bank-accounts'] })
-      setShowNewBankModal(false)
-      setNewBank({ name: '', accountNumber: '', ifsc: '', bankName: '' })
-    },
-  })
+  const accounts: any[] = Array.isArray(bankData) ? bankData : []
+  const gst = gstData || {}
+
+  const totalBankBalance = accounts.reduce((s, a) => s + Number(a.balance ?? a.current_balance ?? 0), 0)
 
   const reconcileMutation = useMutation({
-    mutationFn: (lineId: string) => api.post('/bank/reconcile', { statementLineId: lineId }),
+    mutationFn: (id: string) => api.post(`/bank-gst/reconcile/${id}`, {}),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['bank-statement', currentBankId] })
+      qc.invalidateQueries({ queryKey: ['bank-accounts'] })
+      toast.success('Bank account marked reconciled')
     },
+    onError: (err) => toast.error(getApiErrorMessage(err, 'Failed to reconcile')),
   })
 
-  const unreconcileMutation = useMutation({
-    mutationFn: (lineId: string) => api.post('/bank/unreconcile', { statementLineId: lineId }),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['bank-statement', currentBankId] })
+  const bankCols: ColumnDef<any>[] = [
+    {
+      id: 'name',
+      header: 'Bank & account',
+      cell: (r) => (
+        <div>
+          <p className="font-medium text-slate-900">{r.bank_name || r.bankName || r.name}</p>
+          <p className="font-mono text-xs text-slate-500">{r.account_number || r.accountNumber || '—'}</p>
+        </div>
+      ),
     },
-  })
+    {
+      id: 'ifsc',
+      header: 'IFSC',
+      cell: (r) => <span className="font-mono text-xs text-slate-600">{r.ifsc || '—'}</span>,
+    },
+    {
+      id: 'balance',
+      header: 'Book balance',
+      align: 'right',
+      cell: (r) => <span className="font-semibold tabular-nums">{formatINR(r.balance ?? r.current_balance ?? 0)}</span>,
+    },
+    {
+      id: 'action',
+      header: 'Action',
+      align: 'right',
+      cell: (r) => (
+        <Button
+          size="sm"
+          variant="outline"
+          icon={<CheckCircle2 className="w-3.5 h-3.5" />}
+          loading={reconcileMutation.isPending}
+          onClick={() => reconcileMutation.mutate(r.id)}
+        >
+          Reconcile
+        </Button>
+      ),
+    },
+  ]
 
-  const gstList = Array.isArray(gstData?.data) ? gstData.data : (Array.isArray(gstData) ? (gstData as any) : [])
-  const gstSummaries = Array.isArray(gstSummaryData?.data) ? gstSummaryData.data : (Array.isArray(gstSummaryData) ? (gstSummaryData as any) : [])
+  const gstRegs: any[] = Array.isArray(gst.transactions) ? gst.transactions : []
+  const gstCols: ColumnDef<any>[] = [
+    { id: 'doc', header: 'Document', cell: (r) => <span className="font-mono text-xs text-teal-700">{r.document_number || r.id}</span> },
+    { id: 'date', header: 'Date', cell: (r) => formatDateIN(r.date || r.created_at) },
+    { id: 'type', header: 'Register', cell: (r) => <StatusBadge status={r.type === 'OUTPUT' ? 'ACTIVE' : 'PENDING'} label={r.type || 'GST'} /> },
+    { id: 'taxable', header: 'Taxable value', align: 'right', cell: (r) => formatINR(r.taxable_value || 0) },
+    { id: 'tax', header: 'GST amount', align: 'right', cell: (r) => formatINR(r.gst_amount || 0) },
+  ]
 
   return (
-    <div className="p-6 space-y-4">
-      {/* Header */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-xl font-semibold flex items-center gap-2" style={{ color: 'var(--color-text)' }}>
-            <Landmark size={20} /> Bank & GST Compliance
-          </h1>
-          <p className="text-sm mt-0.5" style={{ color: 'var(--color-muted)' }}>
-            Manage commercial bank accounts, bank reconciliation, and statutory GST return registers
-          </p>
-        </div>
-        {activeTab === 'banks' && (
-          <button
-            onClick={() => setShowNewBankModal(true)}
-            className="flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium rounded-lg text-white"
-            style={{ background: 'var(--color-primary)' }}
-          >
-            <Plus size={16} /> Add Bank Account
-          </button>
-        )}
-      </div>
+    <div className="space-y-5">
+      <PageHeader
+        title="Bank & GST"
+        description="Reconcile bank accounts and review GSTR-1 / GSTR-3B output vs input tax registers."
+        breadcrumbs={[{ label: 'Finance' }, { label: 'Bank & GST' }]}
+      />
 
-      {/* Tabs */}
-      <div className="flex gap-1 border-b" style={{ borderColor: 'var(--color-border)' }}>
+      <div className="flex items-center gap-1 bg-white border border-slate-200 rounded-lg p-1 w-fit">
         <button
-          onClick={() => setActiveTab('banks')}
-          className="flex items-center gap-2 px-4 py-2.5 text-sm font-medium border-b-2 transition-colors"
-          style={{
-            borderColor: activeTab === 'banks' ? 'var(--color-primary)' : 'transparent',
-            color: activeTab === 'banks' ? 'var(--color-primary)' : 'var(--color-muted)',
-          }}
+          type="button"
+          onClick={() => setTab('bank')}
+          className={tab === 'bank' ? 'px-3.5 py-1.5 rounded-md text-xs font-medium bg-teal-600 text-white' : 'px-3.5 py-1.5 rounded-md text-xs font-medium text-slate-600'}
         >
-          <Landmark size={16} /> Bank Accounts & Reconciliation
+          Bank Accounts
         </button>
         <button
-          onClick={() => setActiveTab('gst-register')}
-          className="flex items-center gap-2 px-4 py-2.5 text-sm font-medium border-b-2 transition-colors"
-          style={{
-            borderColor: activeTab === 'gst-register' ? 'var(--color-primary)' : 'transparent',
-            color: activeTab === 'gst-register' ? 'var(--color-primary)' : 'var(--color-muted)',
-          }}
+          type="button"
+          onClick={() => setTab('gst')}
+          className={tab === 'gst' ? 'px-3.5 py-1.5 rounded-md text-xs font-medium bg-teal-600 text-white' : 'px-3.5 py-1.5 rounded-md text-xs font-medium text-slate-600'}
         >
-          <FileText size={16} /> GST Register (Input & Output)
-        </button>
-        <button
-          onClick={() => setActiveTab('gst-summary')}
-          className="flex items-center gap-2 px-4 py-2.5 text-sm font-medium border-b-2 transition-colors"
-          style={{
-            borderColor: activeTab === 'gst-summary' ? 'var(--color-primary)' : 'transparent',
-            color: activeTab === 'gst-summary' ? 'var(--color-primary)' : 'var(--color-muted)',
-          }}
-        >
-          <DollarSign size={16} /> Monthly GST Return Summary
+          GST Registers (Class A)
         </button>
       </div>
 
-      {/* Tab 1: Bank Accounts & Reconciliation */}
-      {activeTab === 'banks' && (
-        <div className="space-y-4">
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            {loadingBanks ? (
-              <div className="col-span-3 py-8 text-center text-sm" style={{ color: 'var(--color-muted)' }}>Loading bank accounts…</div>
-            ) : bankAccounts.length === 0 ? (
-              <div className="col-span-3 py-8 text-center text-sm" style={{ color: 'var(--color-muted)' }}>No bank accounts configured</div>
-            ) : (
-              bankAccounts.map(b => (
-                <div
-                  key={b.id}
-                  onClick={() => setSelectedBankId(b.id)}
-                  className="p-4 rounded-xl cursor-pointer transition-all"
-                  style={{
-                    background: 'var(--color-surface)',
-                    border: currentBankId === b.id ? '2px solid var(--color-primary)' : '1px solid var(--color-border)',
-                  }}
-                >
-                  <div className="flex justify-between items-start">
-                    <div>
-                      <h3 className="font-semibold text-sm" style={{ color: 'var(--color-text)' }}>{b.name}</h3>
-                      <p className="text-xs mt-0.5" style={{ color: 'var(--color-muted)' }}>{b.bankName || 'Commercial Bank'}</p>
-                    </div>
-                    <span className="font-mono text-xs px-2 py-0.5 rounded" style={{ background: 'var(--color-bg)', color: 'var(--color-muted)' }}>
-                      {b.ifsc || 'IFSC'}
-                    </span>
-                  </div>
-                  <div className="mt-4 flex justify-between items-end">
-                    <span className="font-mono text-xs" style={{ color: 'var(--color-muted)' }}>
-                      •••• {String(b?.accountNumber ?? (b as any)?.account_number ?? '0000').slice(-4)}
-                    </span>
-                    <span className="font-mono text-lg font-bold tabular-nums" style={{ color: 'var(--color-primary)' }}>
-                      ₹{parseFloat(String(b?.balance ?? (b as any)?.current_balance ?? (b as any)?.opening_balance ?? 0)).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
-                    </span>
-                  </div>
-                </div>
-              ))
-            )}
+      {tab === 'bank' ? (
+        <>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <StatCard label="Linked bank accounts" value={accounts.length} icon={<Landmark className="w-4 h-4" />} tone="teal" />
+            <StatCard label="Total bank balance" value={formatINR(totalBankBalance)} tone="success" />
           </div>
-
-          {/* Statement Lines Table */}
-          <div className="rounded-xl overflow-hidden" style={{ background: 'var(--color-surface)', border: '1px solid var(--color-border)' }}>
-            <div className="p-3 border-b flex justify-between items-center text-sm font-medium" style={{ borderColor: 'var(--color-border)' }}>
-              <span>Bank Statement Transactions & Reconciliations</span>
-              <span className="text-xs" style={{ color: 'var(--color-muted)' }}>
-                Showing latest 200 statement entries
-              </span>
-            </div>
-            {loadingStatement ? (
-              <div className="py-12 text-center text-sm" style={{ color: 'var(--color-muted)' }}>Loading Statement Lines…</div>
-            ) : (
-              <table className="w-full text-sm">
-                <thead>
-                  <tr style={{ color: 'var(--color-muted)', borderBottom: '1px solid var(--color-border)' }}>
-                    <th className="text-left px-4 py-3 font-medium">Date</th>
-                    <th className="text-left px-4 py-3 font-medium">Description</th>
-                    <th className="text-right px-4 py-3 font-medium">Withdrawal (Dr)</th>
-                    <th className="text-right px-4 py-3 font-medium">Deposit (Cr)</th>
-                    <th className="text-right px-4 py-3 font-medium">Balance</th>
-                    <th className="text-center px-4 py-3 font-medium">Status</th>
-                    <th className="text-right px-4 py-3 font-medium">Action</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {statementLines.length === 0 ? (
-                    <tr><td colSpan={7} className="py-8 text-center" style={{ color: 'var(--color-muted)' }}>No statement transactions found</td></tr>
-                  ) : (
-                    statementLines.map(line => (
-                      <tr key={line.id} className="hover:bg-opacity-50" style={{ borderBottom: '1px solid var(--color-border)' }}>
-                        <td className="px-4 py-3 text-xs" style={{ color: 'var(--color-muted)' }}>
-                          {line?.transaction_date ? new Date(line.transaction_date).toLocaleDateString('en-IN') : '—'}
-                        </td>
-                        <td className="px-4 py-3 font-medium text-xs" style={{ color: 'var(--color-text)' }}>{line.description || '—'}</td>
-                        <td className="px-4 py-3 text-right font-mono tabular-nums text-red-500">
-                          {parseFloat(line.debit as any) > 0 ? `₹${parseFloat(line.debit as any).toLocaleString('en-IN', { minimumFractionDigits: 2 })}` : '—'}
-                        </td>
-                        <td className="px-4 py-3 text-right font-mono tabular-nums text-emerald-600">
-                          {parseFloat(line.credit as any) > 0 ? `₹${parseFloat(line.credit as any).toLocaleString('en-IN', { minimumFractionDigits: 2 })}` : '—'}
-                        </td>
-                        <td className="px-4 py-3 text-right font-mono tabular-nums font-semibold" style={{ color: 'var(--color-text)' }}>
-                          ₹{parseFloat(line.balance as any || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
-                        </td>
-                        <td className="px-4 py-3 text-center">
-                          <span
-                            className="text-xs px-2 py-0.5 rounded-full font-medium"
-                            style={{
-                              background: line.is_reconciled ? 'rgba(5, 150, 105, 0.1)' : 'rgba(217, 119, 6, 0.1)',
-                              color: line.is_reconciled ? 'var(--color-success)' : 'var(--color-warning)',
-                            }}
-                          >
-                            {line.is_reconciled ? 'Reconciled' : 'Unmatched'}
-                          </span>
-                        </td>
-                        <td className="px-4 py-3 text-right">
-                          {line.is_reconciled ? (
-                            <button
-                              onClick={() => unreconcileMutation.mutate(line.id)}
-                              className="text-xs text-red-500 hover:underline"
-                            >
-                              Unreconcile
-                            </button>
-                          ) : (
-                            <button
-                              onClick={() => reconcileMutation.mutate(line.id)}
-                              className="inline-flex items-center gap-1 px-2 py-0.5 text-xs font-medium rounded text-white"
-                              style={{ background: 'var(--color-primary)' }}
-                            >
-                              <Check size={12} /> Match
-                            </button>
-                          )}
-                        </td>
-                      </tr>
-                    ))
-                  )}
-                </tbody>
-              </table>
-            )}
+          <DataTable
+            data={accounts}
+            columns={bankCols}
+            getRowId={(r, i) => r.id || String(i)}
+            isLoading={loadingBank}
+            error={bankErr}
+            onRetry={refetchBank}
+            exportFilename="solecontrol-bank-accounts"
+          />
+        </>
+      ) : (
+        <>
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+            <StatCard label="Output GST (Sales)" value={formatINR(gst.outputGst || 0)} tone="teal" />
+            <StatCard label="Input GST (Class A Purchases)" value={formatINR(gst.inputGst || 0)} tone="success" />
+            <StatCard label="Net GST payable" value={formatINR((gst.outputGst || 0) - (gst.inputGst || 0))} tone="warning" />
           </div>
-        </div>
-      )}
-
-      {/* Tab 2: GST Register */}
-      {activeTab === 'gst-register' && (
-        <div className="rounded-xl overflow-hidden" style={{ background: 'var(--color-surface)', border: '1px solid var(--color-border)' }}>
-          {loadingGST ? (
-            <div className="py-12 text-center text-sm" style={{ color: 'var(--color-muted)' }}>Loading GST Transactions…</div>
-          ) : (
-            <table className="w-full text-sm">
-              <thead>
-                <tr style={{ color: 'var(--color-muted)', borderBottom: '1px solid var(--color-border)' }}>
-                  <th className="text-left px-4 py-3 font-medium">Date</th>
-                  <th className="text-left px-4 py-3 font-medium">Type</th>
-                  <th className="text-left px-4 py-3 font-medium">Doc Ref</th>
-                  <th className="text-right px-4 py-3 font-medium">Taxable Value</th>
-                  <th className="text-right px-4 py-3 font-medium">CGST</th>
-                  <th className="text-right px-4 py-3 font-medium">SGST</th>
-                  <th className="text-right px-4 py-3 font-medium">IGST</th>
-                  <th className="text-right px-4 py-3 font-medium">Total Tax</th>
-                </tr>
-              </thead>
-              <tbody>
-                {gstList.length === 0 ? (
-                  <tr><td colSpan={8} className="py-8 text-center" style={{ color: 'var(--color-muted)' }}>No statutory GST records found</td></tr>
-                ) : (
-                  gstList.map(item => (
-                    <tr key={item.id} className="hover:bg-opacity-50" style={{ borderBottom: '1px solid var(--color-border)' }}>
-                      <td className="px-4 py-3 text-xs" style={{ color: 'var(--color-muted)' }}>
-                        {item?.transaction_date ? new Date(item.transaction_date).toLocaleDateString('en-IN') : '—'}
-                      </td>
-                      <td className="px-4 py-3">
-                        <span
-                          className="text-xs px-2 py-0.5 rounded-full font-medium"
-                          style={{
-                            background: item.type === 'OUTPUT' ? 'rgba(79, 70, 229, 0.1)' : 'rgba(5, 150, 105, 0.1)',
-                            color: item.type === 'OUTPUT' ? 'var(--color-primary)' : 'var(--color-success)',
-                          }}
-                        >
-                          {item.type === 'OUTPUT' ? 'Output (Sale)' : 'Input (ITC)'}
-                        </span>
-                      </td>
-                      <td className="px-4 py-3 font-mono text-xs font-semibold" style={{ color: 'var(--color-text)' }}>
-                        {item.sale_doc || item.purchase_doc || '—'}
-                      </td>
-                      <td className="px-4 py-3 text-right font-mono tabular-nums">
-                        ₹{parseFloat(item.taxable_amount as any || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
-                      </td>
-                      <td className="px-4 py-3 text-right font-mono tabular-nums text-xs" style={{ color: 'var(--color-muted)' }}>
-                        ₹{parseFloat(item.cgst as any || 0).toFixed(2)}
-                      </td>
-                      <td className="px-4 py-3 text-right font-mono tabular-nums text-xs" style={{ color: 'var(--color-muted)' }}>
-                        ₹{parseFloat(item.sgst as any || 0).toFixed(2)}
-                      </td>
-                      <td className="px-4 py-3 text-right font-mono tabular-nums text-xs" style={{ color: 'var(--color-muted)' }}>
-                        ₹{parseFloat(item.igst as any || 0).toFixed(2)}
-                      </td>
-                      <td className="px-4 py-3 text-right font-mono tabular-nums font-semibold" style={{ color: 'var(--color-text)' }}>
-                        ₹{parseFloat(item.tax_amount as any || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
-                      </td>
-                    </tr>
-                  ))
-                )}
-              </tbody>
-            </table>
-          )}
-        </div>
-      )}
-
-      {/* Tab 3: GST Summary */}
-      {activeTab === 'gst-summary' && (
-        <div className="rounded-xl overflow-hidden" style={{ background: 'var(--color-surface)', border: '1px solid var(--color-border)' }}>
-          {loadingGSTSummary ? (
-            <div className="py-12 text-center text-sm" style={{ color: 'var(--color-muted)' }}>Computing Monthly GST Summary…</div>
-          ) : (
-            <table className="w-full text-sm">
-              <thead>
-                <tr style={{ color: 'var(--color-muted)', borderBottom: '1px solid var(--color-border)' }}>
-                  <th className="text-left px-4 py-3 font-medium">Tax Period</th>
-                  <th className="text-right px-4 py-3 font-medium">Output Taxable</th>
-                  <th className="text-right px-4 py-3 font-medium">Output GST (Liability)</th>
-                  <th className="text-right px-4 py-3 font-medium">Input Taxable</th>
-                  <th className="text-right px-4 py-3 font-medium">Input GST (Credit)</th>
-                  <th className="text-right px-4 py-3 font-medium">Net GST Payable / (Credit)</th>
-                </tr>
-              </thead>
-              <tbody>
-                {gstSummaries.length === 0 ? (
-                  <tr><td colSpan={6} className="py-8 text-center" style={{ color: 'var(--color-muted)' }}>No monthly summary available</td></tr>
-                ) : (
-                  gstSummaries.map((s, idx) => {
-                    const outTax = parseFloat(s.output_tax as any || 0)
-                    const inTax = parseFloat(s.input_tax as any || 0)
-                    const net = outTax - inTax
-                    return (
-                      <tr key={idx} className="hover:bg-opacity-50" style={{ borderBottom: '1px solid var(--color-border)' }}>
-                        <td className="px-4 py-3 font-medium" style={{ color: 'var(--color-text)' }}>
-                          {s.month ? new Date(s.month).toLocaleDateString('en-IN', { month: 'short', year: 'numeric' }) : 'Current'}
-                        </td>
-                        <td className="px-4 py-3 text-right font-mono tabular-nums">
-                          ₹{parseFloat(s.output_taxable as any || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
-                        </td>
-                        <td className="px-4 py-3 text-right font-mono tabular-nums text-red-500 font-medium">
-                          ₹{outTax.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
-                        </td>
-                        <td className="px-4 py-3 text-right font-mono tabular-nums">
-                          ₹{parseFloat(s.input_taxable as any || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
-                        </td>
-                        <td className="px-4 py-3 text-right font-mono tabular-nums text-emerald-600 font-medium">
-                          ₹{inTax.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
-                        </td>
-                        <td className="px-4 py-3 text-right font-mono tabular-nums font-bold" style={{ color: net >= 0 ? 'var(--color-danger)' : 'var(--color-success)' }}>
-                          {net >= 0 ? `₹${net.toLocaleString('en-IN', { minimumFractionDigits: 2 })}` : `(₹${Math.abs(net).toLocaleString('en-IN', { minimumFractionDigits: 2 })})`}
-                        </td>
-                      </tr>
-                    )
-                  })
-                )}
-              </tbody>
-            </table>
-          )}
-        </div>
-      )}
-
-      {/* Modal: New Bank */}
-      {showNewBankModal && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50">
-          <div className="w-full max-w-md p-6 rounded-2xl shadow-xl space-y-4" style={{ background: 'var(--color-surface)', border: '1px solid var(--color-border)' }}>
-            <h2 className="text-lg font-semibold" style={{ color: 'var(--color-text)' }}>Add Bank Account</h2>
-            <div className="space-y-3">
-              <div>
-                <label className="text-xs font-medium" style={{ color: 'var(--color-muted)' }}>Account Nickname / Name</label>
-                <input
-                  value={newBank.name}
-                  onChange={e => setNewBank({ ...newBank, name: e.target.value })}
-                  placeholder="e.g. SoleControl Main Current Account"
-                  className="w-full mt-1 px-3 py-2 rounded-lg text-sm outline-none"
-                  style={{ background: 'var(--color-bg)', border: '1px solid var(--color-border)', color: 'var(--color-text)' }}
-                />
-              </div>
-              <div>
-                <label className="text-xs font-medium" style={{ color: 'var(--color-muted)' }}>Bank Name</label>
-                <input
-                  value={newBank.bankName}
-                  onChange={e => setNewBank({ ...newBank, bankName: e.target.value })}
-                  placeholder="e.g. HDFC Bank Ltd"
-                  className="w-full mt-1 px-3 py-2 rounded-lg text-sm outline-none"
-                  style={{ background: 'var(--color-bg)', border: '1px solid var(--color-border)', color: 'var(--color-text)' }}
-                />
-              </div>
-              <div>
-                <label className="text-xs font-medium" style={{ color: 'var(--color-muted)' }}>Account Number</label>
-                <input
-                  value={newBank.accountNumber}
-                  onChange={e => setNewBank({ ...newBank, accountNumber: e.target.value })}
-                  placeholder="50200084729182"
-                  className="w-full mt-1 px-3 py-2 rounded-lg text-sm outline-none font-mono"
-                  style={{ background: 'var(--color-bg)', border: '1px solid var(--color-border)', color: 'var(--color-text)' }}
-                />
-              </div>
-              <div>
-                <label className="text-xs font-medium" style={{ color: 'var(--color-muted)' }}>IFSC Code</label>
-                <input
-                  value={newBank.ifsc}
-                  onChange={e => setNewBank({ ...newBank, ifsc: e.target.value })}
-                  placeholder="HDFC0001234"
-                  className="w-full mt-1 px-3 py-2 rounded-lg text-sm outline-none font-mono"
-                  style={{ background: 'var(--color-bg)', border: '1px solid var(--color-border)', color: 'var(--color-text)' }}
-                />
-              </div>
-            </div>
-            <div className="flex justify-end gap-2 pt-2">
-              <button
-                onClick={() => setShowNewBankModal(false)}
-                className="px-4 py-2 text-sm rounded-lg"
-                style={{ background: 'var(--color-bg)', border: '1px solid var(--color-border)', color: 'var(--color-muted)' }}
-              >
-                Cancel
-              </button>
-              <button
-                disabled={!newBank.name || !newBank.accountNumber || createBankMutation.isPending}
-                onClick={() => createBankMutation.mutate(newBank)}
-                className="px-4 py-2 text-sm font-medium rounded-lg text-white"
-                style={{ background: 'var(--color-primary)' }}
-              >
-                {createBankMutation.isPending ? 'Saving…' : 'Save Account'}
-              </button>
-            </div>
-          </div>
-        </div>
+          <DataTable
+            data={gstRegs}
+            columns={gstCols}
+            getRowId={(r, i) => r.id || String(i)}
+            isLoading={loadingGst}
+            error={gstErr}
+            onRetry={refetchGst}
+            exportFilename="solecontrol-gst-register"
+            emptyTitle="No GST transactions in this period"
+            emptyDescription="Class A GST purchases and POS sales invoices appear here automatically."
+          />
+        </>
       )}
     </div>
   )

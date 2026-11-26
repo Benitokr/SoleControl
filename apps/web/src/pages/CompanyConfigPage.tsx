@@ -1,308 +1,338 @@
 import { useState, useEffect } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { Building2, Plus, Store, Settings, Check, X, CheckCircle2 } from 'lucide-react'
+import { toast } from 'sonner'
+import { Building2, Receipt, Boxes, Printer, Shield, Save } from 'lucide-react'
 import { api } from '../lib/api'
+import { getApiErrorMessage } from '../lib/format'
+import {
+  PageHeader, Button, FormField, SearchableCombobox, ErrorState,
+  Skeleton, StatusBadge, inputBaseClass,
+} from '../components/ui'
 
-type Tab = 'profile' | 'stores' | 'settings'
+type Tab = 'profile' | 'tax' | 'inventory' | 'print' | 'security'
 
 export function CompanyConfigPage() {
-  const [tab, setTab] = useState<Tab>('profile')
-  const [showAddStoreModal, setShowAddStoreModal] = useState(false)
-  const [successMsg, setSuccessMsg] = useState('')
-  const [formError, setFormError] = useState('')
-  const [formData, setFormData] = useState<Record<string, string>>({})
-
-  // New Store form
-  const [storeName, setStoreName] = useState('')
-  const [storeCode, setStoreCode] = useState('')
-  const [storeGstin, setStoreGstin] = useState('')
-  const [storeAddress, setStoreAddress] = useState('')
-
   const qc = useQueryClient()
+  const [tab, setTab] = useState<Tab>('profile')
+  const [dirty, setDirty] = useState(false)
 
-  const profile = useQuery({ queryKey: ['company-profile'], queryFn: () => api.get('/company/profile').then(r => r.data?.data) })
-  const stores = useQuery({ queryKey: ['stores'], queryFn: () => api.get('/company/stores').then(r => r.data?.data ?? []) })
-  const settings = useQuery({ queryKey: ['company-settings'], queryFn: () => api.get('/company/settings').then(r => r.data?.data ?? []) })
+  // Profile
+  const [name, setName] = useState('')
+  const [legalName, setLegalName] = useState('')
+  const [gstin, setGstin] = useState('')
+  const [stateName, setStateName] = useState('Tamil Nadu (33)')
+  const [address, setAddress] = useState('')
+  const [phone, setPhone] = useState('')
+  const [email, setEmail] = useState('')
+
+  // Tax & invoice
+  const [invoicePrefix, setInvoicePrefix] = useState('INV-26-27-')
+  const [financialYear, setFinancialYear] = useState('2026-2027')
+  const [roundingMode, setRoundingMode] = useState('NEAREST_RUPEE')
+
+  // Inventory rules
+  const [allowNegativeStock, setAllowNegativeStock] = useState(false)
+  const [sizeScheme, setSizeScheme] = useState('UK')
+
+  // Print settings
+  const [receiptWidth, setReceiptWidth] = useState('80mm')
+
+  // Security
+  const [sessionTimeout, setSessionTimeout] = useState('15')
+  const [adminSalesEnabled, setAdminSalesEnabled] = useState(true)
+
+  const { data, isLoading, error, refetch } = useQuery({
+    queryKey: ['company-profile'],
+    queryFn: () => api.get('/company/profile').then((r) => r.data?.data ?? {}),
+  })
 
   useEffect(() => {
-    if (profile.data) {
-      setFormData(profile.data)
+    if (data) {
+      setName(data.name || '')
+      setLegalName(data.legalName || data.legal_name || '')
+      setGstin(data.gstin || '')
+      setAddress(data.address || '')
+      setPhone(data.phone || '')
+      setEmail(data.email || '')
+      setDirty(false)
     }
-  }, [profile.data])
+  }, [data])
 
-  const saveProfile = useMutation({
-    mutationFn: (body: Record<string, string>) => api.put('/company/profile', body),
+  const saveMutation = useMutation({
+    mutationFn: () =>
+      api.put('/company/profile', {
+        name,
+        legalName,
+        gstin,
+        stateName,
+        address,
+        phone,
+        email,
+        invoicePrefix,
+        financialYear,
+        roundingMode,
+        allowNegativeStock,
+        sizeScheme,
+        receiptWidth,
+        adminSalesEnabled,
+      }),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['company-profile'] })
-      setSuccessMsg('Company profile details saved successfully.')
-      setTimeout(() => setSuccessMsg(''), 4000)
+      setDirty(false)
+      toast.success('Company configuration saved')
     },
-    onError: (err: any) => {
-      setFormError(err.response?.data?.error?.message || 'Failed to update company profile.')
-    }
+    onError: (err) => toast.error(getApiErrorMessage(err, 'Failed to save configuration')),
   })
 
-  const addStoreMutation = useMutation({
-    mutationFn: (body: any) => api.post('/company/stores', body),
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ['stores'] })
-      setShowAddStoreModal(false)
-      setStoreName('')
-      setStoreCode('')
-      setStoreGstin('')
-      setStoreAddress('')
-      setSuccessMsg('New store location registered successfully.')
-      setTimeout(() => setSuccessMsg(''), 4000)
-    },
-    onError: (err: any) => {
-      setFormError(err.response?.data?.error?.message || 'Failed to add store location.')
-    }
-  })
-
-  const handleFieldChange = (key: string, val: string) => {
-    setFormData(prev => ({ ...prev, [key]: val }))
-  }
-
-  const handleProfileSubmit = (e: React.FormEvent) => {
-    e.preventDefault()
-    setFormError('')
-    saveProfile.mutate(formData)
-  }
-
-  const handleAddStoreSubmit = (e: React.FormEvent) => {
-    e.preventDefault()
-    if (!storeName.trim() || !storeCode.trim()) {
-      setFormError('Store name and code are required.')
-      return
-    }
-    setFormError('')
-    addStoreMutation.mutate({
-      name: storeName,
-      code: storeCode.toUpperCase(),
-      gstin: storeGstin,
-      address: storeAddress,
-      isActive: true
-    })
-  }
-
-  const tabs: { key: Tab; label: string }[] = [
-    { key: 'profile', label: 'Company Profile' },
-    { key: 'stores', label: 'Store Locations' },
-    { key: 'settings', label: 'System Configuration' },
+  const TABS: { key: Tab; label: string; icon: React.ReactNode }[] = [
+    { key: 'profile', label: 'Business profile', icon: <Building2 className="w-3.5 h-3.5" /> },
+    { key: 'tax', label: 'Tax & invoice', icon: <Receipt className="w-3.5 h-3.5" /> },
+    { key: 'inventory', label: 'Inventory rules', icon: <Boxes className="w-3.5 h-3.5" /> },
+    { key: 'print', label: 'Print settings', icon: <Printer className="w-3.5 h-3.5" /> },
+    { key: 'security', label: 'Security', icon: <Shield className="w-3.5 h-3.5" /> },
   ]
 
-  return (
-    <div className="p-6 space-y-6">
-      {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-        <div>
-          <h1 className="text-2xl font-bold tracking-tight flex items-center gap-2" style={{ color: 'var(--color-text)' }}>
-            <Building2 size={24} className="text-indigo-600" /> Company & Store Configuration
-          </h1>
-          <p className="text-sm mt-1" style={{ color: 'var(--color-muted)' }}>
-            Statutory entity profiles, multi-store physical outlets, and inventory accounting policies
-          </p>
-        </div>
-        {tab === 'stores' && (
-          <button
-            onClick={() => { setShowAddStoreModal(true); setFormError('') }}
-            className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-semibold text-white shadow-xs transition-all hover:opacity-95"
-            style={{ background: 'var(--color-primary)' }}
-          >
-            <Plus size={16} /> Add Store Outlet
-          </button>
-        )}
+  if (error) {
+    return (
+      <div className="space-y-5">
+        <PageHeader title="Company Configuration" breadcrumbs={[{ label: 'Administration' }, { label: 'Company Settings' }]} />
+        <ErrorState message={getApiErrorMessage(error)} onRetry={refetch} />
       </div>
+    )
+  }
 
-      {successMsg && (
-        <div className="p-3.5 rounded-xl text-xs font-semibold bg-emerald-50 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300 border border-emerald-200 flex items-center gap-2">
-          <Check size={16} />
-          <span>{successMsg}</span>
-        </div>
-      )}
+  return (
+    <div className="space-y-5">
+      <PageHeader
+        title="Company Configuration"
+        description="Configure business identity, GST & invoice series, footwear size schemes, and security rules."
+        breadcrumbs={[{ label: 'Administration' }, { label: 'Company Settings' }]}
+        secondaryActions={dirty ? <StatusBadge status="PENDING" label="Unsaved changes" tone="warning" /> : undefined}
+      />
 
-      {/* Tabs */}
-      <div className="flex gap-1 p-1 rounded-xl w-fit" style={{ background: 'var(--color-bg)', border: '1px solid var(--color-border)' }}>
-        {tabs.map(t => (
+      <div className="flex items-center gap-1 bg-white border border-slate-200 rounded-lg p-1 overflow-x-auto">
+        {TABS.map((t) => (
           <button
             key={t.key}
+            type="button"
             onClick={() => setTab(t.key)}
-            className="px-4 py-2 text-xs font-bold rounded-lg transition-all"
-            style={tab === t.key
-              ? { background: 'var(--color-surface)', color: 'var(--color-primary)', boxShadow: '0 1px 2px rgba(0,0,0,.08)' }
-              : { color: 'var(--color-muted)' }}
+            className={
+              tab === t.key
+                ? 'px-3.5 py-2 rounded-md text-xs font-medium bg-teal-600 text-white inline-flex items-center gap-1.5 whitespace-nowrap'
+                : 'px-3.5 py-2 rounded-md text-xs font-medium text-slate-600 hover:text-slate-900 inline-flex items-center gap-1.5 whitespace-nowrap'
+            }
           >
+            {t.icon}
             {t.label}
           </button>
         ))}
       </div>
 
-      {/* Content Card */}
-      <div className="rounded-xl border p-6 shadow-xs" style={{ background: 'var(--color-surface)', borderColor: 'var(--color-border)' }}>
-        {tab === 'profile' && (
-          profile.isLoading ? <Spinner /> : profile.error ? <Err /> : (
-            <form onSubmit={handleProfileSubmit} className="space-y-5 max-w-3xl">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                {(['name', 'legalName', 'gstin', 'pan', 'email', 'phone', 'address'] as const).map(f => (
-                  <div key={f} className={f === 'address' ? 'md:col-span-2' : ''}>
-                    <label className="block text-xs font-semibold mb-1 uppercase tracking-wider text-slate-500">
-                      {f === 'legalName' ? 'Legal Entity Name' : f === 'name' ? 'Company Display Name' : f.toUpperCase()}
-                    </label>
-                    <input
-                      value={formData[f] ?? ''}
-                      onChange={e => handleFieldChange(f, e.target.value)}
-                      className="w-full px-3.5 py-2.5 rounded-xl text-sm outline-none border transition-all focus:ring-2 focus:ring-indigo-500/20"
-                      style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }}
-                    />
-                  </div>
-                ))}
-              </div>
-              <div className="pt-2">
-                <button
-                  type="submit"
-                  disabled={saveProfile.isPending}
-                  className="px-5 py-2.5 rounded-xl text-xs font-semibold text-white shadow-xs transition-opacity hover:opacity-95"
-                  style={{ background: 'var(--color-primary)' }}
-                >
-                  {saveProfile.isPending ? 'Saving Profile…' : 'Save Company Profile'}
-                </button>
-              </div>
-            </form>
-          )
-        )}
-
-        {tab === 'stores' && (
-          stores.isLoading ? <Spinner /> : stores.error ? <Err /> : (
-            <div className="space-y-3">
-              {(Array.isArray(stores.data) ? stores.data : []).map((s: any) => (
-                <div
-                  key={s.id}
-                  className="flex items-center justify-between p-4 rounded-xl border hover:border-indigo-300 transition-colors"
-                  style={{ borderColor: 'var(--color-border)' }}
-                >
-                  <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 rounded-xl bg-indigo-50 dark:bg-indigo-950/40 text-indigo-600 flex items-center justify-center">
-                      <Store size={20} />
-                    </div>
-                    <div>
-                      <p className="text-sm font-bold" style={{ color: 'var(--color-text)' }}>{s.name}</p>
-                      <p className="text-xs font-mono text-slate-400">{s.code} · GSTIN: {s.gstin ?? '33AABCF4050M1Z2'}</p>
-                    </div>
-                  </div>
-                  <span className="text-xs px-2.5 py-0.5 rounded-full font-semibold bg-emerald-100 text-emerald-700 dark:bg-emerald-950/50 dark:text-emerald-300 flex items-center gap-1">
-                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" /> Active Store
-                  </span>
-                </div>
-              ))}
-            </div>
-          )
-        )}
-
-        {tab === 'settings' && (
-          settings.isLoading ? <Spinner /> : settings.error ? <Err /> : (
-            <div className="divide-y max-w-2xl" style={{ borderColor: 'var(--color-border)' }}>
-              {(Array.isArray(settings.data) ? settings.data : []).map((s: any) => (
-                <div key={s.id} className="flex items-center justify-between py-3.5">
-                  <div className="pr-4">
-                    <p className="text-sm font-semibold" style={{ color: 'var(--color-text)' }}>{s.key}</p>
-                    {s.description && <p className="text-xs text-slate-400 mt-0.5">{s.description}</p>}
-                  </div>
-                  <span className="text-xs font-mono font-bold px-2.5 py-1 rounded-lg border bg-slate-50 dark:bg-slate-900 text-indigo-600 dark:text-indigo-400"
-                        style={{ borderColor: 'var(--color-border)' }}>
-                    {s.value}
-                  </span>
-                </div>
-              ))}
-            </div>
-          )
-        )}
-      </div>
-
-      {/* Add Store Modal */}
-      {showAddStoreModal && (
-        <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="w-full max-w-md rounded-2xl p-6 shadow-2xl border space-y-4 animate-in fade-in"
-               style={{ background: 'var(--color-surface)', borderColor: 'var(--color-border)' }}>
-            <div className="flex items-center justify-between border-b pb-3" style={{ borderColor: 'var(--color-border)' }}>
-              <h3 className="font-bold text-lg" style={{ color: 'var(--color-text)' }}>Register Store Location</h3>
-              <button onClick={() => setShowAddStoreModal(false)} className="p-1 hover:opacity-75"><X size={18} /></button>
-            </div>
-
-            {formError && (
-              <div className="p-3 rounded-xl text-xs font-semibold bg-rose-50 text-rose-600 dark:bg-rose-950/40 dark:text-rose-300 border border-rose-200">
-                {formError}
+      {isLoading ? (
+        <div className="bg-white rounded-lg border border-slate-200 p-6 space-y-4">
+          <Skeleton className="h-6 w-48" />
+          <Skeleton className="h-10 w-full" />
+          <Skeleton className="h-10 w-full" />
+        </div>
+      ) : (
+        <div className="bg-white rounded-lg border border-slate-200 overflow-hidden">
+          <div className="p-6 space-y-5">
+            {tab === 'profile' && (
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <FormField label="Business display name" required>
+                  <input
+                    type="text"
+                    value={name}
+                    onChange={(e) => { setName(e.target.value); setDirty(true) }}
+                    className={inputBaseClass}
+                  />
+                </FormField>
+                <FormField label="Registered legal name">
+                  <input
+                    type="text"
+                    value={legalName}
+                    onChange={(e) => { setLegalName(e.target.value); setDirty(true) }}
+                    className={inputBaseClass}
+                  />
+                </FormField>
+                <FormField label="GSTIN" helperText="15-character Goods & Services Tax ID">
+                  <input
+                    type="text"
+                    value={gstin}
+                    onChange={(e) => { setGstin(e.target.value.toUpperCase()); setDirty(true) }}
+                    className={`${inputBaseClass} font-mono`}
+                  />
+                </FormField>
+                <FormField label="Registered state">
+                  <SearchableCombobox
+                    options={[
+                      { value: 'Tamil Nadu (33)', label: 'Tamil Nadu (33)' },
+                      { value: 'Karnataka (29)', label: 'Karnataka (29)' },
+                      { value: 'Maharashtra (27)', label: 'Maharashtra (27)' },
+                      { value: 'Kerala (32)', label: 'Kerala (32)' },
+                      { value: 'Delhi (07)', label: 'Delhi (07)' },
+                    ]}
+                    value={stateName}
+                    onChange={(v) => { setStateName(v); setDirty(true) }}
+                  />
+                </FormField>
+                <FormField label="Support phone">
+                  <input
+                    type="tel"
+                    value={phone}
+                    onChange={(e) => { setPhone(e.target.value); setDirty(true) }}
+                    className={inputBaseClass}
+                  />
+                </FormField>
+                <FormField label="Business email">
+                  <input
+                    type="email"
+                    value={email}
+                    onChange={(e) => { setEmail(e.target.value); setDirty(true) }}
+                    className={inputBaseClass}
+                  />
+                </FormField>
+                <FormField label="Registered address" className="sm:col-span-2">
+                  <textarea
+                    rows={2}
+                    value={address}
+                    onChange={(e) => { setAddress(e.target.value); setDirty(true) }}
+                    className="w-full p-3 text-sm bg-white border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-teal-600/20 focus:border-teal-600"
+                  />
+                </FormField>
               </div>
             )}
 
-            <form onSubmit={handleAddStoreSubmit} className="space-y-4 text-sm">
-              <div>
-                <label className="block text-xs font-semibold mb-1" style={{ color: 'var(--color-muted)' }}>Store Outlet Name</label>
-                <input
-                  type="text"
-                  required
-                  placeholder="e.g. Retail Express - Downtown"
-                  value={storeName}
-                  onChange={e => setStoreName(e.target.value)}
-                  className="w-full px-3 py-2 rounded-xl border text-sm outline-none"
-                  style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }}
-                />
+            {tab === 'tax' && (
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                <FormField label="Invoice prefix">
+                  <input
+                    type="text"
+                    value={invoicePrefix}
+                    onChange={(e) => { setInvoicePrefix(e.target.value); setDirty(true) }}
+                    className={`${inputBaseClass} font-mono`}
+                  />
+                </FormField>
+                <FormField label="Active financial year">
+                  <SearchableCombobox
+                    options={[
+                      { value: '2025-2026', label: 'FY 2025–2026' },
+                      { value: '2026-2027', label: 'FY 2026–2027' },
+                    ]}
+                    value={financialYear}
+                    onChange={(v) => { setFinancialYear(v); setDirty(true) }}
+                  />
+                </FormField>
+                <FormField label="Invoice rounding">
+                  <SearchableCombobox
+                    options={[
+                      { value: 'NEAREST_RUPEE', label: 'Round to nearest ₹1' },
+                      { value: 'NONE', label: 'Exact paise (no rounding)' },
+                    ]}
+                    value={roundingMode}
+                    onChange={(v) => { setRoundingMode(v); setDirty(true) }}
+                  />
+                </FormField>
               </div>
+            )}
 
-              <div>
-                <label className="block text-xs font-semibold mb-1" style={{ color: 'var(--color-muted)' }}>Store Code</label>
-                <input
-                  type="text"
-                  required
-                  placeholder="e.g. STR-02"
-                  value={storeCode}
-                  onChange={e => setStoreCode(e.target.value)}
-                  className="w-full px-3 py-2 rounded-xl border text-sm outline-none font-mono"
-                  style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }}
-                />
+            {tab === 'inventory' && (
+              <div className="space-y-4 max-w-lg">
+                <FormField label="Default footwear size scheme">
+                  <SearchableCombobox
+                    options={[
+                      { value: 'UK', label: 'UK / India Sizes (UK 6 – UK 11)' },
+                      { value: 'EU', label: 'EU Sizes (EU 39 – EU 46)' },
+                    ]}
+                    value={sizeScheme}
+                    onChange={(v) => { setSizeScheme(v); setDirty(true) }}
+                  />
+                </FormField>
+                <label className="flex items-start gap-3 p-3.5 rounded-lg border border-slate-200 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={allowNegativeStock}
+                    onChange={(e) => { setAllowNegativeStock(e.target.checked); setDirty(true) }}
+                    className="mt-0.5 rounded border-slate-300 text-teal-600 focus:ring-teal-600"
+                  />
+                  <div>
+                    <span className="text-sm font-medium text-slate-900">Allow negative stock at POS</span>
+                    <p className="text-xs text-slate-500 mt-0.5">
+                      Permits billing even if warehouse balance is 0 (reconciled later during GRN).
+                    </p>
+                  </div>
+                </label>
               </div>
+            )}
 
-              <div>
-                <label className="block text-xs font-semibold mb-1" style={{ color: 'var(--color-muted)' }}>GSTIN (Optional / Store specific)</label>
-                <input
-                  type="text"
-                  placeholder="33AABCF4050M1Z2"
-                  value={storeGstin}
-                  onChange={e => setStoreGstin(e.target.value)}
-                  className="w-full px-3 py-2 rounded-xl border text-sm outline-none font-mono"
-                  style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }}
-                />
+            {tab === 'print' && (
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-6 items-start">
+                <FormField label="Thermal receipt width">
+                  <SearchableCombobox
+                    options={[
+                      { value: '80mm', label: '80mm Standard Thermal' },
+                      { value: '58mm', label: '58mm Compact Thermal' },
+                      { value: 'A4', label: 'A4 Laser Tax Invoice' },
+                    ]}
+                    value={receiptWidth}
+                    onChange={(v) => { setReceiptWidth(v); setDirty(true) }}
+                  />
+                </FormField>
+                <div className="p-4 rounded-lg border border-slate-200 bg-slate-50 text-xs space-y-1.5">
+                  <p className="font-semibold text-slate-900">Print preview ({receiptWidth})</p>
+                  <p className="text-slate-600">{name || 'SoleControl Retail'}</p>
+                  <p className="font-mono text-slate-500">GSTIN: {gstin || '—'}</p>
+                  <p className="text-slate-400 pt-2 border-t border-slate-200">Powered by Forty V</p>
+                </div>
               </div>
+            )}
 
-              <div className="flex justify-end gap-2 pt-3 border-t" style={{ borderColor: 'var(--color-border)' }}>
-                <button
-                  type="button"
-                  onClick={() => setShowAddStoreModal(false)}
-                  className="px-4 py-2 rounded-xl border text-xs font-semibold"
-                  style={{ borderColor: 'var(--color-border)', color: 'var(--color-muted)' }}
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  disabled={addStoreMutation.isPending}
-                  className="px-5 py-2.5 rounded-xl text-xs font-semibold text-white shadow-xs"
-                  style={{ background: 'var(--color-primary)' }}
-                >
-                  {addStoreMutation.isPending ? 'Registering…' : 'Add Store'}
-                </button>
+            {tab === 'security' && (
+              <div className="space-y-4 max-w-lg">
+                <FormField label="Access token timeout (minutes)">
+                  <SearchableCombobox
+                    options={[
+                      { value: '15', label: '15 minutes (recommended)' },
+                      { value: '30', label: '30 minutes' },
+                      { value: '60', label: '60 minutes' },
+                    ]}
+                    value={sessionTimeout}
+                    onChange={(v) => { setSessionTimeout(v); setDirty(true) }}
+                  />
+                </FormField>
+                <label className="flex items-start gap-3 p-3.5 rounded-lg border border-slate-200 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={adminSalesEnabled}
+                    onChange={(e) => { setAdminSalesEnabled(e.target.checked); setDirty(true) }}
+                    className="mt-0.5 rounded border-slate-300 text-teal-600 focus:ring-teal-600"
+                  />
+                  <div>
+                    <span className="text-sm font-medium text-slate-900">Allow Super Admin to create POS bills</span>
+                    <p className="text-xs text-slate-500 mt-0.5">
+                      Disable if Super Admin should only monitor sales and approve returns.
+                    </p>
+                  </div>
+                </label>
               </div>
-            </form>
+            )}
+          </div>
+
+          <div className="px-6 py-3.5 bg-slate-50 border-t border-slate-200 flex items-center justify-between">
+            <span className="text-xs text-slate-500">
+              {dirty ? 'You have unsaved changes in this tab.' : 'All changes saved.'}
+            </span>
+            <Button
+              variant="primary"
+              icon={<Save className="w-4 h-4" />}
+              loading={saveMutation.isPending}
+              onClick={() => saveMutation.mutate()}
+            >
+              Save Changes
+            </Button>
           </div>
         </div>
       )}
     </div>
   )
-}
-
-function Spinner() {
-  return <div className="py-12 text-center text-sm" style={{ color: 'var(--color-muted)' }}>Loading configuration…</div>
-}
-
-function Err() {
-  return <div className="py-12 text-center text-sm" style={{ color: 'var(--color-danger)' }}>Failed to load configuration</div>
 }

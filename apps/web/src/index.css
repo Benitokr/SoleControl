@@ -1,37 +1,79 @@
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap');
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
 :root {
-  --color-bg: #F7F8FA; --color-surface: #FFFFFF; --color-border: #E6E8EC;
-  --color-text: #0F172A; --color-muted: #64748B; --color-primary: #4F46E5;
-  --color-primary-soft: #EEF2FF; --color-success: #059669; --color-warning: #D97706;
-  --color-danger: #DC2626; --color-info: #0284C7;
-}
-.dark {
-  --color-bg: #0B0F17; --color-surface: #111827; --color-border: #1F2937;
-  --color-text: #E5E7EB; --color-muted: #94A3B8; --color-primary: #818CF8;
-  --color-primary-soft: #1e1b4b;
-}
-* { box-sizing: border-box; margin: 0; padding: 0; }
-html { font-family: 'Inter', system-ui, sans-serif; }
-body { background: var(--color-bg); color: var(--color-text); }
-.font-mono { font-family: 'JetBrains Mono', monospace !important; }
-.tabular-nums { font-variant-numeric: tabular-nums; }
-
-/* 180ms Smooth Theme Transition */
-html.theme-transition,
-html.theme-transition *,
-html.theme-transition *:before,
-html.theme-transition *:after {
-  transition: background-color 180ms ease-out, border-color 180ms ease-out, color 180ms ease-out !important;
+  --color-bg: #F7F8FA;
+  --color-surface: #FFFFFF;
+  --color-border: #E2E8F0;
+  --color-text: #0F172A;
+  --color-muted: #64748B;
+  --color-primary: #0D9488;
+  --color-primary-hover: #0F766E;
+  --color-primary-soft: #F0FDFA;
+  --color-sidebar: #0F172A;
+  --color-sidebar-hover: #1E293B;
+  --color-success: #059669;
+  --color-warning: #D97706;
+  --color-danger: #DC2626;
+  --color-info: #0284C7;
 }
 
-/* Scrollbar */
-::-webkit-scrollbar { width: 6px; height: 6px; }
-::-webkit-scrollbar-track { background: transparent; }
-::-webkit-scrollbar-thumb { background: var(--color-border); border-radius: 3px; }
+* {
+  box-sizing: border-box;
+}
 
-/* Focus ring */
-:focus-visible { outline: 2px solid var(--color-primary); outline-offset: 2px; }
+html {
+  font-family: 'Inter', system-ui, -apple-system, sans-serif;
+  font-size: 14px;
+  color: var(--color-text);
+  background: var(--color-bg);
+  -webkit-font-smoothing: antialiased;
+}
+
+body {
+  background: var(--color-bg);
+  color: var(--color-text);
+  overflow-x: hidden;
+}
+
+.font-mono {
+  font-family: 'JetBrains Mono', Consolas, monospace !important;
+}
+
+.tabular-nums {
+  font-variant-numeric: tabular-nums;
+}
+
+/* Custom slim scrollbars */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: #CBD5E1;
+  border-radius: 9999px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #94A3B8;
+}
+
+/* Accessible visible focus ring */
+:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
+}
+
+/* Print utilities */
+@media print {
+  .no-print {
+    display: none !important;
+  }
+  body {
+    background: #FFFFFF !important;
+  }
+}

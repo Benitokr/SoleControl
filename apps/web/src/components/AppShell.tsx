@@ -1,446 +1,508 @@
-import { Outlet, NavLink, useNavigate } from 'react-router-dom'
-import { useState, useEffect } from 'react'
+import { Outlet, NavLink, useLocation, useNavigate } from 'react-router-dom'
+import { useState, useEffect, useMemo } from 'react'
 import {
   LayoutDashboard, Building2, Database, Users, ShieldCheck,
   ReceiptText, Boxes, ScanBarcode, Warehouse, Store, Receipt,
   ArrowLeftRight, Hourglass, PackageX, Truck, HeartHandshake,
   BadgePercent, BookOpen, Wallet, Landmark, BarChart3, ScrollText,
-  Plug, ChevronLeft, ChevronRight, Moon, Sun, Bell, LogOut, Search,
-  Plus, X, CheckCircle2, AlertTriangle, Info, ArrowUpRight, Check,
-  Lightbulb, Activity, Command
+  Plug, ChevronLeft, ChevronRight, Bell, LogOut, Search,
+  Menu, X, ShoppingBag, Activity, Lightbulb, ClipboardList, Command,
 } from 'lucide-react'
 import { useAuthStore } from '../store/authStore'
-import { useThemeStore } from '../store/themeStore'
 import { useQuery } from '@tanstack/react-query'
 import { api } from '../lib/api'
-import { NotificationStorage } from '../lib/storage'
+import { cn } from '../lib/utils'
+import { SearchableCombobox } from './ui/SearchableCombobox'
 
-type NavItem = { label: string; icon: React.ReactNode; to: string }
-type NavGroup = { title: string; items: NavItem[] }
+interface NavItem {
+  label: string
+  to: string
+  icon: React.ReactNode
+  permission?: string
+}
 
-const NAV: NavGroup[] = [
-  { title: 'Executive Overview', items: [
-    { label: 'Dashboard', icon: <LayoutDashboard size={18} strokeWidth={1.5} />, to: '/dashboard' }
-  ]},
-  { title: 'Business Setup', items: [
-    { label: 'Company Configuration', icon: <Building2 size={18} strokeWidth={1.5} />, to: '/company' },
-    { label: 'Master Data', icon: <Database size={18} strokeWidth={1.5} />, to: '/masters' },
-    { label: 'Users', icon: <Users size={18} strokeWidth={1.5} />, to: '/users' },
-    { label: 'Roles & Permissions', icon: <ShieldCheck size={18} strokeWidth={1.5} />, to: '/roles' },
-    { label: 'Rack & Location', icon: <Warehouse size={18} strokeWidth={1.5} />, to: '/locations' },
-    { label: 'Integrations', icon: <Plug size={18} strokeWidth={1.5} />, to: '/integrations' },
-  ]},
-  { title: 'Retail Operations', items: [
-    { label: 'Purchases', icon: <ReceiptText size={18} strokeWidth={1.5} />, to: '/purchases' },
-    { label: 'Vendors', icon: <Truck size={18} strokeWidth={1.5} />, to: '/vendors' },
-    { label: 'Inventory', icon: <Boxes size={18} strokeWidth={1.5} />, to: '/inventory' },
-    { label: 'Barcodes', icon: <ScanBarcode size={18} strokeWidth={1.5} />, to: '/barcodes' },
-    { label: 'Display Stock', icon: <Store size={18} strokeWidth={1.5} />, to: '/display' },
-    { label: 'Stock Transfers', icon: <ArrowLeftRight size={18} strokeWidth={1.5} />, to: '/transfers' },
-    { label: 'Ageing & Clearance', icon: <Hourglass size={18} strokeWidth={1.5} />, to: '/ageing' },
-    { label: 'Damaged Goods', icon: <PackageX size={18} strokeWidth={1.5} />, to: '/damage' },
-  ]},
-  { title: 'Sales & Customers', items: [
-    { label: 'Sales & POS', icon: <Receipt size={18} strokeWidth={1.5} />, to: '/sales' },
-    { label: 'Customer & CRM', icon: <HeartHandshake size={18} strokeWidth={1.5} />, to: '/customers' },
-    { label: 'Offers & Discounts', icon: <BadgePercent size={18} strokeWidth={1.5} />, to: '/offers' },
-  ]},
-  { title: 'Finance', items: [
-    { label: 'Accounting', icon: <BookOpen size={18} strokeWidth={1.5} />, to: '/accounting' },
-    { label: 'Capital & Withdrawals', icon: <Wallet size={18} strokeWidth={1.5} />, to: '/capital' },
-    { label: 'Bank & GST', icon: <Landmark size={18} strokeWidth={1.5} />, to: '/bank-gst' },
-  ]},
-  { title: 'Intelligence & Reports', items: [
-    { label: 'Reports & Analytics', icon: <BarChart3 size={18} strokeWidth={1.5} />, to: '/reports' },
-    { label: 'Business Insights', icon: <Lightbulb size={18} strokeWidth={1.5} />, to: '/insights' },
-  ]},
-  { title: 'System & Control', items: [
-    { label: 'Database Explorer', icon: <Database size={18} strokeWidth={1.5} />, to: '/database' },
-    { label: 'Notifications & Audit', icon: <ScrollText size={18} strokeWidth={1.5} />, to: '/audit' },
-    { label: 'System Health', icon: <Activity size={18} strokeWidth={1.5} />, to: '/system-health' },
-  ]},
+interface NavGroup {
+  title: string
+  items: NavItem[]
+}
+
+const NAV_GROUPS: NavGroup[] = [
+  {
+    title: 'Overview',
+    items: [
+      { label: 'Dashboard', to: '/dashboard', icon: <LayoutDashboard className="w-4 h-4" />, permission: 'dashboard.view' },
+    ],
+  },
+  {
+    title: 'Sales',
+    items: [
+      { label: 'POS Billing', to: '/sales/pos', icon: <ShoppingBag className="w-4 h-4" />, permission: 'sales.create' },
+      { label: 'Sales History & Returns', to: '/sales', icon: <Receipt className="w-4 h-4" />, permission: 'sales.view' },
+      { label: 'Customers', to: '/customers', icon: <HeartHandshake className="w-4 h-4" />, permission: 'customers.view' },
+      { label: 'Offers & Discounts', to: '/offers', icon: <BadgePercent className="w-4 h-4" />, permission: 'offers.view' },
+    ],
+  },
+  {
+    title: 'Inventory',
+    items: [
+      { label: 'Stock', to: '/inventory', icon: <Boxes className="w-4 h-4" />, permission: 'inventory.view' },
+      { label: 'Display Stock', to: '/display', icon: <Store className="w-4 h-4" />, permission: 'display_stock.view' },
+      { label: 'Stock Transfers', to: '/transfers', icon: <ArrowLeftRight className="w-4 h-4" />, permission: 'stock_transfers.view' },
+      { label: 'Ageing & Clearance', to: '/ageing', icon: <Hourglass className="w-4 h-4" />, permission: 'ageing.view' },
+      { label: 'Damaged Goods', to: '/damage', icon: <PackageX className="w-4 h-4" />, permission: 'damaged_goods.view' },
+      { label: 'Barcodes & Labels', to: '/barcodes', icon: <ScanBarcode className="w-4 h-4" />, permission: 'barcodes.view' },
+    ],
+  },
+  {
+    title: 'Purchasing',
+    items: [
+      { label: 'Purchase Orders', to: '/purchases?tab=orders', icon: <ClipboardList className="w-4 h-4" />, permission: 'purchases.view' },
+      { label: 'Purchase Bills / GRN', to: '/purchases', icon: <ReceiptText className="w-4 h-4" />, permission: 'purchases.view' },
+      { label: 'Vendors', to: '/vendors', icon: <Truck className="w-4 h-4" />, permission: 'vendors.view' },
+    ],
+  },
+  {
+    title: 'Finance',
+    items: [
+      { label: 'Accounting & Ledgers', to: '/accounting', icon: <BookOpen className="w-4 h-4" />, permission: 'accounting.view' },
+      { label: 'Capital & Withdrawals', to: '/capital', icon: <Wallet className="w-4 h-4" />, permission: 'capital.view' },
+      { label: 'Bank & GST', to: '/bank-gst', icon: <Landmark className="w-4 h-4" />, permission: 'bank_gst.view' },
+    ],
+  },
+  {
+    title: 'Reports',
+    items: [
+      { label: 'Reports & Exports', to: '/reports', icon: <BarChart3 className="w-4 h-4" />, permission: 'reports.view' },
+      { label: 'Business Insights', to: '/insights', icon: <Lightbulb className="w-4 h-4" />, permission: 'reports.view' },
+    ],
+  },
+  {
+    title: 'Administration',
+    items: [
+      { label: 'Master Data', to: '/masters', icon: <Database className="w-4 h-4" />, permission: 'masters.view' },
+      { label: 'Company Settings', to: '/company', icon: <Building2 className="w-4 h-4" />, permission: 'company.view' },
+      { label: 'Locations', to: '/locations', icon: <Warehouse className="w-4 h-4" />, permission: 'locations.view' },
+      { label: 'Users', to: '/users', icon: <Users className="w-4 h-4" />, permission: 'users.view' },
+      { label: 'Roles & Permissions', to: '/roles', icon: <ShieldCheck className="w-4 h-4" />, permission: 'roles.view' },
+      { label: 'Notifications', to: '/notifications', icon: <Bell className="w-4 h-4" />, permission: 'audit.view' },
+      { label: 'Audit Trail', to: '/audit', icon: <ScrollText className="w-4 h-4" />, permission: 'audit.view' },
+      { label: 'Integrations', to: '/integrations', icon: <Plug className="w-4 h-4" />, permission: 'integrations.view' },
+      { label: 'System Health', to: '/system-health', icon: <Activity className="w-4 h-4" />, permission: 'audit.view' },
+      { label: 'Database Explorer', to: '/database', icon: <Database className="w-4 h-4" />, permission: 'audit.view' },
+    ],
+  },
 ]
 
-const ALL_SEARCH_ITEMS = NAV.flatMap(g => g.items.map(i => ({ ...i, group: g.title })))
+const ROUTE_TITLES: Record<string, string> = {
+  '/dashboard': 'Dashboard',
+  '/sales/pos': 'POS Billing',
+  '/sales': 'Sales History & Returns',
+  '/customers': 'Customers',
+  '/offers': 'Offers & Discounts',
+  '/inventory': 'Warehouse Stock',
+  '/display': 'Display Stock',
+  '/transfers': 'Stock Transfers',
+  '/ageing': 'Ageing & Clearance',
+  '/damage': 'Damaged Goods',
+  '/barcodes': 'Barcodes & Labels',
+  '/purchases': 'Purchasing & Goods Inward',
+  '/purchases/new': 'New Purchase Bill',
+  '/vendors': 'Vendors',
+  '/accounting': 'Accounting & Ledgers',
+  '/capital': 'Capital & Withdrawals',
+  '/bank-gst': 'Bank & GST',
+  '/reports': 'Reports & Exports',
+  '/insights': 'Business Insights',
+  '/masters': 'Master Data',
+  '/masters/articles/new': 'New Footwear Article',
+  '/company': 'Company Settings',
+  '/locations': 'Locations',
+  '/users': 'Users & Personnel',
+  '/roles': 'Roles & Permissions',
+  '/notifications': 'Notifications & Alerts',
+  '/audit': 'Audit Trail',
+  '/integrations': 'Integrations',
+  '/system-health': 'System Health',
+  '/database': 'Database Explorer',
+}
 
 export function AppShell() {
   const navigate = useNavigate()
+  const location = useLocation()
+  const { user, logout, hasPermission } = useAuthStore()
+
   const [collapsed, setCollapsed] = useState(() => localStorage.getItem('sc-sidebar') === 'true')
-  const [showNotifications, setShowNotifications] = useState(false)
-  const [showCommandPalette, setShowCommandPalette] = useState(false)
-  const [showQuickCreate, setShowQuickCreate] = useState(false)
+  const [mobileOpen, setMobileOpen] = useState(false)
+  const [showPalette, setShowPalette] = useState(false)
   const [paletteQuery, setPaletteQuery] = useState('')
-  const [notificationsList, setNotificationsList] = useState(() => {
-    const all = NotificationStorage.getAll()
-    return (Array.isArray(all) ? all : []).map(n => ({
-      ...n,
-      unread: !n.isRead && !n.is_read
-    }))
-  })
+  const [activeStoreId, setActiveStoreId] = useState('')
 
-  const { user, logout } = useAuthStore()
-  const { theme, toggle } = useThemeStore()
+  const isFullScreenPos = location.pathname === '/sales/pos'
 
-  const { data: storeData } = useQuery({
+  const { data: storesData } = useQuery({
     queryKey: ['stores'],
-    queryFn: () => api.get('/company/stores').then(r => r.data.data).catch(() => []),
+    queryFn: () => api.get('/company/stores').then((r) => r.data?.data ?? []),
   })
 
   const { data: alertsData } = useQuery({
     queryKey: ['alerts'],
-    queryFn: () => api.get('/alerts').then(r => r.data?.data ?? []).catch(() => []),
+    queryFn: () => api.get('/alerts').then((r) => r.data?.data ?? []),
   })
 
-  useEffect(() => {
-    const list = NotificationStorage.getAll()
-    setNotificationsList((Array.isArray(list) ? list : []).map(n => ({
-      ...n,
-      unread: !n.isRead && !n.is_read
-    })))
-  }, [alertsData])
-  const stores: any[] = Array.isArray(storeData)
-    ? storeData
-    : Array.isArray((storeData as any)?.data)
-    ? (storeData as any).data
-    : []
-  const storeName = stores[0]?.name || 'Central Store (Flagship)'
+  const stores: any[] = Array.isArray(storesData) ? storesData : []
+  const activeStores = stores.filter((s) => s.isActive !== false && s.is_active !== false)
+  const currentStore =
+    activeStores.find((s) => s.id === activeStoreId) ||
+    activeStores[0] || { id: 'store-1', name: 'Forty V Flagship Store' }
 
-  const unreadCount = notificationsList.filter(n => n.unread).length
+  const alertsList: any[] = Array.isArray(alertsData) ? alertsData : []
+  const unreadCount = alertsList.filter((a) => !a.isRead && !a.is_read).length
 
-  // Global Ctrl+K handler
+  const visibleGroups = useMemo(() => {
+    return NAV_GROUPS.map((g) => ({
+      ...g,
+      items: g.items.filter((item) => !item.permission || hasPermission(item.permission)),
+    })).filter((g) => g.items.length > 0)
+  }, [hasPermission])
+
+  const allVisibleItems = useMemo(
+    () => visibleGroups.flatMap((g) => g.items.map((i) => ({ ...i, group: g.title }))),
+    [visibleGroups]
+  )
+
+  const filteredPalette = useMemo(() => {
+    const q = paletteQuery.trim().toLowerCase()
+    if (!q) return allVisibleItems
+    return allVisibleItems.filter(
+      (i) => i.label.toLowerCase().includes(q) || i.group.toLowerCase().includes(q)
+    )
+  }, [allVisibleItems, paletteQuery])
+
   useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if ((e.ctrlKey || e.metaKey) && e.key === 'k') {
+    setMobileOpen(false)
+  }, [location.pathname, location.search])
+
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'k') {
         e.preventDefault()
-        setShowCommandPalette(prev => !prev)
+        setShowPalette((p) => !p)
       }
       if (e.key === 'Escape') {
-        setShowCommandPalette(false)
-        setShowNotifications(false)
-        setShowQuickCreate(false)
+        setShowPalette(false)
+        setMobileOpen(false)
       }
     }
-    window.addEventListener('keydown', handleKeyDown)
-    return () => window.removeEventListener('keydown', handleKeyDown)
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
   }, [])
 
-  const handleCollapse = () => {
-    const v = !collapsed
-    setCollapsed(v)
-    localStorage.setItem('sc-sidebar', String(v))
+  const toggleCollapse = () => {
+    const next = !collapsed
+    setCollapsed(next)
+    localStorage.setItem('sc-sidebar', String(next))
   }
 
   const handleLogout = async () => {
-    try { await api.post('/auth/logout') } finally { logout() }
+    try {
+      await api.post('/auth/logout')
+    } catch {
+      // Proceed with local sign-out even if session already expired
+    } finally {
+      logout()
+      navigate('/login')
+    }
   }
 
-  const markAllNotificationsRead = () => {
-    NotificationStorage.markAllRead()
-    setNotificationsList(prev => prev.map(n => ({ ...n, unread: false, isRead: true, is_read: true })))
-    api.post('/alerts/read-all').catch(() => {})
+  if (isFullScreenPos) {
+    return (
+      <div className="min-h-screen bg-[#F7F8FA]">
+        <Outlet />
+      </div>
+    )
   }
 
-  const filteredPaletteItems = ALL_SEARCH_ITEMS.filter(item =>
-    item.label.toLowerCase().includes(paletteQuery.toLowerCase()) ||
-    item.group.toLowerCase().includes(paletteQuery.toLowerCase())
+  const currentTitle = ROUTE_TITLES[location.pathname] || 'SoleControl'
+
+  const renderSidebarContent = (isMobile = false) => (
+    <div className="flex flex-col h-full bg-[#0F172A] text-slate-300 select-none">
+      {/* Brand header */}
+      <div className="h-14 px-3.5 flex items-center justify-between border-b border-slate-800 shrink-0">
+        <div className="flex items-center gap-2.5 min-w-0">
+          <div className="bg-white rounded-md px-1.5 py-1 flex items-center justify-center shrink-0">
+            <img
+              src="/fortyv-logo.png"
+              alt="Forty V"
+              className="h-5 w-auto object-contain"
+            />
+          </div>
+          {(!collapsed || isMobile) && (
+            <div className="min-w-0">
+              <div className="text-sm font-semibold text-white leading-tight truncate">
+                SoleControl
+              </div>
+              <div className="text-[11px] text-slate-400 truncate">Retail ERP</div>
+            </div>
+          )}
+        </div>
+        {isMobile ? (
+          <button
+            type="button"
+            onClick={() => setMobileOpen(false)}
+            className="p-1.5 rounded-md text-slate-400 hover:text-white hover:bg-slate-800"
+            aria-label="Close navigation"
+          >
+            <X className="w-4 h-4" />
+          </button>
+        ) : (
+          <button
+            type="button"
+            onClick={toggleCollapse}
+            className="p-1.5 rounded-md text-slate-400 hover:text-white hover:bg-slate-800 hidden lg:flex"
+            aria-label={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+          >
+            {collapsed ? <ChevronRight className="w-4 h-4" /> : <ChevronLeft className="w-4 h-4" />}
+          </button>
+        )}
+      </div>
+
+      {/* Navigation groups */}
+      <nav className="flex-1 overflow-y-auto px-2.5 py-3 space-y-5" aria-label="Main navigation">
+        {visibleGroups.map((group) => (
+          <div key={group.title} className="space-y-1">
+            {(!collapsed || isMobile) && (
+              <div className="px-2.5 text-[11px] font-medium text-slate-400">
+                {group.title}
+              </div>
+            )}
+            <div className="space-y-0.5">
+              {group.items.map((item) => {
+                const isPurchaseOrders = item.to.includes('tab=orders')
+                const isActive = isPurchaseOrders
+                  ? location.pathname === '/purchases' && location.search.includes('tab=orders')
+                  : item.to === '/purchases'
+                  ? location.pathname.startsWith('/purchases') && !location.search.includes('tab=orders')
+                  : item.to === '/sales'
+                  ? location.pathname === '/sales'
+                  : location.pathname === item.to
+
+                return (
+                  <NavLink
+                    key={item.to}
+                    to={item.to}
+                    title={collapsed && !isMobile ? item.label : undefined}
+                    className={cn(
+                      'flex items-center gap-2.5 px-2.5 py-2 rounded-lg text-[13px] font-medium transition-colors',
+                      collapsed && !isMobile && 'justify-center px-2',
+                      isActive
+                        ? 'bg-teal-600 text-white'
+                        : 'text-slate-300 hover:bg-slate-800 hover:text-white'
+                    )}
+                  >
+                    <span className="shrink-0">{item.icon}</span>
+                    {(!collapsed || isMobile) && <span className="truncate">{item.label}</span>}
+                  </NavLink>
+                )
+              })}
+            </div>
+          </div>
+        ))}
+      </nav>
+
+      {/* Footer user card */}
+      <div className="p-3 border-t border-slate-800 shrink-0">
+        {(!collapsed || isMobile) ? (
+          <div className="flex items-center justify-between gap-2">
+            <div className="min-w-0">
+              <div className="text-xs font-medium text-white truncate">{user?.name || 'Admin'}</div>
+              <div className="text-[11px] text-slate-400 truncate">{user?.roleName || 'Super Admin'}</div>
+            </div>
+            <button
+              type="button"
+              onClick={handleLogout}
+              title="Sign out"
+              className="p-1.5 rounded-md text-slate-400 hover:text-white hover:bg-slate-800 transition-colors"
+            >
+              <LogOut className="w-4 h-4" />
+            </button>
+          </div>
+        ) : (
+          <button
+            type="button"
+            onClick={handleLogout}
+            title="Sign out"
+            className="w-full flex justify-center p-1.5 rounded-md text-slate-400 hover:text-white hover:bg-slate-800"
+          >
+            <LogOut className="w-4 h-4" />
+          </button>
+        )}
+      </div>
+    </div>
   )
 
-  const s = { background: 'var(--color-surface)', borderColor: 'var(--color-border)' }
-
   return (
-    <div className="flex h-screen overflow-hidden" style={{ background: 'var(--color-bg)' }}>
-      {/* Sidebar */}
-      <aside className="flex flex-col border-r flex-shrink-0 transition-all duration-200" style={{ ...s, width: collapsed ? 72 : 264 }}>
-        {/* Logo */}
-        <div className="flex items-center px-3 py-4 border-b" style={{ borderColor: 'var(--color-border)', minHeight: 56 }}>
-          {collapsed
-            ? <div className="w-9 h-9 rounded-xl bg-indigo-600 flex items-center justify-center text-white shadow-md mx-auto"><Command size={18} strokeWidth={2.2} /></div>
-            : <div className="flex items-center gap-2.5 overflow-hidden">
-                <div className="w-8 h-8 rounded-xl bg-indigo-600 flex items-center justify-center text-white shadow-md flex-shrink-0"><Command size={16} strokeWidth={2.2} /></div>
-                <div className="flex flex-col">
-                  <span className="text-xs font-bold tracking-wider uppercase text-slate-800 dark:text-slate-100">SoleControl</span>
-                  <span className="text-[10px] font-mono text-indigo-500 font-semibold">Enterprise Retail OS</span>
-                </div>
-              </div>
-          }
-        </div>
-        {/* Nav */}
-        <nav className="flex-1 overflow-y-auto py-3 px-2 space-y-4">
-          {NAV.map(g => (
-            <div key={g.title}>
-              {!collapsed && <div className="px-2 mb-1 text-[11px] font-semibold uppercase tracking-wider" style={{ color: 'var(--color-muted)' }}>{g.title}</div>}
-              <ul className="space-y-0.5">
-                {g.items.map(item => (
-                  <li key={item.to}>
-                    <NavLink to={item.to} title={collapsed ? item.label : undefined}
-                      className={({ isActive }) => `flex items-center gap-3 px-2.5 py-2 rounded-xl text-sm font-medium transition-all ${collapsed ? 'justify-center' : ''} ${isActive ? 'shadow-xs font-semibold' : 'hover:opacity-80'}`}
-                      style={({ isActive }) => ({ color: isActive ? 'var(--color-primary)' : 'var(--color-text)', background: isActive ? 'var(--color-primary-soft)' : 'transparent' })}
-                    >
-                      {item.icon}
-                      {!collapsed && <span>{item.label}</span>}
-                    </NavLink>
-                  </li>
-                ))}
-              </ul>
-            </div>
-          ))}
-        </nav>
-        <div className="p-2 border-t" style={{ borderColor: 'var(--color-border)' }}>
-          <button onClick={handleCollapse} className="w-full flex items-center justify-center p-2 rounded-xl transition-colors hover:bg-slate-100 dark:hover:bg-slate-800" style={{ color: 'var(--color-muted)' }}>
-            {collapsed ? <ChevronRight size={16} /> : <><ChevronLeft size={16} /><span className="ml-2 text-xs font-medium">Collapse Sidebar</span></>}
-          </button>
-        </div>
+    <div className="min-h-screen flex bg-[#F7F8FA] text-slate-900">
+      {/* Desktop Sidebar */}
+      <aside
+        className={cn(
+          'hidden lg:block shrink-0 sticky top-0 h-screen transition-all duration-150',
+          collapsed ? 'w-[68px]' : 'w-[248px]'
+        )}
+      >
+        {renderSidebarContent(false)}
       </aside>
 
-      <div className="flex flex-col flex-1 overflow-hidden relative">
-        {/* Top bar */}
-        <header className="flex items-center gap-3 px-6 border-b flex-shrink-0 z-20" style={{ ...s, height: 56 }}>
-          {/* Store chip & FY */}
-          <div className="flex items-center gap-2">
-            <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold border"
-                  style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }}>
-              <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
-              {storeName}
-            </span>
-            <span className="hidden sm:inline-flex px-2 py-0.5 rounded text-[11px] font-mono font-semibold"
-                  style={{ background: 'var(--color-primary-soft)', color: 'var(--color-primary)' }}>
-              FY 2026-27
-            </span>
-          </div>
+      {/* Mobile / Tablet Drawer Sidebar */}
+      {mobileOpen && (
+        <div
+          className="fixed inset-0 z-50 lg:hidden bg-slate-900/50 flex"
+          onMouseDown={(e) => {
+            if (e.target === e.currentTarget) setMobileOpen(false)
+          }}
+        >
+          <aside className="w-[260px] h-full shadow-2xl">{renderSidebarContent(true)}</aside>
+        </div>
+      )}
 
-          {/* Search Trigger (Ctrl+K) */}
-          <button
-            onClick={() => setShowCommandPalette(true)}
-            className="hidden md:flex items-center gap-2 px-3 py-1.5 rounded-xl border text-xs text-slate-500 hover:border-indigo-400 transition-colors cursor-pointer w-64 ml-4"
-            style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)' }}
-          >
-            <Search size={14} className="text-slate-400" />
-            <span className="flex-1 text-left">Search SKU, menu or actions…</span>
-            <kbd className="px-1.5 py-0.5 rounded text-[10px] font-mono border bg-slate-100 dark:bg-slate-800 dark:border-slate-700">⌘K</kbd>
-          </button>
-
-          <div className="flex-1" />
-
-          {/* Quick Create (+ New) */}
-          <div className="relative">
+      {/* Main Column */}
+      <div className="flex-1 min-w-0 flex flex-col">
+        {/* Top Bar */}
+        <header className="h-14 bg-white border-b border-slate-200 sticky top-0 z-30 px-4 sm:px-6 flex items-center justify-between gap-3">
+          <div className="flex items-center gap-3 min-w-0">
             <button
-              onClick={() => { setShowQuickCreate(!showQuickCreate); setShowNotifications(false); }}
-              className="flex items-center gap-1 px-3 py-1.5 rounded-xl text-xs font-semibold text-white shadow-xs transition-all hover:opacity-95"
-              style={{ background: 'var(--color-primary)' }}
+              type="button"
+              onClick={() => setMobileOpen(true)}
+              className="lg:hidden p-2 -ml-2 rounded-lg text-slate-600 hover:bg-slate-100"
+              aria-label="Open navigation menu"
             >
-              <Plus size={14} />
-              <span>New</span>
+              <Menu className="w-5 h-5" />
             </button>
 
-            {showQuickCreate && (
-              <div className="absolute right-0 mt-2 w-52 rounded-2xl shadow-xl border p-2 space-y-1 z-50 animate-in fade-in"
-                   style={{ background: 'var(--color-surface)', borderColor: 'var(--color-border)' }}>
-                <button
-                  onClick={() => { setShowQuickCreate(false); navigate('/purchases'); }}
-                  className="w-full flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs font-medium hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors text-left"
-                  style={{ color: 'var(--color-text)' }}
-                >
-                  <ReceiptText size={15} className="text-indigo-600" />
-                  <span>New Purchase Bill</span>
-                </button>
-                <button
-                  onClick={() => { setShowQuickCreate(false); navigate('/sales'); }}
-                  className="w-full flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs font-medium hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors text-left"
-                  style={{ color: 'var(--color-text)' }}
-                >
-                  <Receipt size={15} className="text-emerald-600" />
-                  <span>New POS Counter Sale</span>
-                </button>
-                <button
-                  onClick={() => { setShowQuickCreate(false); navigate('/transfers'); }}
-                  className="w-full flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs font-medium hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors text-left"
-                  style={{ color: 'var(--color-text)' }}
-                >
-                  <ArrowLeftRight size={15} className="text-sky-600" />
-                  <span>Stock Transfer Consignment</span>
-                </button>
-                <button
-                  onClick={() => { setShowQuickCreate(false); navigate('/customers'); }}
-                  className="w-full flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs font-medium hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors text-left"
-                  style={{ color: 'var(--color-text)' }}
-                >
-                  <HeartHandshake size={15} className="text-purple-600" />
-                  <span>Add Customer</span>
-                </button>
-                <button
-                  onClick={() => { setShowQuickCreate(false); navigate('/barcodes'); }}
-                  className="w-full flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs font-medium hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors text-left"
-                  style={{ color: 'var(--color-text)' }}
-                >
-                  <ScanBarcode size={15} className="text-amber-600" />
-                  <span>Queue Barcode Print</span>
-                </button>
-              </div>
-            )}
+            <div className="flex items-center gap-2 text-sm min-w-0">
+              <span className="text-slate-400 hidden sm:inline">SoleControl</span>
+              <span className="text-slate-300 hidden sm:inline">/</span>
+              <span className="font-medium text-slate-800 truncate">{currentTitle}</span>
+            </div>
           </div>
 
-          {/* Theme Toggle */}
-          <button
-            onClick={toggle}
-            className="p-2 rounded-xl transition-colors hover:bg-slate-100 dark:hover:bg-slate-800"
-            style={{ color: 'var(--color-muted)' }}
-            title="Toggle Light/Dark Theme"
-          >
-            {theme === 'dark' ? <Sun size={17} /> : <Moon size={17} />}
-          </button>
-
-          {/* Notifications Bell */}
-          <div className="relative">
+          <div className="flex items-center gap-2 sm:gap-3">
+            {/* Global Search Trigger */}
             <button
-              onClick={() => { setShowNotifications(!showNotifications); setShowQuickCreate(false); }}
-              className="p-2 rounded-xl transition-colors hover:bg-slate-100 dark:hover:bg-slate-800 relative cursor-pointer"
-              style={{ color: 'var(--color-muted)' }}
-              title="System Alerts & Notifications"
+              type="button"
+              onClick={() => setShowPalette(true)}
+              className="h-9 px-3 rounded-lg border border-slate-200 bg-slate-50 hover:bg-white text-slate-500 text-xs flex items-center gap-2 transition-colors"
             >
-              <Bell size={17} />
+              <Search className="w-3.5 h-3.5 text-slate-400" />
+              <span className="hidden md:inline">Search pages, SKU, bill…</span>
+              <kbd className="hidden md:inline-flex items-center gap-0.5 px-1.5 py-0.5 text-[10px] font-medium bg-white border border-slate-200 rounded text-slate-500">
+                <Command className="w-2.5 h-2.5" />K
+              </kbd>
+            </button>
+
+            {/* Store badge or switcher */}
+            {activeStores.length > 1 ? (
+              <div className="hidden sm:block w-48">
+                <SearchableCombobox
+                  options={activeStores.map((st) => ({ value: st.id, label: st.name }))}
+                  value={currentStore.id}
+                  onChange={setActiveStoreId}
+                />
+              </div>
+            ) : (
+              <span className="hidden xl:inline-flex items-center px-2.5 py-1 rounded-md bg-slate-100 text-xs font-medium text-slate-700">
+                {currentStore.name}
+              </span>
+            )}
+
+            {/* Notifications */}
+            <button
+              type="button"
+              onClick={() => navigate('/notifications')}
+              aria-label="Notifications"
+              className="relative p-2 rounded-lg text-slate-600 hover:bg-slate-100 transition-colors"
+            >
+              <Bell className="w-4 h-4" />
               {unreadCount > 0 && (
-                <span className="absolute top-1.5 right-1.5 w-2 h-2 rounded-full bg-red-500 animate-ping" />
-              )}
-              {unreadCount > 0 && (
-                <span className="absolute top-1.5 right-1.5 w-2 h-2 rounded-full bg-red-500" />
+                <span className="absolute top-1 right-1 min-w-[16px] h-4 px-1 rounded-full bg-red-600 text-white text-[10px] font-semibold flex items-center justify-center tabular-nums">
+                  {unreadCount}
+                </span>
               )}
             </button>
 
-            {/* Notifications Popover */}
-            {showNotifications && (
-              <div className="absolute right-0 mt-2 w-80 sm:w-96 rounded-2xl shadow-2xl border overflow-hidden z-50 animate-in fade-in"
-                   style={{ background: 'var(--color-surface)', borderColor: 'var(--color-border)' }}>
-                <div className="p-4 border-b flex items-center justify-between" style={{ borderColor: 'var(--color-border)' }}>
-                  <div className="flex items-center gap-2">
-                    <span className="font-bold text-sm" style={{ color: 'var(--color-text)' }}>Notifications</span>
-                    {unreadCount > 0 && (
-                      <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-red-100 text-red-600 dark:bg-red-950 dark:text-red-300">
-                        {unreadCount} new
-                      </span>
-                    )}
-                  </div>
-                  <button
-                    onClick={markAllNotificationsRead}
-                    className="text-xs text-indigo-600 dark:text-indigo-400 font-semibold hover:underline"
-                  >
-                    Mark all read
-                  </button>
-                </div>
-
-                <div className="divide-y max-h-80 overflow-y-auto" style={{ borderColor: 'var(--color-border)' }}>
-                  {notificationsList.map(n => (
-                    <div
-                      key={n.id}
-                      onClick={() => {
-                        NotificationStorage.markRead(n.id)
-                        setNotificationsList(prev => prev.map(item => item.id === n.id ? { ...item, unread: false, isRead: true, is_read: true } : item))
-                        api.post(`/alerts/${n.id}/read`).catch(() => {})
-                        setShowNotifications(false)
-                        navigate('/audit')
-                      }}
-                      className={`p-3.5 hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors cursor-pointer flex gap-3 ${n.unread ? 'bg-indigo-50/40 dark:bg-indigo-950/20' : ''}`}
-                    >
-                      <div className="mt-0.5">
-                        {n.severity === 'warning' ? <AlertTriangle size={16} className="text-amber-500" /> :
-                         n.severity === 'success' ? <CheckCircle2 size={16} className="text-emerald-500" /> :
-                         <Info size={16} className="text-sky-500" />}
-                      </div>
-                      <div className="flex-1 space-y-0.5">
-                        <div className="text-xs font-semibold" style={{ color: 'var(--color-text)' }}>{n.title}</div>
-                        <div className="text-[11px]" style={{ color: 'var(--color-muted)' }}>{n.message}</div>
-                        <div className="text-[10px] font-mono text-slate-400">{n.time}</div>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-
-                <div className="p-2.5 border-t text-center" style={{ borderColor: 'var(--color-border)', background: 'var(--color-bg)' }}>
-                  <button
-                    onClick={() => { setShowNotifications(false); navigate('/audit'); }}
-                    className="text-xs font-semibold text-indigo-600 dark:text-indigo-400 hover:underline flex items-center justify-center gap-1 mx-auto"
-                  >
-                    View All Audit Logs & Alerts <ArrowUpRight size={13} />
-                  </button>
-                </div>
-              </div>
+            {/* Prominent New Sale Shortcut */}
+            {hasPermission('sales.create') && (
+              <button
+                type="button"
+                onClick={() => navigate('/sales/pos')}
+                className="h-9 px-3.5 rounded-lg bg-teal-600 hover:bg-teal-700 text-white text-xs sm:text-sm font-medium inline-flex items-center gap-1.5 shadow-xs transition-colors"
+              >
+                <ShoppingBag className="w-4 h-4" />
+                <span>New Sale</span>
+              </button>
             )}
-          </div>
-
-          {/* User Avatar Menu */}
-          <div className="flex items-center gap-2 pl-2 border-l" style={{ borderColor: 'var(--color-border)' }}>
-            <div className="w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold text-white shadow-xs" style={{ background: 'var(--color-primary)' }}>
-              {user?.name?.charAt(0) || 'S'}
-            </div>
-            <div className="hidden sm:flex flex-col">
-              <span className="text-xs font-semibold leading-tight" style={{ color: 'var(--color-text)' }}>{user?.name || 'Super Admin'}</span>
-              <span className="text-[10px] font-mono text-indigo-500">SUPER_ADMIN</span>
-            </div>
-            <button
-              onClick={handleLogout}
-              className="p-1.5 rounded-lg transition-colors hover:bg-rose-50 dark:hover:bg-rose-950/40 text-slate-400 hover:text-rose-500 ml-1"
-              title="Logout session"
-            >
-              <LogOut size={15} />
-            </button>
           </div>
         </header>
 
-        {/* Main Content Area */}
-        <main className="flex-1 overflow-y-auto"><Outlet /></main>
+        {/* Page Content */}
+        <main className="flex-1 p-4 sm:p-6 max-w-[1600px] w-full mx-auto">
+          <Outlet />
+        </main>
+      </div>
 
-        {/* Global Command Palette Modal */}
-        {showCommandPalette && (
-          <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-start justify-center pt-20 p-4">
-            <div className="w-full max-w-xl rounded-2xl shadow-2xl border overflow-hidden animate-in fade-in zoom-in-95"
-                 style={{ background: 'var(--color-surface)', borderColor: 'var(--color-border)' }}>
-              <div className="p-4 border-b flex items-center gap-3" style={{ borderColor: 'var(--color-border)' }}>
-                <Search size={18} className="text-slate-400" />
-                <input
-                  autoFocus
-                  value={paletteQuery}
-                  onChange={e => setPaletteQuery(e.target.value)}
-                  placeholder="Jump to page, report, or module…"
-                  className="flex-1 bg-transparent text-sm outline-none font-medium"
-                  style={{ color: 'var(--color-text)' }}
-                />
-                <button onClick={() => setShowCommandPalette(false)} className="p-1 text-slate-400 hover:text-slate-600">
-                  <X size={16} />
-                </button>
-              </div>
-
-              <div className="max-h-80 overflow-y-auto p-2 space-y-1">
-                {filteredPaletteItems.length === 0 ? (
-                  <div className="py-8 text-center text-xs text-slate-400">No matching pages found</div>
-                ) : (
-                  filteredPaletteItems.map(item => (
-                    <button
-                      key={item.to}
-                      onClick={() => {
-                        setShowCommandPalette(false)
-                        navigate(item.to)
-                      }}
-                      className="w-full flex items-center justify-between p-2.5 rounded-xl text-xs font-semibold hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors text-left"
-                      style={{ color: 'var(--color-text)' }}
-                    >
-                      <div className="flex items-center gap-3">
-                        <span className="text-indigo-600 dark:text-indigo-400">{item.icon}</span>
-                        <span>{item.label}</span>
-                      </div>
-                      <span className="text-[10px] uppercase font-mono text-slate-400">{item.group}</span>
-                    </button>
-                  ))
-                )}
-              </div>
-
-              <div className="px-4 py-2 border-t flex items-center justify-between text-[11px] text-slate-400"
-                   style={{ borderColor: 'var(--color-border)', background: 'var(--color-bg)' }}>
-                <span>Navigation Shortcut</span>
-                <span>Press <kbd className="font-mono border px-1 rounded">ESC</kbd> to exit</span>
-              </div>
+      {/* Command Palette (Ctrl/Cmd+K) */}
+      {showPalette && (
+        <div
+          className="fixed inset-0 z-50 bg-slate-900/50 backdrop-blur-[1px] flex items-start justify-center pt-20 p-4"
+          onMouseDown={(e) => {
+            if (e.target === e.currentTarget) setShowPalette(false)
+          }}
+        >
+          <div className="w-full max-w-lg bg-white rounded-xl border border-slate-200 shadow-2xl overflow-hidden">
+            <div className="px-4 py-3 border-b border-slate-200 flex items-center gap-2.5">
+              <Search className="w-4 h-4 text-slate-400" />
+              <input
+                autoFocus
+                type="text"
+                value={paletteQuery}
+                onChange={(e) => setPaletteQuery(e.target.value)}
+                placeholder="Jump to module or action…"
+                className="flex-1 text-sm text-slate-900 placeholder:text-slate-400 focus:outline-none"
+              />
+              <button
+                type="button"
+                onClick={() => setShowPalette(false)}
+                className="text-xs text-slate-400 hover:text-slate-600 px-1.5 py-0.5 border border-slate-200 rounded"
+              >
+                Esc
+              </button>
+            </div>
+            <div className="max-h-80 overflow-y-auto p-2 space-y-0.5">
+              {filteredPalette.length === 0 ? (
+                <div className="py-8 text-center text-xs text-slate-500">No matching pages found</div>
+              ) : (
+                filteredPalette.map((item) => (
+                  <button
+                    key={item.to}
+                    type="button"
+                    onClick={() => {
+                      navigate(item.to)
+                      setShowPalette(false)
+                      setPaletteQuery('')
+                    }}
+                    className="w-full px-3 py-2 rounded-lg text-left hover:bg-teal-50 hover:text-teal-900 flex items-center justify-between gap-2 text-sm text-slate-700 transition-colors"
+                  >
+                    <span className="flex items-center gap-2.5">
+                      <span className="text-slate-400">{item.icon}</span>
+                      <span className="font-medium">{item.label}</span>
+                    </span>
+                    <span className="text-xs text-slate-400">{item.group}</span>
+                  </button>
+                ))
+              )}
             </div>
           </div>
-        )}
-      </div>
+        </div>
+      )}
     </div>
   )
 }

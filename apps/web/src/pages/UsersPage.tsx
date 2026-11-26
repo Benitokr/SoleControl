@@ -1,340 +1,345 @@
-import { useState } from 'react'
+import { useState, useMemo } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { Users, Plus, CheckCircle, XCircle, Search, KeyRound, Shield, X, Check } from 'lucide-react'
+import { toast } from 'sonner'
+import { Users, Plus, KeyRound, UserX } from 'lucide-react'
 import { api } from '../lib/api'
-import { UserStorage } from '../lib/storage'
+import { formatDateTimeIN, getApiErrorMessage } from '../lib/format'
+import {
+  PageHeader, FilterBar, DataTable, StatusBadge, Button, Drawer,
+  ConfirmDialog, FormField, SearchableCombobox, ColumnDef, inputBaseClass,
+} from '../components/ui'
 
-interface User {
-  id: string
-  name: string
-  email: string
-  isActive: boolean
-  role?: { name: string }
-  role_name?: string
-  lastLoginAt?: string
+const ROLE_DESCRIPTIONS: Record<string, string> = {
+  SUPER_ADMIN: 'Full system access including security settings, accounting, and role management.',
+  ADMINISTRATOR: 'Manages daily store operations, master data, purchases, and staff.',
+  MANAGEMENT: 'Read-only executive access to dashboards, reports, insights, and audit logs.',
+  SALES_EXECUTIVE: 'Operates POS billing, customer lookup, and returns.',
+  ACCOUNTS_USER: 'Manages journals, vendor payments, bank reconciliation, and GST registers.',
+  INVENTORY_USER: 'Manages warehouse stock, GRN receiving, transfers, and physical audits.',
 }
 
 export function UsersPage() {
   const qc = useQueryClient()
   const [search, setSearch] = useState('')
-  const [showAddModal, setShowAddModal] = useState(false)
-  const [resetSuccessMsg, setResetSuccessMsg] = useState('')
-  const [formError, setFormError] = useState('')
+  const [statusFilter, setStatusFilter] = useState('ALL')
 
-  // Form state
-  const [newName, setNewName] = useState('')
-  const [newEmail, setNewEmail] = useState('')
-  const [newRole, setNewRole] = useState('SALES_EXECUTIVE')
-  const [newPassword, setNewPassword] = useState('ChangeMe@123')
+  const [showDrawer, setShowDrawer] = useState(false)
+  const [editingUser, setEditingUser] = useState<any | null>(null)
+  const [name, setName] = useState('')
+  const [email, setEmail] = useState('')
+  const [phone, setPhone] = useState('')
+  const [roleId, setRoleId] = useState('')
+  const [password, setPassword] = useState('')
 
-  const { data, isLoading } = useQuery<{ data: User[] }>({
+  const [confirmDeactivate, setConfirmDeactivate] = useState<any | null>(null)
+
+  const { data: usersData, isLoading, error, refetch } = useQuery({
     queryKey: ['users'],
-    queryFn: () => api.get('/users').then(r => r.data).catch(() => ({ data: [] })),
+    queryFn: () => api.get('/users').then((r) => r.data?.data ?? []),
   })
 
-  const toggle = useMutation({
-    mutationFn: (u: User) => api.put(`/users/${u.id}`, { isActive: !u.isActive }),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['users'] }),
+  const { data: rolesData } = useQuery({
+    queryKey: ['roles'],
+    queryFn: () => api.get('/roles').then((r) => r.data?.data ?? []),
   })
 
-  const createUserMutation = useMutation({
-    mutationFn: (body: any) => api.post('/users', body),
+  const users: any[] = Array.isArray(usersData) ? usersData : []
+  const roles: any[] = Array.isArray(rolesData) ? rolesData : []
+
+  const filtered = useMemo(() => {
+    const q = search.trim().toLowerCase()
+    return users.filter((u) => {
+      const active = u.isActive !== false && u.is_active !== false
+      if (statusFilter === 'ACTIVE' && !active) return false
+      if (statusFilter === 'INACTIVE' && active) return false
+      if (!q) return true
+      return (
+        String(u.name || '').toLowerCase().includes(q) ||
+        String(u.email || '').toLowerCase().includes(q)
+      )
+    })
+  }, [users, search, statusFilter])
+
+  const selectedRoleObj = roles.find((r) => r.id === roleId)
+  const roleCode = String(selectedRoleObj?.code || '').toUpperCase()
+
+  const saveMutation = useMutation({
+    mutationFn: () => {
+      if (editingUser) {
+        return api.put(`/users/${editingUser.id}`, {
+          name: name.trim(),
+          phone: phone.trim() || undefined,
+          roleId: roleId || undefined,
+        })
+      }
+      return api.post('/users', {
+        name: name.trim(),
+        email: email.trim(),
+        phone: phone.trim() || undefined,
+        roleId: roleId || roles[0]?.id,
+        password: password || 'Welcome@123',
+      })
+    },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['users'] })
-      setShowAddModal(false)
-      setNewName('')
-      setNewEmail('')
+      toast.success(editingUser ? 'User updated' : 'User created')
+      setShowDrawer(false)
     },
-    onError: (err: any) => {
-      setFormError(err.response?.data?.error?.message || 'Failed to create user.')
-    }
+    onError: (err) => toast.error(getApiErrorMessage(err, 'Failed to save user')),
   })
 
-  const handleCreateSubmit = (e: React.FormEvent) => {
-    e.preventDefault()
-    if (!newName.trim() || !newEmail.trim()) {
-      setFormError('Name and email are required.')
-      return
-    }
-    setFormError('')
-    const newUserObj = {
-      id: 'usr-' + Date.now(),
-      name: newName.trim(),
-      email: newEmail.trim().toLowerCase(),
-      role: { name: newRole.replace(/_/g, ' ') },
-      role_name: newRole.replace(/_/g, ' '),
-      isActive: true,
-      lastLoginAt: new Date().toISOString()
-    }
-    UserStorage.add(newUserObj)
-    createUserMutation.mutate({
-      name: newName.trim(),
-      email: newEmail.trim().toLowerCase(),
-      roleName: newRole,
-      password: newPassword,
-      isActive: true
-    })
-    setShowAddModal(false)
+  const deactivateMutation = useMutation({
+    mutationFn: (id: string) => api.post(`/users/${id}/deactivate`, {}),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['users'] })
+      toast.success('User deactivated')
+      setConfirmDeactivate(null)
+    },
+    onError: (err) => toast.error(getApiErrorMessage(err, 'Failed to deactivate user')),
+  })
+
+  const openAdd = () => {
+    setEditingUser(null)
+    setName('')
+    setEmail('')
+    setPhone('')
+    setRoleId(roles[0]?.id || '')
+    setPassword('')
+    setShowDrawer(true)
   }
 
-  const handleResetPassword = (u: User) => {
-    setResetSuccessMsg(`Password for ${u.name} reset to 'ChangeMe@123' (forced update on login).`)
-    setTimeout(() => setResetSuccessMsg(''), 4000)
+  const openEdit = (u: any) => {
+    setEditingUser(u)
+    setName(u.name || '')
+    setEmail(u.email || '')
+    setPhone(u.phone || '')
+    setRoleId(u.roleId || u.role_id || u.role?.id || '')
+    setPassword('')
+    setShowDrawer(true)
   }
 
-  const rawUsers: User[] = UserStorage.mergeWith(
-    Array.isArray(data?.data)
-      ? data.data
-      : Array.isArray(data)
-        ? (data as any)
-        : []
-  )
-
-  const users = rawUsers.filter(u =>
-    (u?.name || '').toLowerCase().includes(search.toLowerCase()) ||
-    (u?.email || '').toLowerCase().includes(search.toLowerCase())
-  )
+  const columns: ColumnDef<any>[] = [
+    {
+      id: 'name',
+      header: 'User',
+      sortable: true,
+      accessor: (r) => r.name || '',
+      cell: (r) => (
+        <div>
+          <p className="font-medium text-slate-900">{r.name}</p>
+          <p className="text-xs text-slate-500">{r.email}</p>
+        </div>
+      ),
+    },
+    {
+      id: 'role',
+      header: 'Role',
+      sortable: true,
+      accessor: (r) => r.role?.name || r.roleName || r.role_name || '',
+      cell: (r) => (
+        <span className="text-xs font-medium text-slate-700 bg-slate-100 px-2 py-0.5 rounded">
+          {r.role?.name || r.roleName || r.role_name || 'Staff'}
+        </span>
+      ),
+    },
+    {
+      id: 'lastLogin',
+      header: 'Last login',
+      cell: (r) => (
+        <span className="text-xs text-slate-500 tabular-nums">
+          {formatDateTimeIN(r.lastLoginAt || r.last_login_at)}
+        </span>
+      ),
+    },
+    {
+      id: 'status',
+      header: 'Status',
+      cell: (r) => (
+        <StatusBadge status={r.isActive === false || r.is_active === false ? 'INACTIVE' : 'ACTIVE'} />
+      ),
+    },
+    {
+      id: 'actions',
+      header: 'Actions',
+      align: 'right',
+      cell: (r) => (
+        <div className="flex items-center justify-end gap-1.5" onClick={(e) => e.stopPropagation()}>
+          <Button size="sm" variant="outline" onClick={() => openEdit(r)}>
+            Edit
+          </Button>
+          {r.role?.code !== 'SUPER_ADMIN' && r.isActive !== false && (
+            <Button
+              size="sm"
+              variant="ghost"
+              onClick={() => setConfirmDeactivate(r)}
+              title="Deactivate user"
+              icon={<UserX className="w-3.5 h-3.5 text-red-600" />}
+            />
+          )}
+        </div>
+      ),
+    },
+  ]
 
   return (
-    <div className="p-6 space-y-6">
-      {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-        <div>
-          <h1 className="text-2xl font-bold tracking-tight flex items-center gap-2" style={{ color: 'var(--color-text)' }}>
-            <Users size={24} className="text-indigo-600" /> Users & Personnel
-          </h1>
-          <p className="text-sm mt-1" style={{ color: 'var(--color-muted)' }}>
-            Manage staff credentials, store location assignments, and role-based permissions
-          </p>
-        </div>
-        <button
-          onClick={() => { setShowAddModal(true); setFormError('') }}
-          className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-semibold text-white shadow-xs transition-all hover:opacity-95"
-          style={{ background: 'var(--color-primary)' }}
+    <div className="space-y-5">
+      <PageHeader
+        title="Users & Personnel"
+        description="Manage staff accounts, assigned roles, and account status."
+        breadcrumbs={[{ label: 'Administration' }, { label: 'Users' }]}
+        primaryAction={
+          <Button variant="primary" icon={<Plus className="w-4 h-4" />} onClick={openAdd}>
+            Add User
+          </Button>
+        }
+      />
+
+      <FilterBar
+        search={search}
+        onSearchChange={setSearch}
+        searchPlaceholder="Search by name or email…"
+        chips={[
+          { key: 'ALL', label: 'All', count: users.length },
+          {
+            key: 'ACTIVE',
+            label: 'Active',
+            count: users.filter((u) => u.isActive !== false && u.is_active !== false).length,
+          },
+          {
+            key: 'INACTIVE',
+            label: 'Inactive',
+            count: users.filter((u) => u.isActive === false || u.is_active === false).length,
+          },
+        ]}
+        activeChip={statusFilter}
+        onChipChange={setStatusFilter}
+        onReset={() => {
+          setSearch('')
+          setStatusFilter('ALL')
+        }}
+      />
+
+      <DataTable
+        data={filtered}
+        columns={columns}
+        getRowId={(r, i) => r.id || r.email || String(i)}
+        isLoading={isLoading}
+        error={error}
+        onRetry={refetch}
+        onRowClick={openEdit}
+        exportFilename="solecontrol-users"
+        emptyIcon={<Users className="w-6 h-6" />}
+        emptyTitle="No users found"
+        emptyDescription="Add staff members and assign their store role."
+      />
+
+      <Drawer
+        open={showDrawer}
+        onClose={() => setShowDrawer(false)}
+        title={editingUser ? `Edit ${editingUser.name}` : 'Add Staff User'}
+        subtitle="Assign role and login credentials."
+        isDirty={Boolean(name || email)}
+        footer={
+          <>
+            <Button variant="outline" onClick={() => setShowDrawer(false)}>
+              Cancel
+            </Button>
+            <Button
+              variant="primary"
+              loading={saveMutation.isPending}
+              onClick={() => {
+                if (!name.trim() || (!editingUser && !email.trim())) {
+                  toast.error('Name and email are required')
+                  return
+                }
+                saveMutation.mutate()
+              }}
+            >
+              {editingUser ? 'Save Changes' : 'Create User'}
+            </Button>
+          </>
+        }
+      >
+        <FormField label="Full name" required>
+          <input
+            type="text"
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            placeholder="e.g. Priya Sharma"
+            className={inputBaseClass}
+          />
+        </FormField>
+
+        <FormField label="Email address" required>
+          <input
+            type="email"
+            disabled={!!editingUser}
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            placeholder="priya@fortyv.local"
+            className={inputBaseClass}
+          />
+        </FormField>
+
+        <FormField label="Mobile number">
+          <input
+            type="tel"
+            value={phone}
+            onChange={(e) => setPhone(e.target.value)}
+            placeholder="+91 98765 43210"
+            className={inputBaseClass}
+          />
+        </FormField>
+
+        <FormField
+          label="Role"
+          required
+          helperText={ROLE_DESCRIPTIONS[roleCode] || 'Select the access role for this user.'}
         >
-          <Plus size={16} /> Add User
-        </button>
-      </div>
+          <SearchableCombobox
+            options={roles.map((r) => ({ value: r.id, label: r.name, sublabel: r.code }))}
+            value={roleId}
+            onChange={setRoleId}
+            placeholder="Select role…"
+          />
+        </FormField>
 
-      {resetSuccessMsg && (
-        <div className="p-3.5 rounded-xl text-xs font-semibold bg-emerald-50 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300 border border-emerald-200 flex items-center gap-2">
-          <Check size={16} />
-          <span>{resetSuccessMsg}</span>
-        </div>
-      )}
-
-      {/* KPI Cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-        <div className="p-5 rounded-xl border flex flex-col justify-between" style={{ background: 'var(--color-surface)', borderColor: 'var(--color-border)' }}>
-          <span className="text-xs font-semibold uppercase tracking-wider" style={{ color: 'var(--color-muted)' }}>Total Personnel</span>
-          <span className="text-2xl font-bold font-mono mt-2" style={{ color: 'var(--color-text)' }}>{users.length}</span>
-          <span className="text-xs mt-1" style={{ color: 'var(--color-muted)' }}>Authorized system accounts</span>
-        </div>
-        <div className="p-5 rounded-xl border flex flex-col justify-between" style={{ background: 'var(--color-surface)', borderColor: 'var(--color-border)' }}>
-          <span className="text-xs font-semibold uppercase tracking-wider text-emerald-600 dark:text-emerald-400">Active Sessions</span>
-          <span className="text-2xl font-bold font-mono mt-2 text-emerald-600 dark:text-emerald-400">
-            {users.filter(u => u.isActive).length}
-          </span>
-          <span className="text-xs mt-1" style={{ color: 'var(--color-muted)' }}>Enabled for store operations</span>
-        </div>
-        <div className="p-5 rounded-xl border flex flex-col justify-between" style={{ background: 'var(--color-surface)', borderColor: 'var(--color-border)' }}>
-          <span className="text-xs font-semibold uppercase tracking-wider text-indigo-600 dark:text-indigo-400">System Super Admins</span>
-          <span className="text-2xl font-bold font-mono mt-2 text-indigo-600 dark:text-indigo-400">1</span>
-          <span className="text-xs mt-1" style={{ color: 'var(--color-muted)' }}>Root management role</span>
-        </div>
-      </div>
-
-      {/* Table Card */}
-      <div className="rounded-xl border overflow-hidden shadow-xs" style={{ background: 'var(--color-surface)', borderColor: 'var(--color-border)' }}>
-        <div className="p-4 border-b flex items-center justify-between gap-4" style={{ borderColor: 'var(--color-border)' }}>
-          <div className="relative flex-1 max-w-md">
-            <Search size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" />
+        {!editingUser && (
+          <FormField label="Initial password" helperText="User will be asked to change this at first login.">
             <input
-              value={search}
-              onChange={e => setSearch(e.target.value)}
-              placeholder="Search user by name, email, or role…"
-              className="w-full pl-10 pr-4 py-2 rounded-xl text-sm outline-none border transition-all focus:ring-2 focus:ring-indigo-500/20"
-              style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }}
+              type="password"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              placeholder="Minimum 8 characters"
+              className={inputBaseClass}
             />
-          </div>
-        </div>
+          </FormField>
+        )}
 
-        {isLoading && users.length === 0 && <div className="text-sm py-12 text-center" style={{ color: 'var(--color-muted)' }}>Loading users…</div>}
-
-        {(!isLoading || users.length > 0) && (
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="border-b text-xs uppercase tracking-wider text-slate-400" style={{ borderColor: 'var(--color-border)' }}>
-                  <th className="text-left px-5 py-3 font-semibold">User</th>
-                  <th className="text-left px-5 py-3 font-semibold">Email</th>
-                  <th className="text-left px-5 py-3 font-semibold">Assigned Role</th>
-                  <th className="text-left px-5 py-3 font-semibold">Status</th>
-                  <th className="text-left px-5 py-3 font-semibold">Last Active</th>
-                  <th className="text-right px-5 py-3 font-semibold">Actions</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y" style={{ borderColor: 'var(--color-border)' }}>
-                {users.length === 0 && (
-                  <tr><td colSpan={6} className="py-12 text-center text-xs text-slate-400">No users found</td></tr>
-                )}
-                {users.map(u => {
-                  const roleName = u.role?.name || u.role_name || (u.email.includes('superadmin') ? 'Super Admin' : 'Staff')
-                  const isSuperAdmin = roleName === 'Super Admin'
-                  return (
-                    <tr key={u.id} className="hover:bg-slate-50/50 dark:hover:bg-slate-800/40 transition-colors">
-                      <td className="px-5 py-3.5 font-semibold" style={{ color: 'var(--color-text)' }}>
-                        <div className="flex items-center gap-2.5">
-                          <div className="w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold text-white bg-indigo-600">
-                            {u.name.charAt(0)}
-                          </div>
-                          <span>{u.name}</span>
-                        </div>
-                      </td>
-                      <td className="px-5 py-3.5 text-xs font-mono text-slate-500">{u.email}</td>
-                      <td className="px-5 py-3.5">
-                        <span className="text-xs px-2.5 py-0.5 rounded-full font-semibold border"
-                          style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }}>
-                          {roleName}
-                        </span>
-                      </td>
-                      <td className="px-5 py-3.5">
-                        {u.isActive ? (
-                          <span className="inline-flex items-center gap-1 text-xs font-semibold px-2.5 py-0.5 rounded-full bg-emerald-100 text-emerald-700 dark:bg-emerald-950/50 dark:text-emerald-300">
-                            <CheckCircle size={12} /> Active
-                          </span>
-                        ) : (
-                          <span className="inline-flex items-center gap-1 text-xs font-semibold px-2.5 py-0.5 rounded-full bg-rose-100 text-rose-700 dark:bg-rose-950/50 dark:text-rose-300">
-                            <XCircle size={12} /> Inactive
-                          </span>
-                        )}
-                      </td>
-                      <td className="px-5 py-3.5 font-mono text-xs text-slate-400">
-                        {u.lastLoginAt ? new Date(u.lastLoginAt).toLocaleDateString('en-IN') : 'Recent'}
-                      </td>
-                      <td className="px-5 py-3.5 text-right">
-                        <div className="flex items-center justify-end gap-2">
-                          <button
-                            onClick={() => handleResetPassword(u)}
-                            className="inline-flex items-center gap-1 text-xs px-2.5 py-1 rounded-lg border font-semibold hover:border-indigo-400 transition-colors"
-                            style={{ borderColor: 'var(--color-border)', color: 'var(--color-text)' }}
-                            title="Reset password"
-                          >
-                            <KeyRound size={12} /> Reset
-                          </button>
-                          {!isSuperAdmin && (
-                            <button
-                              onClick={() => toggle.mutate(u)}
-                              className="text-xs px-2.5 py-1 rounded-lg border font-semibold hover:border-rose-400 transition-colors"
-                              style={{ borderColor: 'var(--color-border)', color: u.isActive ? 'var(--color-danger)' : 'var(--color-success)' }}
-                            >
-                              {u.isActive ? 'Deactivate' : 'Activate'}
-                            </button>
-                          )}
-                        </div>
-                      </td>
-                    </tr>
-                  )
-                })}
-              </tbody>
-            </table>
+        {editingUser && (
+          <div className="pt-3 border-t border-slate-200">
+            <Button
+              variant="outline"
+              size="sm"
+              icon={<KeyRound className="w-3.5 h-3.5" />}
+              onClick={() => toast.info('Password reset link/action queued for user')}
+            >
+              Reset Password
+            </Button>
           </div>
         )}
-      </div>
+      </Drawer>
 
-      {/* Add User Modal */}
-      {showAddModal && (
-        <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="w-full max-w-md rounded-2xl p-6 shadow-2xl border space-y-4 animate-in fade-in"
-            style={{ background: 'var(--color-surface)', borderColor: 'var(--color-border)' }}>
-            <div className="flex items-center justify-between border-b pb-3" style={{ borderColor: 'var(--color-border)' }}>
-              <h3 className="font-bold text-lg" style={{ color: 'var(--color-text)' }}>Create Staff Account</h3>
-              <button onClick={() => setShowAddModal(false)} className="p-1 hover:opacity-75"><X size={18} /></button>
-            </div>
-
-            {formError && (
-              <div className="p-3 rounded-xl text-xs font-semibold bg-rose-50 text-rose-600 dark:bg-rose-950/40 dark:text-rose-300 border border-rose-200">
-                {formError}
-              </div>
-            )}
-
-            <form onSubmit={handleCreateSubmit} className="space-y-4 text-sm">
-              <div>
-                <label className="block text-xs font-semibold mb-1" style={{ color: 'var(--color-muted)' }}>Staff Full Name</label>
-                <input
-                  type="text"
-                  required
-                  placeholder="e.g. Ramesh Kumar"
-                  value={newName}
-                  onChange={e => setNewName(e.target.value)}
-                  className="w-full px-3 py-2 rounded-xl border text-sm outline-none"
-                  style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }}
-                />
-              </div>
-
-              <div>
-                <label className="block text-xs font-semibold mb-1" style={{ color: 'var(--color-muted)' }}>Email Address</label>
-                <input
-                  type="email"
-                  required
-                  placeholder="e.g. ramesh@fortyv.local"
-                  value={newEmail}
-                  onChange={e => setNewEmail(e.target.value)}
-                  className="w-full px-3 py-2 rounded-xl border text-sm outline-none font-mono"
-                  style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }}
-                />
-              </div>
-
-              <div>
-                <label className="block text-xs font-semibold mb-1" style={{ color: 'var(--color-muted)' }}>Role Assignment</label>
-                <select
-                  value={newRole}
-                  onChange={e => setNewRole(e.target.value)}
-                  className="w-full px-3 py-2 rounded-xl border text-sm outline-none"
-                  style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }}
-                >
-                  <option value="SALES_EXECUTIVE">Sales Executive (POS & Cashier)</option>
-                  <option value="INVENTORY_USER">Inventory Manager (Stock & Barcodes)</option>
-                  <option value="ACCOUNTS_USER">Accounts Specialist (Ledger & GST)</option>
-                  <option value="MANAGEMENT">Store Management (Approvals & Reports)</option>
-                  <option value="ADMINISTRATOR">Store Administrator</option>
-                </select>
-              </div>
-
-              <div>
-                <label className="block text-xs font-semibold mb-1" style={{ color: 'var(--color-muted)' }}>Initial Password</label>
-                <input
-                  type="text"
-                  value={newPassword}
-                  onChange={e => setNewPassword(e.target.value)}
-                  className="w-full px-3 py-2 rounded-xl border text-sm outline-none font-mono"
-                  style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }}
-                />
-                <span className="text-[11px] text-slate-400 mt-1 block">Staff will be prompted to change password upon first login.</span>
-              </div>
-
-              <div className="flex justify-end gap-2 pt-3 border-t" style={{ borderColor: 'var(--color-border)' }}>
-                <button
-                  type="button"
-                  onClick={() => setShowAddModal(false)}
-                  className="px-4 py-2 rounded-xl border text-xs font-semibold"
-                  style={{ borderColor: 'var(--color-border)', color: 'var(--color-muted)' }}
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  disabled={createUserMutation.isPending}
-                  className="px-5 py-2.5 rounded-xl text-xs font-semibold text-white shadow-xs"
-                  style={{ background: 'var(--color-primary)' }}
-                >
-                  {createUserMutation.isPending ? 'Provisioning…' : 'Create User'}
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
+      <ConfirmDialog
+        open={!!confirmDeactivate}
+        onClose={() => setConfirmDeactivate(null)}
+        onConfirm={() => confirmDeactivate && deactivateMutation.mutate(confirmDeactivate.id)}
+        title={`Deactivate ${confirmDeactivate?.name}?`}
+        description="Deactivated users cannot sign in, but their historical invoices and audit records remain intact."
+        confirmLabel="Deactivate User"
+        variant="danger"
+        loading={deactivateMutation.isPending}
+      />
     </div>
   )
 }

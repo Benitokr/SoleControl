@@ -1,787 +1,335 @@
 import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import {
-  BookOpen, Plus, CheckCircle, RotateCcw,
-  Scale, FileSpreadsheet, DollarSign, Wallet
-} from 'lucide-react'
+import { toast } from 'sonner'
+import { BookOpen, Plus, Trash2, CheckCircle2, AlertCircle } from 'lucide-react'
 import { api } from '../lib/api'
+import { formatINR, formatDateIN, toISODate, getApiErrorMessage } from '../lib/format'
+import {
+  PageHeader, DataTable, StatusBadge, Button, FullPageForm, FormField,
+  SearchableCombobox, DatePicker, MoneyInput, ColumnDef, inputBaseClass,
+} from '../components/ui'
 
-interface Account {
+type AccTab = 'daybook' | 'ledgers' | 'journals' | 'trial' | 'pnl' | 'bs'
+
+interface JournalLine {
   id: string
-  code: string
-  name: string
-  type: string
-  parentId?: string
-  createdAt?: string
-}
-
-interface TrialBalanceRow {
-  code: string
-  name: string
-  type: string
-  debit: string | number
-  credit: string | number
-}
-
-interface PLResponse {
-  revenue: { code: string; name: string; net_amount: string | number }[]
-  expenses: { code: string; name: string; net_amount: string | number }[]
-  totalRevenue: number
-  totalExpenses: number
-  grossProfit: number
-  netProfit: number
-}
-
-interface BalanceSheetResponse {
-  assets: { code: string; name: string; balance: string | number }[]
-  liabilities: { code: string; name: string; balance: string | number }[]
-  equity: { code: string; name: string; balance: string | number }[]
-  totalAssets: number
-  totalLiabilities: number
-  totalEquity: number
-}
-
-interface JournalEntry {
-  id: string
-  reference: string
-  type: string
-  status: string
-  total_debit: string | number
-  total_credit: string | number
-  notes?: string
-  created_at: string
-  posted_at?: string
-  lines?: {
-    id: string
-    account_code: string
-    account_name: string
-    type: 'DEBIT' | 'CREDIT'
-    amount: string | number
-    description?: string
-  }[]
-}
-
-interface CashbookRow {
-  posted_at: string
-  reference: string
-  type: 'DEBIT' | 'CREDIT'
-  amount: string | number
-  description?: string
+  accountId: string
+  debit: number
+  credit: number
 }
 
 export function AccountingPage() {
-  const [activeTab, setActiveTab] = useState<'accounts' | 'trial' | 'pl' | 'bs' | 'journals' | 'cashbook'>('accounts')
-  const [showNewAccountModal, setShowNewAccountModal] = useState(false)
-  const [showNewJournalModal, setShowNewJournalModal] = useState(false)
-  const [selectedJournal, setSelectedJournal] = useState<JournalEntry | null>(null)
+  const qc = useQueryClient()
+  const [tab, setTab] = useState<AccTab>('daybook')
+  const [newJournalMode, setNewJournalMode] = useState(false)
 
-  const queryClient = useQueryClient()
+  // Manual journal state
+  const [entryDate, setEntryDate] = useState(toISODate(new Date()))
+  const [narration, setNarration] = useState('')
+  const [jLines, setJLines] = useState<JournalLine[]>([
+    { id: 'jl-1', accountId: '', debit: 0, credit: 0 },
+    { id: 'jl-2', accountId: '', debit: 0, credit: 0 },
+  ])
 
-  // Queries
-  const { data: accountsData, isLoading: loadingAccounts } = useQuery<{ data: Account[] }>({
-    queryKey: ['accounts'],
-    queryFn: () => api.get('/accounting/accounts').then(r => r.data),
+  const { data: accountsData, isLoading: loadingAcc, error: accErr, refetch: refetchAcc } = useQuery({
+    queryKey: ['accounting-accounts'],
+    queryFn: () => api.get('/accounting/accounts').then((r) => r.data?.data ?? []),
   })
 
-  const { data: trialData, isLoading: loadingTrial } = useQuery<{ data: TrialBalanceRow[]; meta: { totalDebit: number; totalCredit: number; balanced: boolean } }>({
-    queryKey: ['trial-balance'],
-    queryFn: () => api.get('/accounting/trial-balance').then(r => r.data),
-    enabled: activeTab === 'trial',
+  const { data: journalsData, isLoading: loadingJour, error: jourErr, refetch: refetchJour } = useQuery({
+    queryKey: ['accounting-journals'],
+    queryFn: () => api.get('/accounting/journals').then((r) => r.data?.data ?? []),
   })
 
-  const { data: plData, isLoading: loadingPL } = useQuery<{ data: PLResponse }>({
-    queryKey: ['pl'],
-    queryFn: () => api.get('/accounting/pl').then(r => r.data),
-    enabled: activeTab === 'pl',
-  })
+  const accounts: any[] = Array.isArray(accountsData) ? accountsData : []
+  const journals: any[] = Array.isArray(journalsData) ? journalsData : []
 
-  const { data: bsData, isLoading: loadingBS } = useQuery<{ data: BalanceSheetResponse }>({
-    queryKey: ['balance-sheet'],
-    queryFn: () => api.get('/accounting/balance-sheet').then(r => r.data),
-    enabled: activeTab === 'bs',
-  })
-
-  const { data: journalsData, isLoading: loadingJournals } = useQuery<{ data: JournalEntry[] }>({
-    queryKey: ['journals'],
-    queryFn: () => api.get('/accounting/journals').then(r => r.data),
-    enabled: activeTab === 'journals',
-  })
-
-  const { data: cashbookData, isLoading: loadingCashbook } = useQuery<{ data: CashbookRow[] }>({
-    queryKey: ['cashbook'],
-    queryFn: () => api.get('/accounting/cashbook').then(r => r.data),
-    enabled: activeTab === 'cashbook',
-  })
-
-  // Account Form State
-  const [newAccount, setNewAccount] = useState({ code: '', name: '', type: 'ASSET', parentId: '' })
-  const createAccountMutation = useMutation({
-    mutationFn: (data: typeof newAccount) => api.post('/accounting/accounts', data),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['accounts'] })
-      setShowNewAccountModal(false)
-      setNewAccount({ code: '', name: '', type: 'ASSET', parentId: '' })
-    },
-  })
-
-  // Journal Form State
-  const [journalForm, setJournalForm] = useState({
-    reference: '',
-    type: 'MANUAL',
-    notes: '',
-    lines: [
-      { accountId: '', type: 'DEBIT' as 'DEBIT' | 'CREDIT', amount: '', description: '' },
-      { accountId: '', type: 'CREDIT' as 'DEBIT' | 'CREDIT', amount: '', description: '' },
-    ],
-  })
+  const totalDebit = jLines.reduce((s, l) => s + (Number(l.debit) || 0), 0)
+  const totalCredit = jLines.reduce((s, l) => s + (Number(l.credit) || 0), 0)
+  const isBalanced = totalDebit > 0 && Math.abs(totalDebit - totalCredit) < 0.01
 
   const createJournalMutation = useMutation({
-    mutationFn: (data: any) => api.post('/accounting/journals', data),
+    mutationFn: () =>
+      api.post('/accounting/journals', {
+        entryDate,
+        narration: narration.trim(),
+        lines: jLines.map((l) => ({
+          accountId: l.accountId,
+          debit: l.debit,
+          credit: l.credit,
+        })),
+      }),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['journals'] })
-      setShowNewJournalModal(false)
-      setJournalForm({
-        reference: '',
-        type: 'MANUAL',
-        notes: '',
-        lines: [
-          { accountId: '', type: 'DEBIT', amount: '', description: '' },
-          { accountId: '', type: 'CREDIT', amount: '', description: '' },
-        ],
-      })
+      qc.invalidateQueries({ queryKey: ['accounting-journals'] })
+      qc.invalidateQueries({ queryKey: ['accounting-accounts'] })
+      toast.success('Journal entry posted')
+      setNewJournalMode(false)
+      setNarration('')
     },
+    onError: (err) => toast.error(getApiErrorMessage(err, 'Failed to post journal entry')),
   })
 
-  const approveJournalMutation = useMutation({
-    mutationFn: (id: string) => api.post(`/accounting/journals/${id}/approve`),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['journals'] })
-      queryClient.invalidateQueries({ queryKey: ['trial-balance'] })
-      queryClient.invalidateQueries({ queryKey: ['pl'] })
-      queryClient.invalidateQueries({ queryKey: ['balance-sheet'] })
+  if (newJournalMode) {
+    return (
+      <FullPageForm
+        title="New Manual Journal Entry"
+        subtitle="Double-entry voucher. Total debits must equal total credits before posting."
+        backLabel="Accounting"
+        onCancel={() => setNewJournalMode(false)}
+        isDirty={Boolean(narration || totalDebit > 0)}
+        primaryActionLabel="Post Journal"
+        primaryDisabled={!isBalanced}
+        onPrimaryAction={() => {
+          if (!narration.trim()) {
+            toast.error('Narration is required')
+            return
+          }
+          if (jLines.some((l) => !l.accountId)) {
+            toast.error('Select an account for every line')
+            return
+          }
+          createJournalMutation.mutate()
+        }}
+        primaryLoading={createJournalMutation.isPending}
+        headerFields={
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+            <FormField label="Voucher date" required>
+              <DatePicker value={entryDate} onChange={setEntryDate} />
+            </FormField>
+            <FormField label="Narration" required className="sm:col-span-2">
+              <input
+                type="text"
+                value={narration}
+                onChange={(e) => setNarration(e.target.value)}
+                placeholder="e.g. Monthly showroom rent adjustment"
+                className={inputBaseClass}
+              />
+            </FormField>
+          </div>
+        }
+        summaryPanel={
+          <div className="space-y-4 text-sm">
+            <h2 className="text-base font-semibold text-slate-900 border-b border-slate-100 pb-2">
+              Balance Check
+            </h2>
+            <div className="flex justify-between">
+              <span className="text-slate-600">Total debit</span>
+              <span className="font-semibold tabular-nums">{formatINR(totalDebit)}</span>
+            </div>
+            <div className="flex justify-between">
+              <span className="text-slate-600">Total credit</span>
+              <span className="font-semibold tabular-nums">{formatINR(totalCredit)}</span>
+            </div>
+            <div
+              className={
+                isBalanced
+                  ? 'p-3 rounded-lg bg-emerald-50 border border-emerald-200 text-emerald-800 flex items-center gap-2 text-xs font-medium'
+                  : 'p-3 rounded-lg bg-amber-50 border border-amber-200 text-amber-800 flex items-center gap-2 text-xs font-medium'
+              }
+            >
+              {isBalanced ? (
+                <>
+                  <CheckCircle2 className="w-4 h-4 shrink-0" />
+                  Entry is balanced and ready to post.
+                </>
+              ) : (
+                <>
+                  <AlertCircle className="w-4 h-4 shrink-0" />
+                  Difference: {formatINR(Math.abs(totalDebit - totalCredit))}
+                </>
+              )}
+            </div>
+          </div>
+        }
+      >
+        <div className="bg-white rounded-lg border border-slate-200 p-4 space-y-3">
+          {jLines.map((line, idx) => (
+            <div key={line.id} className="grid grid-cols-1 sm:grid-cols-12 gap-3 items-end border-b border-slate-100 pb-3 last:border-b-0">
+              <FormField label={`Account #${idx + 1}`} className="sm:col-span-5">
+                <SearchableCombobox
+                  options={accounts.map((a) => ({
+                    value: a.id,
+                    label: a.name,
+                    sublabel: `${a.code || ''} · ${a.type || ''}`,
+                  }))}
+                  value={line.accountId}
+                  onChange={(v) =>
+                    setJLines((p) => p.map((x) => (x.id === line.id ? { ...x, accountId: v } : x)))
+                  }
+                  placeholder="Select ledger account…"
+                />
+              </FormField>
+              <FormField label="Debit (Dr)" className="sm:col-span-3">
+                <MoneyInput
+                  value={line.debit}
+                  onChange={(val) =>
+                    setJLines((p) =>
+                      p.map((x) => (x.id === line.id ? { ...x, debit: val, credit: val > 0 ? 0 : x.credit } : x))
+                    )
+                  }
+                />
+              </FormField>
+              <FormField label="Credit (Cr)" className="sm:col-span-3">
+                <MoneyInput
+                  value={line.credit}
+                  onChange={(val) =>
+                    setJLines((p) =>
+                      p.map((x) => (x.id === line.id ? { ...x, credit: val, debit: val > 0 ? 0 : x.debit } : x))
+                    )
+                  }
+                />
+              </FormField>
+              <div className="sm:col-span-1 flex justify-end">
+                {jLines.length > 2 && (
+                  <button
+                    type="button"
+                    onClick={() => setJLines((p) => p.filter((x) => x.id !== line.id))}
+                    className="p-2 text-slate-400 hover:text-red-600"
+                  >
+                    <Trash2 className="w-4 h-4" />
+                  </button>
+                )}
+              </div>
+            </div>
+          ))}
+
+          <Button
+            variant="outline"
+            size="sm"
+            icon={<Plus className="w-3.5 h-3.5" />}
+            onClick={() =>
+              setJLines((p) => [...p, { id: `jl-${Date.now()}`, accountId: '', debit: 0, credit: 0 }])
+            }
+          >
+            Add line
+          </Button>
+        </div>
+      </FullPageForm>
+    )
+  }
+
+  const journalCols: ColumnDef<any>[] = [
+    {
+      id: 'voucher',
+      header: 'Voucher no.',
+      cell: (r) => (
+        <span className="font-mono text-xs text-teal-700">
+          {r.entry_number || r.entryNumber || String(r.id).slice(0, 10)}
+        </span>
+      ),
     },
-  })
-
-  const reverseJournalMutation = useMutation({
-    mutationFn: (id: string) => api.post(`/accounting/journals/${id}/reverse`),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['journals'] })
-      queryClient.invalidateQueries({ queryKey: ['trial-balance'] })
-      queryClient.invalidateQueries({ queryKey: ['pl'] })
-      queryClient.invalidateQueries({ queryKey: ['balance-sheet'] })
+    {
+      id: 'date',
+      header: 'Date',
+      cell: (r) => formatDateIN(r.entry_date || r.entryDate || r.created_at),
     },
-  })
+    {
+      id: 'narration',
+      header: 'Narration / Source',
+      cell: (r) => <span className="font-medium text-slate-900">{r.narration || r.description || '—'}</span>,
+    },
+    {
+      id: 'amount',
+      header: 'Amount',
+      align: 'right',
+      cell: (r) => formatINR(r.total_amount ?? r.totalAmount ?? 0),
+    },
+    {
+      id: 'status',
+      header: 'Status',
+      cell: (r) => <StatusBadge status={r.status || 'POSTED'} />,
+    },
+  ]
 
-  const accounts: Account[] = Array.isArray(accountsData?.data)
-    ? accountsData.data
-    : Array.isArray(accountsData)
-    ? (accountsData as any)
-    : []
+  const accountCols: ColumnDef<any>[] = [
+    {
+      id: 'code',
+      header: 'Code',
+      cell: (r) => <span className="font-mono text-xs text-slate-600">{r.code || '—'}</span>,
+    },
+    {
+      id: 'name',
+      header: 'Account name',
+      cell: (r) => <span className="font-medium text-slate-900">{r.name}</span>,
+    },
+    {
+      id: 'type',
+      header: 'Group',
+      cell: (r) => <StatusBadge status="ACTIVE" label={r.type || 'Ledger'} tone="teal" />,
+    },
+    {
+      id: 'balance',
+      header: 'Balance',
+      align: 'right',
+      cell: (r) => formatINR(r.balance ?? 0),
+    },
+  ]
 
-  const journals: JournalEntry[] = Array.isArray(journalsData?.data)
-    ? journalsData.data
-    : Array.isArray(journalsData)
-    ? (journalsData as any)
-    : []
-
-  const totalJournalDebit = journalForm.lines
-    .filter(l => l.type === 'DEBIT')
-    .reduce((sum, l) => sum + (parseFloat(l.amount) || 0), 0)
-  const totalJournalCredit = journalForm.lines
-    .filter(l => l.type === 'CREDIT')
-    .reduce((sum, l) => sum + (parseFloat(l.amount) || 0), 0)
-  const isJournalBalanced = Math.abs(totalJournalDebit - totalJournalCredit) < 0.01 && totalJournalDebit > 0
+  const TABS: { key: AccTab; label: string }[] = [
+    { key: 'daybook', label: 'Day Book' },
+    { key: 'ledgers', label: 'Ledgers (COA)' },
+    { key: 'journals', label: 'Journal Entries' },
+    { key: 'trial', label: 'Trial Balance' },
+    { key: 'pnl', label: 'P&L' },
+    { key: 'bs', label: 'Balance Sheet' },
+  ]
 
   return (
-    <div className="p-6 space-y-4">
-      {/* Header */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-xl font-semibold flex items-center gap-2" style={{ color: 'var(--color-text)' }}>
-            <BookOpen size={20} /> Accounting & Finance
-          </h1>
-          <p className="text-sm mt-0.5" style={{ color: 'var(--color-muted)' }}>
-            Chart of accounts, general ledger, journals, trial balance, and financial statements
-          </p>
-        </div>
-        <div className="flex gap-2">
-          {activeTab === 'accounts' && (
-            <button
-              onClick={() => setShowNewAccountModal(true)}
-              className="flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium rounded-lg text-white"
-              style={{ background: 'var(--color-primary)' }}
-            >
-              <Plus size={16} /> New Account
-            </button>
-          )}
-          {activeTab === 'journals' && (
-            <button
-              onClick={() => setShowNewJournalModal(true)}
-              className="flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium rounded-lg text-white"
-              style={{ background: 'var(--color-primary)' }}
-            >
-              <Plus size={16} /> New Journal Entry
-            </button>
-          )}
-        </div>
+    <div className="space-y-5">
+      <PageHeader
+        title="Accounting & Ledgers"
+        description="Double-entry day book, chart of accounts, manual journals, and financial statements."
+        breadcrumbs={[{ label: 'Finance' }, { label: 'Accounting & Ledgers' }]}
+        primaryAction={
+          <Button variant="primary" icon={<Plus className="w-4 h-4" />} onClick={() => setNewJournalMode(true)}>
+            New Journal Entry
+          </Button>
+        }
+      />
+
+      <div className="flex items-center gap-1 bg-white border border-slate-200 rounded-lg p-1 overflow-x-auto">
+        {TABS.map((t) => (
+          <button
+            key={t.key}
+            type="button"
+            onClick={() => setTab(t.key)}
+            className={
+              tab === t.key
+                ? 'px-3.5 py-1.5 rounded-md text-xs font-medium bg-teal-600 text-white whitespace-nowrap'
+                : 'px-3.5 py-1.5 rounded-md text-xs font-medium text-slate-600 hover:text-slate-900 whitespace-nowrap'
+            }
+          >
+            {t.label}
+          </button>
+        ))}
       </div>
 
-      {/* Tabs */}
-      <div className="flex gap-1 border-b" style={{ borderColor: 'var(--color-border)' }}>
-        {[
-          { id: 'accounts', label: 'Chart of Accounts', icon: FileSpreadsheet },
-          { id: 'trial', label: 'Trial Balance', icon: Scale },
-          { id: 'pl', label: 'Profit & Loss', icon: DollarSign },
-          { id: 'bs', label: 'Balance Sheet', icon: Scale },
-          { id: 'journals', label: 'Journal Entries', icon: BookOpen },
-          { id: 'cashbook', label: 'Cashbook', icon: Wallet },
-        ].map(tab => {
-          const Icon = tab.icon
-          const isActive = activeTab === tab.id
-          return (
-            <button
-              key={tab.id}
-              onClick={() => setActiveTab(tab.id as any)}
-              className="flex items-center gap-2 px-4 py-2.5 text-sm font-medium border-b-2 transition-colors"
-              style={{
-                borderColor: isActive ? 'var(--color-primary)' : 'transparent',
-                color: isActive ? 'var(--color-primary)' : 'var(--color-muted)',
-              }}
-            >
-              <Icon size={16} />
-              {tab.label}
-            </button>
-          )
-        })}
-      </div>
-
-      {/* Tab 1: Chart of Accounts */}
-      {activeTab === 'accounts' && (
-        <div className="rounded-xl overflow-hidden" style={{ background: 'var(--color-surface)', border: '1px solid var(--color-border)' }}>
-          {loadingAccounts ? (
-            <div className="py-12 text-center text-sm" style={{ color: 'var(--color-muted)' }}>Loading Chart of Accounts…</div>
-          ) : (
-            <table className="w-full text-sm">
-              <thead>
-                <tr style={{ color: 'var(--color-muted)', borderBottom: '1px solid var(--color-border)' }}>
-                  <th className="text-left px-4 py-3 font-medium">Account Code</th>
-                  <th className="text-left px-4 py-3 font-medium">Account Name</th>
-                  <th className="text-left px-4 py-3 font-medium">Type</th>
-                  <th className="text-left px-4 py-3 font-medium">Parent</th>
-                </tr>
-              </thead>
-              <tbody>
-                {accounts.length === 0 ? (
-                  <tr><td colSpan={4} className="py-8 text-center" style={{ color: 'var(--color-muted)' }}>No accounts found</td></tr>
-                ) : (
-                  accounts.map(acc => (
-                    <tr key={acc.id} className="hover:bg-opacity-50" style={{ borderBottom: '1px solid var(--color-border)' }}>
-                      <td className="px-4 py-3 font-mono text-xs font-semibold" style={{ color: 'var(--color-primary)' }}>{acc.code}</td>
-                      <td className="px-4 py-3 font-medium" style={{ color: 'var(--color-text)' }}>{acc.name}</td>
-                      <td className="px-4 py-3">
-                        <span
-                          className="text-xs px-2 py-0.5 rounded-full font-medium"
-                          style={{
-                            background: acc.type === 'ASSET' ? 'rgba(79, 70, 229, 0.1)' :
-                              acc.type === 'LIABILITY' ? 'rgba(220, 38, 38, 0.1)' :
-                              acc.type === 'EQUITY' ? 'rgba(217, 119, 6, 0.1)' :
-                              acc.type === 'REVENUE' ? 'rgba(5, 150, 105, 0.1)' : 'rgba(100, 116, 139, 0.1)',
-                            color: acc.type === 'ASSET' ? 'var(--color-primary)' :
-                              acc.type === 'LIABILITY' ? 'var(--color-danger)' :
-                              acc.type === 'EQUITY' ? 'var(--color-warning)' :
-                              acc.type === 'REVENUE' ? 'var(--color-success)' : 'var(--color-muted)',
-                          }}
-                        >
-                          {acc.type}
-                        </span>
-                      </td>
-                      <td className="px-4 py-3 font-mono text-xs" style={{ color: 'var(--color-muted)' }}>{acc.parentId || '—'}</td>
-                    </tr>
-                  ))
-                )}
-              </tbody>
-            </table>
-          )}
-        </div>
-      )}
-
-      {/* Tab 2: Trial Balance */}
-      {activeTab === 'trial' && (
-        <div className="space-y-4">
-          <div className="flex items-center justify-between p-3 rounded-lg" style={{ background: trialData?.meta?.balanced ? 'rgba(5, 150, 105, 0.1)' : 'rgba(220, 38, 38, 0.1)' }}>
-            <span className="text-sm font-medium" style={{ color: trialData?.meta?.balanced ? 'var(--color-success)' : 'var(--color-danger)' }}>
-              {trialData?.meta?.balanced ? '✓ Trial Balance is fully balanced' : '⚠ Warning: Debits and Credits do not match'}
-            </span>
-            <div className="text-sm font-mono space-x-4">
-              <span>Debit: ₹{(trialData?.meta?.totalDebit || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span>
-              <span>Credit: ₹{(trialData?.meta?.totalCredit || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span>
-            </div>
-          </div>
-
-          <div className="rounded-xl overflow-hidden" style={{ background: 'var(--color-surface)', border: '1px solid var(--color-border)' }}>
-            {loadingTrial ? (
-              <div className="py-12 text-center text-sm" style={{ color: 'var(--color-muted)' }}>Computing Trial Balance…</div>
-            ) : (
-              <table className="w-full text-sm">
-                <thead>
-                  <tr style={{ color: 'var(--color-muted)', borderBottom: '1px solid var(--color-border)' }}>
-                    <th className="text-left px-4 py-3 font-medium">Code</th>
-                    <th className="text-left px-4 py-3 font-medium">Account Name</th>
-                    <th className="text-left px-4 py-3 font-medium">Type</th>
-                    <th className="text-right px-4 py-3 font-medium">Debit (₹)</th>
-                    <th className="text-right px-4 py-3 font-medium">Credit (₹)</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {(Array.isArray(trialData?.data) ? trialData.data : (Array.isArray(trialData) ? (trialData as any) : [])).map((row, idx) => (
-                    <tr key={idx} className="hover:bg-opacity-50" style={{ borderBottom: '1px solid var(--color-border)' }}>
-                      <td className="px-4 py-3 font-mono text-xs font-semibold" style={{ color: 'var(--color-primary)' }}>{row.code}</td>
-                      <td className="px-4 py-3 font-medium" style={{ color: 'var(--color-text)' }}>{row.name}</td>
-                      <td className="px-4 py-3 text-xs" style={{ color: 'var(--color-muted)' }}>{row.type}</td>
-                      <td className="px-4 py-3 text-right font-mono tabular-nums">
-                        {parseFloat(row.debit as any) > 0 ? parseFloat(row.debit as any).toLocaleString('en-IN', { minimumFractionDigits: 2 }) : '—'}
-                      </td>
-                      <td className="px-4 py-3 text-right font-mono tabular-nums">
-                        {parseFloat(row.credit as any) > 0 ? parseFloat(row.credit as any).toLocaleString('en-IN', { minimumFractionDigits: 2 }) : '—'}
-                      </td>
-                    </tr>
-                  ))}
-                  <tr className="font-semibold" style={{ background: 'var(--color-bg)', borderTop: '2px solid var(--color-border)' }}>
-                    <td colSpan={3} className="px-4 py-3 text-right">Total:</td>
-                    <td className="px-4 py-3 text-right font-mono tabular-nums" style={{ color: 'var(--color-primary)' }}>
-                      ₹{(trialData?.meta?.totalDebit || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
-                    </td>
-                    <td className="px-4 py-3 text-right font-mono tabular-nums" style={{ color: 'var(--color-primary)' }}>
-                      ₹{(trialData?.meta?.totalCredit || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
-                    </td>
-                  </tr>
-                </tbody>
-              </table>
-            )}
-          </div>
-        </div>
-      )}
-
-      {/* Tab 3: Profit & Loss */}
-      {activeTab === 'pl' && (
-        <div className="space-y-4">
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div className="p-4 rounded-xl" style={{ background: 'var(--color-surface)', border: '1px solid var(--color-border)' }}>
-              <span className="text-xs font-medium uppercase tracking-wider" style={{ color: 'var(--color-muted)' }}>Total Revenue</span>
-              <p className="text-2xl font-bold font-mono mt-1 tabular-nums" style={{ color: 'var(--color-success)' }}>
-                ₹{(plData?.data?.totalRevenue || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
-              </p>
-            </div>
-            <div className="p-4 rounded-xl" style={{ background: 'var(--color-surface)', border: '1px solid var(--color-border)' }}>
-              <span className="text-xs font-medium uppercase tracking-wider" style={{ color: 'var(--color-muted)' }}>Net Profit</span>
-              <p className="text-2xl font-bold font-mono mt-1 tabular-nums" style={{ color: (plData?.data?.netProfit || 0) >= 0 ? 'var(--color-primary)' : 'var(--color-danger)' }}>
-                ₹{(plData?.data?.netProfit || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
-              </p>
-            </div>
-          </div>
-
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            {/* Revenue Column */}
-            <div className="rounded-xl overflow-hidden" style={{ background: 'var(--color-surface)', border: '1px solid var(--color-border)' }}>
-              <div className="p-3 border-b font-medium text-sm" style={{ borderColor: 'var(--color-border)', color: 'var(--color-success)' }}>
-                Operating Revenue & Income
-              </div>
-              <table className="w-full text-sm">
-                <tbody>
-                  {(plData?.data?.revenue || []).map((r, i) => (
-                    <tr key={i} style={{ borderBottom: '1px solid var(--color-border)' }}>
-                      <td className="px-4 py-2.5 font-medium">{r.name}</td>
-                      <td className="px-4 py-2.5 text-right font-mono tabular-nums">
-                        ₹{parseFloat(r.net_amount as any).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
-                      </td>
-                    </tr>
-                  ))}
-                  {(plData?.data?.revenue || []).length === 0 && (
-                    <tr><td colSpan={2} className="py-6 text-center text-xs" style={{ color: 'var(--color-muted)' }}>No posted revenue</td></tr>
-                  )}
-                </tbody>
-              </table>
-            </div>
-
-            {/* Expenses Column */}
-            <div className="rounded-xl overflow-hidden" style={{ background: 'var(--color-surface)', border: '1px solid var(--color-border)' }}>
-              <div className="p-3 border-b font-medium text-sm" style={{ borderColor: 'var(--color-border)', color: 'var(--color-danger)' }}>
-                Cost of Goods & Operating Expenses
-              </div>
-              <table className="w-full text-sm">
-                <tbody>
-                  {(plData?.data?.expenses || []).map((e, i) => (
-                    <tr key={i} style={{ borderBottom: '1px solid var(--color-border)' }}>
-                      <td className="px-4 py-2.5 font-medium">{e.name}</td>
-                      <td className="px-4 py-2.5 text-right font-mono tabular-nums text-red-500">
-                        ₹{Math.abs(parseFloat(e.net_amount as any)).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
-                      </td>
-                    </tr>
-                  ))}
-                  {(plData?.data?.expenses || []).length === 0 && (
-                    <tr><td colSpan={2} className="py-6 text-center text-xs" style={{ color: 'var(--color-muted)' }}>No posted expenses</td></tr>
-                  )}
-                </tbody>
-              </table>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Tab 4: Balance Sheet */}
-      {activeTab === 'bs' && (
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <div className="rounded-xl overflow-hidden" style={{ background: 'var(--color-surface)', border: '1px solid var(--color-border)' }}>
-            <div className="p-3 border-b flex justify-between items-center font-medium text-sm" style={{ borderColor: 'var(--color-border)' }}>
-              <span>Assets</span>
-              <span className="font-mono" style={{ color: 'var(--color-primary)' }}>
-                ₹{(bsData?.data?.totalAssets || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
-              </span>
-            </div>
-            <table className="w-full text-sm">
-              <tbody>
-                {(bsData?.data?.assets || []).map((a, i) => (
-                  <tr key={i} style={{ borderBottom: '1px solid var(--color-border)' }}>
-                    <td className="px-4 py-2.5">{a.name}</td>
-                    <td className="px-4 py-2.5 text-right font-mono tabular-nums">
-                      ₹{parseFloat(a.balance as any).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-
-          <div className="rounded-xl overflow-hidden" style={{ background: 'var(--color-surface)', border: '1px solid var(--color-border)' }}>
-            <div className="p-3 border-b flex justify-between items-center font-medium text-sm" style={{ borderColor: 'var(--color-border)' }}>
-              <span>Liabilities & Equity</span>
-              <span className="font-mono" style={{ color: 'var(--color-primary)' }}>
-                ₹{((bsData?.data?.totalLiabilities || 0) + (bsData?.data?.totalEquity || 0)).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
-              </span>
-            </div>
-            <table className="w-full text-sm">
-              <tbody>
-                <tr className="bg-opacity-50 font-semibold text-xs uppercase" style={{ color: 'var(--color-muted)' }}>
-                  <td colSpan={2} className="px-4 py-2">Liabilities</td>
-                </tr>
-                {(bsData?.data?.liabilities || []).map((l, i) => (
-                  <tr key={i} style={{ borderBottom: '1px solid var(--color-border)' }}>
-                    <td className="px-4 py-2.5">{l.name}</td>
-                    <td className="px-4 py-2.5 text-right font-mono tabular-nums">
-                      ₹{parseFloat(l.balance as any).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
-                    </td>
-                  </tr>
-                ))}
-                <tr className="bg-opacity-50 font-semibold text-xs uppercase" style={{ color: 'var(--color-muted)' }}>
-                  <td colSpan={2} className="px-4 py-2">Equity & Capital</td>
-                </tr>
-                {(bsData?.data?.equity || []).map((eq, i) => (
-                  <tr key={i} style={{ borderBottom: '1px solid var(--color-border)' }}>
-                    <td className="px-4 py-2.5">{eq.name}</td>
-                    <td className="px-4 py-2.5 text-right font-mono tabular-nums">
-                      ₹{parseFloat(eq.balance as any).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </div>
-      )}
-
-      {/* Tab 5: Journals */}
-      {activeTab === 'journals' && (
-        <div className="rounded-xl overflow-hidden" style={{ background: 'var(--color-surface)', border: '1px solid var(--color-border)' }}>
-          {loadingJournals ? (
-            <div className="py-12 text-center text-sm" style={{ color: 'var(--color-muted)' }}>Loading Journals…</div>
-          ) : (
-            <table className="w-full text-sm">
-              <thead>
-                <tr style={{ color: 'var(--color-muted)', borderBottom: '1px solid var(--color-border)' }}>
-                  <th className="text-left px-4 py-3 font-medium">Reference</th>
-                  <th className="text-left px-4 py-3 font-medium">Type</th>
-                  <th className="text-right px-4 py-3 font-medium">Amount</th>
-                  <th className="text-left px-4 py-3 font-medium">Status</th>
-                  <th className="text-left px-4 py-3 font-medium">Date</th>
-                  <th className="text-right px-4 py-3 font-medium">Actions</th>
-                </tr>
-              </thead>
-              <tbody>
-                {journals.length === 0 ? (
-                  <tr><td colSpan={6} className="py-8 text-center" style={{ color: 'var(--color-muted)' }}>No journal entries found</td></tr>
-                ) : (
-                  journals.map(j => (
-                    <tr key={j.id} className="hover:bg-opacity-50" style={{ borderBottom: '1px solid var(--color-border)' }}>
-                      <td className="px-4 py-3 font-mono font-medium" style={{ color: 'var(--color-text)' }}>{j.reference}</td>
-                      <td className="px-4 py-3 text-xs" style={{ color: 'var(--color-muted)' }}>{j.type}</td>
-                      <td className="px-4 py-3 text-right font-mono tabular-nums font-semibold" style={{ color: 'var(--color-primary)' }}>
-                        ₹{parseFloat(j.total_debit as any || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
-                      </td>
-                      <td className="px-4 py-3">
-                        <span
-                          className="text-xs px-2 py-0.5 rounded-full font-medium"
-                          style={{
-                            background: j.status === 'POSTED' ? 'rgba(5, 150, 105, 0.1)' : 'rgba(217, 119, 6, 0.1)',
-                            color: j.status === 'POSTED' ? 'var(--color-success)' : 'var(--color-warning)',
-                          }}
-                        >
-                          {j.status}
-                        </span>
-                      </td>
-                      <td className="px-4 py-3 text-xs" style={{ color: 'var(--color-muted)' }}>
-                        {new Date(j.created_at).toLocaleDateString('en-IN')}
-                      </td>
-                      <td className="px-4 py-3 text-right space-x-2">
-                        {j.status === 'DRAFT' && (
-                          <button
-                            onClick={() => approveJournalMutation.mutate(j.id)}
-                            className="inline-flex items-center gap-1 px-2.5 py-1 text-xs font-medium rounded text-white"
-                            style={{ background: 'var(--color-success)' }}
-                          >
-                            <CheckCircle size={12} /> Post
-                          </button>
-                        )}
-                        {j.status === 'POSTED' && (
-                          <button
-                            onClick={() => reverseJournalMutation.mutate(j.id)}
-                            className="inline-flex items-center gap-1 px-2.5 py-1 text-xs font-medium rounded"
-                            style={{ background: 'var(--color-bg)', border: '1px solid var(--color-border)', color: 'var(--color-danger)' }}
-                          >
-                            <RotateCcw size={12} /> Reverse
-                          </button>
-                        )}
-                      </td>
-                    </tr>
-                  ))
-                )}
-              </tbody>
-            </table>
-          )}
-        </div>
-      )}
-
-      {/* Tab 6: Cashbook */}
-      {activeTab === 'cashbook' && (
-        <div className="rounded-xl overflow-hidden" style={{ background: 'var(--color-surface)', border: '1px solid var(--color-border)' }}>
-          {loadingCashbook ? (
-            <div className="py-12 text-center text-sm" style={{ color: 'var(--color-muted)' }}>Loading Cashbook…</div>
-          ) : (
-            <table className="w-full text-sm">
-              <thead>
-                <tr style={{ color: 'var(--color-muted)', borderBottom: '1px solid var(--color-border)' }}>
-                  <th className="text-left px-4 py-3 font-medium">Date</th>
-                  <th className="text-left px-4 py-3 font-medium">Reference</th>
-                  <th className="text-left px-4 py-3 font-medium">Description</th>
-                  <th className="text-right px-4 py-3 font-medium">Receipt (Debit)</th>
-                  <th className="text-right px-4 py-3 font-medium">Payment (Credit)</th>
-                </tr>
-              </thead>
-              <tbody>
-                {(Array.isArray(cashbookData?.data) ? cashbookData.data : (Array.isArray(cashbookData) ? (cashbookData as any) : [])).map((row, i) => (
-                  <tr key={i} className="hover:bg-opacity-50" style={{ borderBottom: '1px solid var(--color-border)' }}>
-                    <td className="px-4 py-3 text-xs" style={{ color: 'var(--color-muted)' }}>
-                      {row?.posted_at ? new Date(row.posted_at).toLocaleDateString('en-IN') : '—'}
-                    </td>
-                    <td className="px-4 py-3 font-mono text-xs font-semibold" style={{ color: 'var(--color-primary)' }}>{row.reference}</td>
-                    <td className="px-4 py-3 text-sm">{row.description || '—'}</td>
-                    <td className="px-4 py-3 text-right font-mono tabular-nums text-emerald-600 font-medium">
-                      {row.type === 'DEBIT' ? `₹${parseFloat(row.amount as any).toLocaleString('en-IN', { minimumFractionDigits: 2 })}` : '—'}
-                    </td>
-                    <td className="px-4 py-3 text-right font-mono tabular-nums text-red-500 font-medium">
-                      {row.type === 'CREDIT' ? `₹${parseFloat(row.amount as any).toLocaleString('en-IN', { minimumFractionDigits: 2 })}` : '—'}
-                    </td>
-                  </tr>
-                ))}
-                {(cashbookData?.data || []).length === 0 && (
-                  <tr><td colSpan={5} className="py-8 text-center" style={{ color: 'var(--color-muted)' }}>No cash transactions found</td></tr>
-                )}
-              </tbody>
-            </table>
-          )}
-        </div>
-      )}
-
-      {/* Modal: New Account */}
-      {showNewAccountModal && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50">
-          <div className="w-full max-w-md p-6 rounded-2xl shadow-xl space-y-4" style={{ background: 'var(--color-surface)', border: '1px solid var(--color-border)' }}>
-            <h2 className="text-lg font-semibold" style={{ color: 'var(--color-text)' }}>Create Ledger Account</h2>
-            <div className="space-y-3">
-              <div>
-                <label className="text-xs font-medium" style={{ color: 'var(--color-muted)' }}>Account Code</label>
-                <input
-                  value={newAccount.code}
-                  onChange={e => setNewAccount({ ...newAccount, code: e.target.value })}
-                  placeholder="e.g. 1050"
-                  className="w-full mt-1 px-3 py-2 rounded-lg text-sm outline-none"
-                  style={{ background: 'var(--color-bg)', border: '1px solid var(--color-border)', color: 'var(--color-text)' }}
-                />
-              </div>
-              <div>
-                <label className="text-xs font-medium" style={{ color: 'var(--color-muted)' }}>Account Name</label>
-                <input
-                  value={newAccount.name}
-                  onChange={e => setNewAccount({ ...newAccount, name: e.target.value })}
-                  placeholder="e.g. Petty Cash Register"
-                  className="w-full mt-1 px-3 py-2 rounded-lg text-sm outline-none"
-                  style={{ background: 'var(--color-bg)', border: '1px solid var(--color-border)', color: 'var(--color-text)' }}
-                />
-              </div>
-              <div>
-                <label className="text-xs font-medium" style={{ color: 'var(--color-muted)' }}>Type</label>
-                <select
-                  value={newAccount.type}
-                  onChange={e => setNewAccount({ ...newAccount, type: e.target.value })}
-                  className="w-full mt-1 px-3 py-2 rounded-lg text-sm outline-none"
-                  style={{ background: 'var(--color-bg)', border: '1px solid var(--color-border)', color: 'var(--color-text)' }}
-                >
-                  <option value="ASSET">ASSET</option>
-                  <option value="LIABILITY">LIABILITY</option>
-                  <option value="EQUITY">EQUITY</option>
-                  <option value="REVENUE">REVENUE</option>
-                  <option value="EXPENSE">EXPENSE</option>
-                  <option value="COGS">COGS</option>
-                </select>
-              </div>
-            </div>
-            <div className="flex justify-end gap-2 pt-2">
-              <button
-                onClick={() => setShowNewAccountModal(false)}
-                className="px-4 py-2 text-sm rounded-lg"
-                style={{ background: 'var(--color-bg)', border: '1px solid var(--color-border)', color: 'var(--color-muted)' }}
-              >
-                Cancel
-              </button>
-              <button
-                disabled={!newAccount.code || !newAccount.name || createAccountMutation.isPending}
-                onClick={() => createAccountMutation.mutate(newAccount)}
-                className="px-4 py-2 text-sm font-medium rounded-lg text-white"
-                style={{ background: 'var(--color-primary)' }}
-              >
-                {createAccountMutation.isPending ? 'Saving…' : 'Save Account'}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Modal: New Journal */}
-      {showNewJournalModal && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50">
-          <div className="w-full max-w-2xl p-6 rounded-2xl shadow-xl space-y-4" style={{ background: 'var(--color-surface)', border: '1px solid var(--color-border)' }}>
-            <h2 className="text-lg font-semibold" style={{ color: 'var(--color-text)' }}>New Journal Voucher</h2>
-            <div className="grid grid-cols-2 gap-3">
-              <div>
-                <label className="text-xs font-medium" style={{ color: 'var(--color-muted)' }}>Reference / Doc #</label>
-                <input
-                  value={journalForm.reference}
-                  onChange={e => setJournalForm({ ...journalForm, reference: e.target.value })}
-                  placeholder="JV-2026-001"
-                  className="w-full mt-1 px-3 py-2 rounded-lg text-sm outline-none"
-                  style={{ background: 'var(--color-bg)', border: '1px solid var(--color-border)', color: 'var(--color-text)' }}
-                />
-              </div>
-              <div>
-                <label className="text-xs font-medium" style={{ color: 'var(--color-muted)' }}>Notes / Narration</label>
-                <input
-                  value={journalForm.notes}
-                  onChange={e => setJournalForm({ ...journalForm, notes: e.target.value })}
-                  placeholder="Month-end adjustment"
-                  className="w-full mt-1 px-3 py-2 rounded-lg text-sm outline-none"
-                  style={{ background: 'var(--color-bg)', border: '1px solid var(--color-border)', color: 'var(--color-text)' }}
-                />
-              </div>
-            </div>
-
-            {/* Lines */}
-            <div className="space-y-2">
-              <div className="flex justify-between items-center">
-                <span className="text-xs font-medium" style={{ color: 'var(--color-muted)' }}>Journal Lines</span>
-                <button
-                  type="button"
-                  onClick={() => setJournalForm({
-                    ...journalForm,
-                    lines: [...journalForm.lines, { accountId: '', type: 'DEBIT', amount: '', description: '' }]
-                  })}
-                  className="text-xs text-primary font-medium"
-                >
-                  + Add Line
-                </button>
-              </div>
-
-              {journalForm.lines.map((line, idx) => (
-                <div key={idx} className="flex gap-2 items-center">
-                  <select
-                    value={line.accountId}
-                    onChange={e => {
-                      const updated = [...journalForm.lines]
-                      updated[idx].accountId = e.target.value
-                      setJournalForm({ ...journalForm, lines: updated })
-                    }}
-                    className="flex-1 px-2 py-1.5 rounded-lg text-xs outline-none"
-                    style={{ background: 'var(--color-bg)', border: '1px solid var(--color-border)', color: 'var(--color-text)' }}
-                  >
-                    <option value="">Select Account</option>
-                    {accounts.map(a => (
-                      <option key={a.id} value={a.id}>[{a.code}] {a.name}</option>
-                    ))}
-                  </select>
-                  <select
-                    value={line.type}
-                    onChange={e => {
-                      const updated = [...journalForm.lines]
-                      updated[idx].type = e.target.value as any
-                      setJournalForm({ ...journalForm, lines: updated })
-                    }}
-                    className="w-24 px-2 py-1.5 rounded-lg text-xs outline-none"
-                    style={{ background: 'var(--color-bg)', border: '1px solid var(--color-border)', color: 'var(--color-text)' }}
-                  >
-                    <option value="DEBIT">DEBIT</option>
-                    <option value="CREDIT">CREDIT</option>
-                  </select>
-                  <input
-                    type="number"
-                    value={line.amount}
-                    onChange={e => {
-                      const updated = [...journalForm.lines]
-                      updated[idx].amount = e.target.value
-                      setJournalForm({ ...journalForm, lines: updated })
-                    }}
-                    placeholder="Amount"
-                    className="w-28 px-2 py-1.5 rounded-lg text-xs outline-none text-right font-mono"
-                    style={{ background: 'var(--color-bg)', border: '1px solid var(--color-border)', color: 'var(--color-text)' }}
-                  />
-                </div>
-              ))}
-            </div>
-
-            <div className="flex justify-between items-center p-3 rounded-lg text-xs font-mono" style={{ background: 'var(--color-bg)' }}>
-              <span>Total Debit: ₹{totalJournalDebit.toFixed(2)}</span>
-              <span>Total Credit: ₹{totalJournalCredit.toFixed(2)}</span>
-              <span style={{ color: isJournalBalanced ? 'var(--color-success)' : 'var(--color-danger)' }}>
-                {isJournalBalanced ? 'Balanced' : 'Out of Balance'}
-              </span>
-            </div>
-
-            <div className="flex justify-end gap-2 pt-2">
-              <button
-                onClick={() => setShowNewJournalModal(false)}
-                className="px-4 py-2 text-sm rounded-lg"
-                style={{ background: 'var(--color-bg)', border: '1px solid var(--color-border)', color: 'var(--color-muted)' }}
-              >
-                Cancel
-              </button>
-              <button
-                disabled={!journalForm.reference || !isJournalBalanced || createJournalMutation.isPending}
-                onClick={() => createJournalMutation.mutate(journalForm)}
-                className="px-4 py-2 text-sm font-medium rounded-lg text-white"
-                style={{ background: 'var(--color-primary)' }}
-              >
-                {createJournalMutation.isPending ? 'Saving…' : 'Save Journal Draft'}
-              </button>
-            </div>
-          </div>
-        </div>
+      {tab === 'ledgers' || tab === 'trial' ? (
+        <DataTable
+          data={accounts}
+          columns={accountCols}
+          getRowId={(r, i) => r.id || r.code || String(i)}
+          isLoading={loadingAcc}
+          error={accErr}
+          onRetry={refetchAcc}
+          exportFilename={`solecontrol-${tab}`}
+          emptyIcon={<BookOpen className="w-6 h-6" />}
+          emptyTitle="No ledger accounts found"
+          emptyDescription="Accounts are initialized from your Chart of Accounts."
+        />
+      ) : (
+        <DataTable
+          data={journals}
+          columns={journalCols}
+          getRowId={(r, i) => r.id || String(i)}
+          isLoading={loadingJour}
+          error={jourErr}
+          onRetry={refetchJour}
+          exportFilename={`solecontrol-${tab}`}
+          emptyIcon={<BookOpen className="w-6 h-6" />}
+          emptyTitle="No journal entries yet"
+          emptyDescription="Automated entries are posted on every purchase and sale, or you can create a manual journal."
+        />
       )}
     </div>
   )
