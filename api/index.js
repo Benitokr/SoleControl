@@ -434,7 +434,17 @@ export default async function handler(req, res) {
     }
     const targetPath = candidate || rawUrl;
     if (targetPath) {
-      req.url = targetPath.startsWith('/api') ? targetPath : '/api' + (targetPath.startsWith('/') ? '' : '/') + targetPath;
+      let queryString = '';
+      if (rawUrl.includes('?')) {
+        try {
+          const u = new URL(rawUrl, 'http://localhost');
+          u.searchParams.delete('path');
+          const qs = u.searchParams.toString();
+          if (qs) queryString = '?' + qs;
+        } catch {}
+      }
+      const basePath = (targetPath.startsWith('/api') ? targetPath : '/api' + (targetPath.startsWith('/') ? '' : '/') + targetPath).split('?')[0];
+      req.url = basePath + queryString;
     }
     return expressApp(req, res);
   }

@@ -31,7 +31,12 @@ export function OffersPage() {
   const [discountValue, setDiscountValue] = useState(15)
   const [priority, setPriority] = useState(1)
 
-  const availableSkus = StockStorage.mergeWith([])
+  const { data: stockItems } = useQuery({
+    queryKey: ['inventory-stock'],
+    queryFn: () => api.get('/inventory/stock').then(r => r.data?.data ?? []),
+  })
+
+  const availableSkus = StockStorage.mergeWith(stockItems || [])
 
   // Simulator state
   const [simCartAmount, setSimCartAmount] = useState(8999)
