@@ -315,7 +315,7 @@ export function CompanyConfigPage() {
                   <p className="font-semibold text-slate-900">Print preview ({receiptWidth})</p>
                   <p className="text-slate-600">{name || 'SoleControl Retail'}</p>
                   <p className="font-mono text-slate-500">GSTIN: {gstin || '—'}</p>
-                  <p className="text-slate-400 pt-2 border-t border-slate-200">Powered by Forty V</p>
+                  <p className="text-slate-400 pt-2 border-t border-slate-200">SoleControl Retail ERP</p>
                 </div>
               </div>
             )}

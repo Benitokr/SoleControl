@@ -103,7 +103,14 @@ const healthHandler = async (_req: any, res: any) => {
     const db = getPGlite();
     const r = await db.query('SELECT current_database() as db');
     const dbName = (r.rows[0] as any)?.db || 'unknown';
-    res.json({ status: 'ok', database: dbName, mode: getDbMode(), ts: new Date().toISOString() });
+    res.json({
+      status: 'ok',
+      database: dbName,
+      mode: getDbMode(),
+      version: process.env.npm_package_version || '1.0.0',
+      commit: process.env.VERCEL_GIT_COMMIT_SHA || process.env.GITHUB_SHA || 'local',
+      ts: new Date().toISOString(),
+    });
   } catch (err: any) {
     res.status(503).json({
       status: 'error',

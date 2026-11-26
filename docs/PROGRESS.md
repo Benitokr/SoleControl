@@ -9,4 +9,4 @@
 | Step 5: Security | done | Added `requirePermission` to `dashboard`, `database`, `integrations` (100% route coverage); login rate limiter; locked CORS; no stack traces in `errorHandler.ts` |
 | Step 6: Footwear UX | done | Added `SizeStrip`, `"Today's Work Queues"` on Dashboard, always-visible Dashboard link in `AppShell`, `HubTabs` on all hubs |
 | Step 7: Demo Data | skipped on prod | Production `neondb` kept clean (no demo rows seeded per rule: "Production gets only clean setup data unless I say otherwise") |
-| Step 8 & 9: Build, Verify & Deploy | in_progress | Full monorepo `npm run build` passed (0 errors); verifying RBAC/GST/Health & pushing to `origin/main` |
+| Step 8 & 9: Build, Verify & Deploy | done | Full monorepo `npm run build` passed (0 errors); Vitest unit/property/fuzz tests passed (`7/7`); pushed to `origin/main` for Vercel deployment |
