@@ -1,6 +1,6 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
-  "buildCommand": "npm run build --workspace=@solecontrol/shared && npm run build --workspace=@solecontrol/web",
+  "buildCommand": "npm run build --workspace=@solecontrol/shared && npm run build --workspace=@solecontrol/api && npm run build --workspace=@solecontrol/web",
   "outputDirectory": "apps/web/dist",
   "installCommand": "npm install",
   "framework": "vite",

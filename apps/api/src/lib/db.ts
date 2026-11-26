@@ -9,6 +9,7 @@ import pg from 'pg';
 let dbMode: 'POSTGRES' | 'PGLITE' = 'POSTGRES';
 let pgliteInstance: PGlite | null = null;
 let prismaInstance: PrismaClient | null = null;
+let pgPoolInstance: pg.Pool | null = null;
 
 function getRootPrismaDir(): string {
   let current = process.cwd();
@@ -55,19 +56,42 @@ function checkPort(port: number, host: string, timeoutMs: number): Promise<boole
 
 // Initialize Database connection
 export async function initDatabase() {
-  const databaseUrl = process.env.DATABASE_URL || 'postgresql://solecontrol:solecontrol_secret@localhost:5432/solecontrol_db?schema=public';
+  const databaseUrl = process.env.DATABASE_URL;
 
+  // 1. Direct Cloud PostgreSQL connection (Neon, Supabase, RDS, etc.)
+  if (databaseUrl && !databaseUrl.includes('localhost') && !databaseUrl.includes('127.0.0.1')) {
+    try {
+      const client = new pg.Client({ connectionString: databaseUrl, connectionTimeoutMillis: 8000, ssl: { rejectUnauthorized: false } });
+      await client.connect();
+      await client.query('SELECT 1');
+      await client.end();
+
+      const hostInfo = databaseUrl.split('@')[1]?.split('/')[0] || 'remote-host';
+      logger.info(`Connected successfully to Cloud PostgreSQL [${hostInfo}]`);
+      prismaInstance = new PrismaClient({
+        datasources: { db: { url: databaseUrl } }
+      });
+      pgPoolInstance = new pg.Pool({ connectionString: databaseUrl, ssl: { rejectUnauthorized: false }, max: 10 });
+      dbMode = 'POSTGRES';
+      return;
+    } catch (err: any) {
+      logger.error(`Cloud PostgreSQL connection attempt failed: ${err.message}`);
+    }
+  }
+
+  // 2. Local Docker PostgreSQL check
   const isPgOpen = process.env.FORCE_PGLITE ? false : await checkPort(5432, '127.0.0.1', 400);
 
-  if (isPgOpen) {
+  if (isPgOpen && databaseUrl) {
     try {
       const client = new pg.Client({ connectionString: databaseUrl, connectionTimeoutMillis: 1000 });
       await client.connect();
       await client.query('SELECT 1');
       await client.end();
 
-      logger.info('Connected to PostgreSQL server at ' + databaseUrl);
+      logger.info('Connected to local PostgreSQL server at ' + databaseUrl);
       prismaInstance = new PrismaClient();
+      pgPoolInstance = new pg.Pool({ connectionString: databaseUrl, max: 10 });
       dbMode = 'POSTGRES';
       return;
     } catch {}
@@ -119,7 +143,15 @@ export function getDbMode() {
   return dbMode;
 }
 
-export function getPGlite(): PGlite {
+export function getPGlite(): any {
+  if (dbMode === 'POSTGRES' && pgPoolInstance) {
+    return {
+      query: async (sql: string, params?: any[]) => {
+        const res = await pgPoolInstance!.query(sql, params);
+        return { rows: res.rows };
+      }
+    };
+  }
   if (!pgliteInstance) {
     const prismaRoot = getRootPrismaDir();
     const dbDir = path.join(prismaRoot, 'pglite-data');

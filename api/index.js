@@ -1,5 +1,22 @@
 import crypto from 'crypto';
+import { createRequire } from 'module';
 import { DB } from './mockData.js';
+
+const require = createRequire(import.meta.url);
+let expressApp = null;
+let initDbPromise = null;
+
+try {
+  const server = require('../apps/api/dist/server.js');
+  expressApp = server.app;
+  if (typeof server.initDatabase === 'function') {
+    initDbPromise = server.initDatabase().catch(err => {
+      console.warn('initDatabase warning:', err.message);
+    });
+  }
+} catch (e) {
+  console.warn('apps/api/dist/server.js fallback active:', e.message);
+}
 
 function createToken(payload) {
   const header = Buffer.from(JSON.stringify({ alg: 'HS256', typ: 'JWT' })).toString('base64url');
@@ -409,6 +426,18 @@ export default async function handler(req, res) {
   const urlPath = rawUrl.split('?')[0];
   const candidate = searchParamsPath || queryPath || matchedPath || (urlPath !== '/api/index' && urlPath !== '/api' ? urlPath : '');
   const path = (candidate || rawUrl).toLowerCase();
+
+  // Route to authoritative compiled Express + PostgreSQL backend if available
+  if (expressApp) {
+    if (initDbPromise) {
+      try { await initDbPromise; } catch {}
+    }
+    const targetPath = candidate || rawUrl;
+    if (targetPath) {
+      req.url = targetPath.startsWith('/api') ? targetPath : '/api' + (targetPath.startsWith('/') ? '' : '/') + targetPath;
+    }
+    return expressApp(req, res);
+  }
 
   let body = req.body || {};
   if (typeof body === 'string') {

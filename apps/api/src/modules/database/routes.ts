@@ -210,7 +210,7 @@ databaseRoutes.get('/tables/:tableName/records', async (req, res) => {
 
     const filteredTotal = search ? rows.length : (total || rows.length);
     const paginated = rows.slice((page - 1) * pageSize, page * pageSize);
-    const columns = rawResult.fields ? rawResult.fields.map(f => ({
+    const columns = rawResult.fields ? rawResult.fields.map((f: any) => ({
       name: f.name,
       dataType: f.dataTypeID === 23 ? 'integer' : f.dataTypeID === 1700 ? 'numeric' : f.dataTypeID === 16 ? 'boolean' : 'varchar',
       isPrimaryKey: f.name === 'id',

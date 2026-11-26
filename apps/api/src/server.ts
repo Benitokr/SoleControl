@@ -42,6 +42,8 @@ import { databaseRoutes } from './modules/database/routes.js';
 import cron from 'node-cron';
 
 export const app = express();
+app.set('trust proxy', 1);
+export { initDatabase } from './lib/db.js';
 const PORT = parseInt(process.env.PORT || '4000', 10);
 
 app.use(helmet({ crossOriginResourcePolicy: { policy: 'cross-origin' } }));
@@ -111,7 +113,7 @@ export async function start() {
   return server;
 }
 
-// Always start server unless running under vitest / test runner
-if (!process.env.VITEST && process.env.NODE_ENV !== 'test') {
+// Always start server unless running under vitest / test runner or serverless environment
+if (!process.env.VITEST && process.env.NODE_ENV !== 'test' && !process.env.VERCEL && !process.env.SERVERLESS) {
   start().catch((err) => { logger.error(err, 'Failed to start'); process.exit(1); });
 }
