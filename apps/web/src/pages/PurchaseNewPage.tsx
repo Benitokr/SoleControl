@@ -57,6 +57,7 @@ export function PurchaseNewPage() {
 
   const [lines, setLines] = useState<PurchaseArticleLine[]>([emptyLine(1)])
   const [showConfirmReceive, setShowConfirmReceive] = useState(false)
+  const [completedNextSteps, setCompletedNextSteps] = useState<{ pairs: number; total: number } | null>(null)
 
   const { data: vendorsData } = useQuery({
     queryKey: ['vendors'],
@@ -178,12 +179,13 @@ export function PurchaseNewPage() {
       qc.invalidateQueries({ queryKey: ['inventory-stock'] })
       qc.invalidateQueries({ queryKey: ['dashboard'] })
       setShowConfirmReceive(false)
-      toast.success(
-        vars.mode === 'FINALISED'
-          ? `Received ${totals.pairs} pairs into stock`
-          : 'Purchase bill saved as draft'
-      )
-      navigate('/purchases')
+      if (vars.mode === 'FINALISED') {
+        toast.success(`Received ${totals.pairs} pairs into stock`)
+        setCompletedNextSteps({ pairs: totals.pairs, total: totals.grandTotal })
+      } else {
+        toast.success('Purchase bill saved as draft')
+        navigate('/purchases')
+      }
     },
     onError: (err) => {
       toast.error(getApiErrorMessage(err, 'Failed to save purchase bill'))
@@ -553,6 +555,28 @@ export function PurchaseNewPage() {
         variant="primary"
         loading={saveMutation.isPending}
       />
+
+      {completedNextSteps && (
+        <div className="fixed inset-0 z-50 bg-slate-900/50 flex items-center justify-center p-4">
+          <div className="w-full max-w-md bg-white rounded-xl border border-slate-200 shadow-2xl p-6 text-center space-y-4">
+            <h3 className="text-lg font-semibold text-slate-900">Stock Received</h3>
+            <p className="text-sm text-slate-600">
+              {completedNextSteps.pairs} pairs ({formatINR(completedNextSteps.total)}) have been added to warehouse inventory. What would you like to do next?
+            </p>
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 pt-2">
+              <Button variant="outline" onClick={() => navigate('/barcodes')}>
+                Print Labels
+              </Button>
+              <Button variant="outline" onClick={() => navigate('/vendors')}>
+                Record Payment
+              </Button>
+              <Button variant="primary" onClick={() => navigate('/inventory')}>
+                View Stock
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
     </>
   )
 }

@@ -139,10 +139,15 @@ export function DashboardPage() {
     )
   }
 
+  const firstName = user?.name?.trim()?.split(/\s+/)[0]
+  const greetingText = firstName
+    ? `Good ${new Date().getHours() < 12 ? 'morning' : new Date().getHours() < 17 ? 'afternoon' : 'evening'}, ${firstName}`
+    : 'Welcome back'
+
   return (
     <div className="space-y-6">
       <PageHeader
-        title={`Good ${new Date().getHours() < 12 ? 'morning' : new Date().getHours() < 17 ? 'afternoon' : 'evening'}, ${user?.name?.split(' ')[0] || 'Admin'}`}
+        title={greetingText}
         description="Executive retail overview across sales, inventory, and payables."
         secondaryActions={
           <div className="flex items-center gap-2 flex-wrap">
@@ -182,15 +187,6 @@ export function DashboardPage() {
             </div>
           </div>
         }
-        primaryAction={
-          <Button
-            variant="primary"
-            icon={<ShoppingBag className="w-4 h-4" />}
-            onClick={() => navigate('/sales/pos')}
-          >
-            New Sale
-          </Button>
-        }
       />
 
       {loadingKpis ? (
@@ -202,6 +198,7 @@ export function DashboardPage() {
           <StatCard
             label="Today's sales"
             value={formatINR(todaySalesVal)}
+            subtext="Gross retail turnover"
             icon={<TrendingUp className="w-4 h-4" />}
             tone="teal"
             onClick={() => navigate('/sales')}
@@ -209,16 +206,24 @@ export function DashboardPage() {
           <StatCard
             label="Bills count"
             value={todayBills}
+            subtext="Completed POS invoices"
             icon={<Receipt className="w-4 h-4" />}
             tone="success"
             onClick={() => navigate('/sales')}
           />
-          <StatCard label="Average bill value" value={formatINR(avgBill)} />
+          <StatCard
+            label="Average bill value"
+            value={formatINR(avgBill)}
+            subtext="Revenue per invoice"
+            onClick={() => navigate('/sales')}
+          />
           <StatCard
             label="Gross margin"
             value={`${Number(kpis.grossMarginPct ?? 0).toFixed(1)}%`}
+            subtext="Estimated retail margin"
             icon={<Percent className="w-4 h-4" />}
             tone="success"
+            onClick={() => navigate('/reports')}
           />
           <StatCard
             label="Stock value (cost)"
@@ -228,16 +233,17 @@ export function DashboardPage() {
             onClick={() => navigate('/inventory')}
           />
           <StatCard
-            label="Low-stock SKUs"
+            label="Low stock (≤5 pairs)"
             value={lowStockCount}
-            subtext="5 pairs or fewer"
+            subtext="Threshold: ≤5 pairs per SKU"
             icon={<AlertTriangle className="w-4 h-4" />}
             tone={lowStockCount > 0 ? 'warning' : 'default'}
-            onClick={() => navigate('/inventory')}
+            onClick={() => navigate('/inventory?filter=LOW')}
           />
           <StatCard
             label="Vendor payables"
             value={formatINR(kpis.vendorOutstanding ?? 0)}
+            subtext="Outstanding supplier dues"
             icon={<Truck className="w-4 h-4" />}
             tone={Number(kpis.vendorOutstanding ?? 0) > 0 ? 'danger' : 'default'}
             onClick={() => navigate('/vendors')}
@@ -245,6 +251,7 @@ export function DashboardPage() {
           <StatCard
             label="Customer receivables"
             value={formatINR(kpis.customerOutstanding ?? 0)}
+            subtext="Credit balance due"
             icon={<HeartHandshake className="w-4 h-4" />}
             onClick={() => navigate('/customers')}
           />
@@ -253,9 +260,9 @@ export function DashboardPage() {
 
       {/* Charts row */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-5">
-        <div className="lg:col-span-8 bg-white rounded-lg border border-slate-200 p-5 space-y-3">
+        <div className="lg:col-span-8 bg-white rounded-xl border border-slate-200 p-5 space-y-3">
           <h2 className="text-sm font-semibold text-slate-900">7-day sales trend</h2>
-          {trendData.length === 0 ? (
+          {!trendData.some((d) => Number(d.amount || 0) > 0) ? (
             <EmptyState
               title="No sales trend data yet"
               description="Complete POS invoices to see daily sales performance."

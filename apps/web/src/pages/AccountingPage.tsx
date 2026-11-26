@@ -6,7 +6,7 @@ import { api } from '../lib/api'
 import { formatINR, formatDateIN, toISODate, getApiErrorMessage } from '../lib/format'
 import {
   PageHeader, DataTable, StatusBadge, Button, FullPageForm, FormField,
-  SearchableCombobox, DatePicker, MoneyInput, ColumnDef, inputBaseClass,
+  SearchableCombobox, DatePicker, MoneyInput, HubTabs, ColumnDef, inputBaseClass,
 } from '../components/ui'
 
 type AccTab = 'daybook' | 'ledgers' | 'journals' | 'trial' | 'pnl' | 'bs'
@@ -287,22 +287,18 @@ export function AccountingPage() {
         }
       />
 
-      <div className="flex items-center gap-1 bg-white border border-slate-200 rounded-lg p-1 overflow-x-auto">
-        {TABS.map((t) => (
-          <button
-            key={t.key}
-            type="button"
-            onClick={() => setTab(t.key)}
-            className={
-              tab === t.key
-                ? 'px-3.5 py-1.5 rounded-md text-xs font-medium bg-teal-600 text-white whitespace-nowrap'
-                : 'px-3.5 py-1.5 rounded-md text-xs font-medium text-slate-600 hover:text-slate-900 whitespace-nowrap'
-            }
-          >
-            {t.label}
-          </button>
-        ))}
-      </div>
+      <HubTabs
+        tabs={[
+          ...TABS.map((t) => ({
+            key: t.key,
+            label: t.label,
+            active: tab === t.key,
+            onClick: () => setTab(t.key),
+          })),
+          { key: 'capital', label: 'Capital & Withdrawals', to: '/capital' },
+          { key: 'bank-gst', label: 'Bank & GST', to: '/bank-gst' },
+        ]}
+      />
 
       {tab === 'ledgers' || tab === 'trial' ? (
         <DataTable

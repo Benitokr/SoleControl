@@ -5,7 +5,7 @@ import { toast } from 'sonner'
 import { api } from '../lib/api'
 import { getApiErrorMessage } from '../lib/format'
 import {
-  FullPageForm, FormField, SearchableCombobox, MoneyInput, inputBaseClass,
+  FullPageForm, FormField, SearchableCombobox, MoneyInput, Drawer, Button, inputBaseClass,
 } from '../components/ui'
 import { DEFAULT_UK_SIZES, MarginBadge } from '../components/footwear'
 
@@ -21,6 +21,8 @@ export function ArticleNewPage() {
   const [hsn, setHsn] = useState('6404')
   const [selectedColours, setSelectedColours] = useState<string[]>(['Black'])
   const [selectedSizes, setSelectedSizes] = useState<string[]>(DEFAULT_UK_SIZES)
+  const [quickAddType, setQuickAddType] = useState<'brands' | 'categories' | null>(null)
+  const [quickAddName, setQuickAddName] = useState('')
 
   const { data: brandsData } = useQuery({
     queryKey: ['masters', 'brands'],
@@ -72,6 +74,24 @@ export function ArticleNewPage() {
       navigate('/masters')
     },
     onError: (err) => toast.error(getApiErrorMessage(err, 'Failed to save article')),
+  })
+
+  const quickAddMutation = useMutation({
+    mutationFn: () =>
+      api.post(`/masters/${quickAddType}`, {
+        name: quickAddName.trim(),
+        code: quickAddName.trim().slice(0, 4).toUpperCase(),
+      }),
+    onSuccess: (res) => {
+      const created = res.data?.data
+      qc.invalidateQueries({ queryKey: ['masters', quickAddType] })
+      if (quickAddType === 'brands' && created?.id) setBrandId(created.id)
+      if (quickAddType === 'categories' && created?.id) setCategoryId(created.id)
+      toast.success('Added to catalog')
+      setQuickAddType(null)
+      setQuickAddName('')
+    },
+    onError: (err) => toast.error(getApiErrorMessage(err, 'Failed to add')),
   })
 
   const toggleColour = (c: string) => {
@@ -146,6 +166,8 @@ export function ArticleNewPage() {
               value={brandId}
               onChange={setBrandId}
               placeholder="Select brand…"
+              onQuickAdd={() => { setQuickAddType('brands'); setQuickAddName('') }}
+              quickAddLabel="Quick add brand"
             />
           </FormField>
           <FormField label="Category">
@@ -154,6 +176,8 @@ export function ArticleNewPage() {
               value={categoryId}
               onChange={setCategoryId}
               placeholder="Select category…"
+              onQuickAdd={() => { setQuickAddType('categories'); setQuickAddName('') }}
+              quickAddLabel="Quick add category"
             />
           </FormField>
         </div>
@@ -221,6 +245,40 @@ export function ArticleNewPage() {
           </div>
         </div>
       </div>
+
+      <Drawer
+        open={!!quickAddType}
+        onClose={() => setQuickAddType(null)}
+        title={quickAddType === 'brands' ? 'Quick Add Brand' : 'Quick Add Category'}
+        footer={
+          <>
+            <Button variant="outline" onClick={() => setQuickAddType(null)}>Cancel</Button>
+            <Button
+              variant="primary"
+              loading={quickAddMutation.isPending}
+              onClick={() => {
+                if (!quickAddName.trim()) {
+                  toast.error('Name is required')
+                  return
+                }
+                quickAddMutation.mutate()
+              }}
+            >
+              Save
+            </Button>
+          </>
+        }
+      >
+        <FormField label="Name" required>
+          <input
+            type="text"
+            value={quickAddName}
+            onChange={(e) => setQuickAddName(e.target.value)}
+            placeholder="Enter name…"
+            className={inputBaseClass}
+          />
+        </FormField>
+      </Drawer>
     </FullPageForm>
   )
 }

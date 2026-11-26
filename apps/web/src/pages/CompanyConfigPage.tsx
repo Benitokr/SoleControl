@@ -19,6 +19,7 @@ export function CompanyConfigPage() {
   // Profile
   const [name, setName] = useState('')
   const [legalName, setLegalName] = useState('')
+  const [logoUrl, setLogoUrl] = useState('')
   const [gstin, setGstin] = useState('')
   const [stateName, setStateName] = useState('Tamil Nadu (33)')
   const [address, setAddress] = useState('')
@@ -50,6 +51,7 @@ export function CompanyConfigPage() {
     if (data) {
       setName(data.name || '')
       setLegalName(data.legalName || data.legal_name || '')
+      setLogoUrl(data.logoUrl || data.logo_url || localStorage.getItem('sc_client_logo') || '')
       setGstin(data.gstin || '')
       setAddress(data.address || '')
       setPhone(data.phone || '')
@@ -59,10 +61,13 @@ export function CompanyConfigPage() {
   }, [data])
 
   const saveMutation = useMutation({
-    mutationFn: () =>
-      api.put('/company/profile', {
+    mutationFn: () => {
+      if (logoUrl) localStorage.setItem('sc_client_logo', logoUrl)
+      else localStorage.removeItem('sc_client_logo')
+      return api.put('/company/profile', {
         name,
         legalName,
+        logoUrl,
         gstin,
         stateName,
         address,
@@ -75,7 +80,8 @@ export function CompanyConfigPage() {
         sizeScheme,
         receiptWidth,
         adminSalesEnabled,
-      }),
+      })
+    },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['company-profile'] })
       setDirty(false)
@@ -199,6 +205,33 @@ export function CompanyConfigPage() {
                     onChange={(e) => { setAddress(e.target.value); setDirty(true) }}
                     className="w-full p-3 text-sm bg-white border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-teal-600/20 focus:border-teal-600"
                   />
+                </FormField>
+                <FormField label="Store logo (optional)" helperText="Shown on invoices, labels, and header only when uploaded." className="sm:col-span-2">
+                  <div className="flex items-center gap-3 flex-wrap">
+                    {logoUrl && (
+                      <img src={logoUrl} alt="Store logo" className="h-10 w-auto rounded border border-slate-200 p-1 bg-white object-contain" />
+                    )}
+                    <input
+                      type="file"
+                      accept="image/*"
+                      onChange={(e) => {
+                        const file = e.target.files?.[0]
+                        if (!file) return
+                        const reader = new FileReader()
+                        reader.onload = () => {
+                          setLogoUrl(String(reader.result || ''))
+                          setDirty(true)
+                        }
+                        reader.readAsDataURL(file)
+                      }}
+                      className="text-xs text-slate-600"
+                    />
+                    {logoUrl && (
+                      <Button size="sm" variant="outline" onClick={() => { setLogoUrl(''); setDirty(true) }}>
+                        Remove logo
+                      </Button>
+                    )}
+                  </div>
                 </FormField>
               </div>
             )}

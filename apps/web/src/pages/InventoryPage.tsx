@@ -1,4 +1,5 @@
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useEffect } from 'react'
+import { useSearchParams, useNavigate } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
 import {
@@ -9,16 +10,32 @@ import { formatINR, formatDateIN, getApiErrorMessage } from '../lib/format'
 import {
   PageHeader, StatCard, FilterBar, DataTable, Button, Drawer,
   FormField, SearchableCombobox, QuantityStepper, EmptyState, ErrorState,
-  TableSkeleton, ColumnDef, inputBaseClass,
+  TableSkeleton, HubTabs, ColumnDef,
 } from '../components/ui'
 import { SizeRunGrid, DEFAULT_UK_SIZES, ColourSwatch, StockBadge } from '../components/footwear'
 
 export function InventoryPage() {
   const qc = useQueryClient()
-  const [viewMode, setViewMode] = useState<'grouped' | 'flat'>('grouped')
+  const navigate = useNavigate()
+  const [searchParams, setSearchParams] = useSearchParams()
+  const hubTab = searchParams.get('tab') === 'overview' ? 'overview' : 'stock'
+  const urlFilter = searchParams.get('filter')
+
+  const [viewMode, setViewMode] = useState<'grouped' | 'flat'>(() =>
+    urlFilter === 'LOW' ? 'flat' : 'grouped'
+  )
   const [search, setSearch] = useState('')
-  const [stockFilter, setStockFilter] = useState('ALL')
+  const [stockFilter, setStockFilter] = useState(() =>
+    urlFilter && ['IN_STOCK', 'LOW', 'OUT'].includes(urlFilter) ? urlFilter : 'ALL'
+  )
   const [expandedKeys, setExpandedKeys] = useState<Record<string, boolean>>({})
+
+  useEffect(() => {
+    if (urlFilter && ['IN_STOCK', 'LOW', 'OUT'].includes(urlFilter)) {
+      setStockFilter(urlFilter)
+      setViewMode('flat')
+    }
+  }, [urlFilter])
 
   // Stock adjustment drawer
   const [showAdjDrawer, setShowAdjDrawer] = useState(false)
@@ -48,7 +65,6 @@ export function InventoryPage() {
   const catalogVariants: any[] = Array.isArray(variantsData) ? variantsData : []
   const adjustments: any[] = Array.isArray(adjustmentsData) ? adjustmentsData : []
 
-  // Merge catalog variants (even at zero stock) into picker options
   const allPickerVariants = useMemo(() => {
     const map = new Map<string, any>()
     catalogVariants.forEach((v) => {
@@ -76,7 +92,6 @@ export function InventoryPage() {
     })
   }, [allPickerVariants, search, stockFilter])
 
-  // Group by Article -> Colour -> SizeRunGrid
   const groupedArticles = useMemo(() => {
     const artMap = new Map<string, any>()
     filteredFlat.forEach((row) => {
@@ -190,34 +205,36 @@ export function InventoryPage() {
       <PageHeader
         title="Warehouse Inventory & Stock"
         description="Live footwear balances grouped by article and size run, with location tracking and cycle adjustments."
-        breadcrumbs={[{ label: 'Inventory' }, { label: 'Stock' }]}
+        breadcrumbs={[{ label: 'Inventory' }, { label: hubTab === 'overview' ? 'Overview' : 'Stock' }]}
         secondaryActions={
-          <div className="inline-flex rounded-lg border border-slate-200 bg-white p-0.5">
-            <button
-              type="button"
-              onClick={() => setViewMode('grouped')}
-              className={
-                viewMode === 'grouped'
-                  ? 'px-2.5 py-1.5 rounded-md text-xs font-medium bg-teal-600 text-white inline-flex items-center gap-1'
-                  : 'px-2.5 py-1.5 rounded-md text-xs font-medium text-slate-600 hover:text-slate-900 inline-flex items-center gap-1'
-              }
-            >
-              <Layers className="w-3.5 h-3.5" />
-              Size Run
-            </button>
-            <button
-              type="button"
-              onClick={() => setViewMode('flat')}
-              className={
-                viewMode === 'flat'
-                  ? 'px-2.5 py-1.5 rounded-md text-xs font-medium bg-teal-600 text-white inline-flex items-center gap-1'
-                  : 'px-2.5 py-1.5 rounded-md text-xs font-medium text-slate-600 hover:text-slate-900 inline-flex items-center gap-1'
-              }
-            >
-              <List className="w-3.5 h-3.5" />
-              Flat SKUs
-            </button>
-          </div>
+          hubTab === 'stock' ? (
+            <div className="inline-flex rounded-lg border border-slate-200 bg-white p-0.5">
+              <button
+                type="button"
+                onClick={() => setViewMode('grouped')}
+                className={
+                  viewMode === 'grouped'
+                    ? 'px-2.5 py-1.5 rounded-md text-xs font-medium bg-teal-600 text-white inline-flex items-center gap-1'
+                    : 'px-2.5 py-1.5 rounded-md text-xs font-medium text-slate-600 hover:text-slate-900 inline-flex items-center gap-1'
+                }
+              >
+                <Layers className="w-3.5 h-3.5" />
+                Size Run
+              </button>
+              <button
+                type="button"
+                onClick={() => setViewMode('flat')}
+                className={
+                  viewMode === 'flat'
+                    ? 'px-2.5 py-1.5 rounded-md text-xs font-medium bg-teal-600 text-white inline-flex items-center gap-1'
+                    : 'px-2.5 py-1.5 rounded-md text-xs font-medium text-slate-600 hover:text-slate-900 inline-flex items-center gap-1'
+                }
+              >
+                <List className="w-3.5 h-3.5" />
+                Flat SKUs
+              </button>
+            </div>
+          ) : undefined
         }
         primaryAction={
           <Button
@@ -230,120 +247,167 @@ export function InventoryPage() {
         }
       />
 
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        <StatCard label="Active SKUs" value={allPickerVariants.length} icon={<Boxes className="w-4 h-4" />} tone="teal" />
-        <StatCard label="Total pairs on hand" value={totalPairs.toLocaleString('en-IN')} tone="success" />
-        <StatCard label="Weighted cost value" value={formatINR(totalCost)} />
-        <StatCard label="Retail MRP value" value={formatINR(totalMrp)} />
-      </div>
-
-      <FilterBar
-        search={search}
-        onSearchChange={setSearch}
-        searchPlaceholder="Search by SKU, article name, or colour…"
-        chips={[
-          { key: 'ALL', label: 'All SKUs', count: allPickerVariants.length },
-          {
-            key: 'IN_STOCK',
-            label: 'In stock',
-            count: allPickerVariants.filter((x) => Number(x.quantity ?? 0) > 5).length,
-          },
-          {
-            key: 'LOW',
-            label: 'Low stock (1–5)',
-            count: allPickerVariants.filter((x) => {
-              const q = Number(x.quantity ?? 0)
-              return q > 0 && q <= 5
-            }).length,
-          },
-          {
-            key: 'OUT',
-            label: 'Out of stock',
-            count: allPickerVariants.filter((x) => Number(x.quantity ?? 0) <= 0).length,
-          },
+      <HubTabs
+        tabs={[
+          { key: 'overview', label: 'Overview', active: hubTab === 'overview', onClick: () => setSearchParams({ tab: 'overview' }) },
+          { key: 'stock', label: 'Stock', active: hubTab === 'stock', onClick: () => setSearchParams({}) },
+          { key: 'display', label: 'Display Stock', to: '/display' },
+          { key: 'transfers', label: 'Transfers', to: '/transfers' },
+          { key: 'damage', label: 'Damaged Goods', to: '/damage' },
+          { key: 'ageing', label: 'Ageing & Clearance', to: '/ageing' },
+          { key: 'barcodes', label: 'Barcodes', to: '/barcodes' },
         ]}
-        activeChip={stockFilter}
-        onChipChange={setStockFilter}
-        onReset={() => {
-          setSearch('')
-          setStockFilter('ALL')
-        }}
       />
 
-      {viewMode === 'flat' ? (
-        <DataTable
-          data={filteredFlat}
-          columns={columns}
-          getRowId={(r, i) => r.sku || r.id || String(i)}
-          isLoading={isLoading}
-          error={error}
-          onRetry={refetch}
-          onRowClick={(r) => setSelectedItem(r)}
-          exportFilename="solecontrol-stock"
-        />
-      ) : isLoading ? (
-        <TableSkeleton rows={5} cols={4} />
-      ) : error ? (
-        <ErrorState message={getApiErrorMessage(error)} onRetry={refetch} />
-      ) : groupedArticles.length === 0 ? (
-        <EmptyState
-          icon={<Boxes className="w-6 h-6" />}
-          title="No stock items match"
-          description="Adjust your search filter or inward footwear stock via Purchase Bills."
-        />
-      ) : (
-        <div className="space-y-3">
-          {groupedArticles.map((art) => {
-            const expanded = expandedKeys[art.articleName] !== false
-            return (
-              <div
-                key={art.articleName}
-                className="bg-white rounded-lg border border-slate-200 overflow-hidden"
-              >
-                <button
-                  type="button"
-                  onClick={() =>
-                    setExpandedKeys((p) => ({ ...p, [art.articleName]: !expanded }))
-                  }
-                  className="w-full px-4 py-3 flex flex-wrap items-center justify-between gap-3 bg-slate-50/70 hover:bg-slate-50 text-left border-b border-slate-100"
-                >
-                  <div className="flex items-center gap-2.5">
-                    {expanded ? (
-                      <ChevronDown className="w-4 h-4 text-slate-400" />
-                    ) : (
-                      <ChevronRight className="w-4 h-4 text-slate-400" />
-                    )}
-                    <span className="text-sm font-semibold text-slate-900">{art.articleName}</span>
-                    <span className="text-xs text-slate-500">
-                      ({art.colourEntries.length} {art.colourEntries.length === 1 ? 'colour' : 'colours'})
-                    </span>
-                  </div>
-                  <div className="flex items-center gap-4 text-xs">
-                    <StockBadge quantity={art.totalQty} />
-                    <span className="tabular-nums text-slate-600">
-                      Cost: <strong className="text-slate-900">{formatINR(art.costValue)}</strong>
-                    </span>
-                  </div>
-                </button>
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+        <StatCard label="Active SKUs" value={allPickerVariants.length} subtext="Catalog variants" icon={<Boxes className="w-4 h-4" />} tone="teal" />
+        <StatCard label="Total pairs on hand" value={totalPairs.toLocaleString('en-IN')} subtext="Across warehouse" tone="success" />
+        <StatCard label="Weighted cost value" value={formatINR(totalCost)} subtext="At purchase cost" />
+        <StatCard label="Retail MRP value" value={formatINR(totalMrp)} subtext="Gross shelf value" />
+      </div>
 
-                {expanded && (
-                  <div className="p-4 space-y-3">
-                    {art.colourEntries.map(([colour, sizeMap]) => (
-                      <div key={colour} className="space-y-1.5">
-                        <ColourSwatch name={colour} />
-                        <SizeRunGrid
-                          readOnly
-                          sizes={Array.from(new Set([...DEFAULT_UK_SIZES, ...Object.keys(sizeMap)]))}
-                          values={sizeMap}
-                        />
-                      </div>
-                    ))}
-                  </div>
-                )}
+      {hubTab === 'overview' ? (
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
+          <div className="bg-white rounded-xl border border-slate-200 p-5 space-y-3">
+            <h2 className="text-sm font-semibold text-slate-900">Needs attention</h2>
+            {allPickerVariants.filter((x) => Number(x.quantity ?? 0) <= 5).length === 0 ? (
+              <p className="text-sm text-slate-500">All SKUs are healthy above 5 pairs.</p>
+            ) : (
+              <div className="p-3 rounded-lg bg-amber-50 border border-amber-200 flex items-center justify-between text-sm">
+                <span className="text-amber-900">
+                  {allPickerVariants.filter((x) => Number(x.quantity ?? 0) <= 5).length} SKUs at ≤5 pairs
+                </span>
+                <Button size="sm" variant="outline" onClick={() => setSearchParams({ filter: 'LOW' })}>
+                  View low stock
+                </Button>
               </div>
-            )
-          })}
+            )}
+          </div>
+          <div className="bg-white rounded-xl border border-slate-200 p-5 space-y-3">
+            <div className="flex items-center justify-between">
+              <h2 className="text-sm font-semibold text-slate-900">Quick inventory actions</h2>
+              <button type="button" onClick={() => setSearchParams({})} className="text-xs font-medium text-teal-700 hover:underline">
+                View all stock
+              </button>
+            </div>
+            <div className="flex flex-wrap gap-2">
+              <Button size="sm" variant="outline" onClick={() => navigate('/purchases/new')}>Inward Purchase</Button>
+              <Button size="sm" variant="outline" onClick={() => navigate('/transfers')}>Transfer Stock</Button>
+              <Button size="sm" variant="outline" onClick={() => navigate('/barcodes')}>Print Labels</Button>
+            </div>
+          </div>
         </div>
+      ) : (
+        <>
+          <FilterBar
+            search={search}
+            onSearchChange={setSearch}
+            searchPlaceholder="Search by SKU, article name, or colour…"
+            chips={[
+              { key: 'ALL', label: 'All SKUs', count: allPickerVariants.length },
+              {
+                key: 'IN_STOCK',
+                label: 'In stock',
+                count: allPickerVariants.filter((x) => Number(x.quantity ?? 0) > 5).length,
+              },
+              {
+                key: 'LOW',
+                label: 'Low stock (1–5)',
+                count: allPickerVariants.filter((x) => {
+                  const q = Number(x.quantity ?? 0)
+                  return q > 0 && q <= 5
+                }).length,
+              },
+              {
+                key: 'OUT',
+                label: 'Out of stock',
+                count: allPickerVariants.filter((x) => Number(x.quantity ?? 0) <= 0).length,
+              },
+            ]}
+            activeChip={stockFilter}
+            onChipChange={setStockFilter}
+            onReset={() => {
+              setSearch('')
+              setStockFilter('ALL')
+            }}
+          />
+
+          {viewMode === 'flat' ? (
+            <DataTable
+              data={filteredFlat}
+              columns={columns}
+              getRowId={(r, i) => r.sku || r.id || String(i)}
+              isLoading={isLoading}
+              error={error}
+              onRetry={refetch}
+              onRowClick={(r) => setSelectedItem(r)}
+              exportFilename="solecontrol-stock"
+            />
+          ) : isLoading ? (
+            <TableSkeleton rows={5} cols={4} />
+          ) : error ? (
+            <ErrorState message={getApiErrorMessage(error)} onRetry={refetch} />
+          ) : groupedArticles.length === 0 ? (
+            <EmptyState
+              icon={<Boxes className="w-6 h-6" />}
+              title="No stock items match"
+              description="Adjust your search filter or inward footwear stock via Purchase Bills."
+            />
+          ) : (
+            <div className="space-y-3">
+              {groupedArticles.map((art) => {
+                const expanded = expandedKeys[art.articleName] !== false
+                return (
+                  <div
+                    key={art.articleName}
+                    className="bg-white rounded-xl border border-slate-200 overflow-hidden"
+                  >
+                    <button
+                      type="button"
+                      onClick={() =>
+                        setExpandedKeys((p) => ({ ...p, [art.articleName]: !expanded }))
+                      }
+                      className="w-full px-4 py-3 flex flex-wrap items-center justify-between gap-3 bg-slate-50/70 hover:bg-slate-50 text-left border-b border-slate-100"
+                    >
+                      <div className="flex items-center gap-2.5">
+                        {expanded ? (
+                          <ChevronDown className="w-4 h-4 text-slate-400" />
+                        ) : (
+                          <ChevronRight className="w-4 h-4 text-slate-400" />
+                        )}
+                        <span className="text-sm font-semibold text-slate-900">{art.articleName}</span>
+                        <span className="text-xs text-slate-500">
+                          ({art.colourEntries.length} {art.colourEntries.length === 1 ? 'colour' : 'colours'})
+                        </span>
+                      </div>
+                      <div className="flex items-center gap-4 text-xs">
+                        <StockBadge quantity={art.totalQty} />
+                        <span className="tabular-nums text-slate-600">
+                          Cost: <strong className="text-slate-900">{formatINR(art.costValue)}</strong>
+                        </span>
+                      </div>
+                    </button>
+
+                    {expanded && (
+                      <div className="p-4 space-y-3">
+                        {art.colourEntries.map(([colour, sizeMap]) => (
+                          <div key={colour} className="space-y-1.5">
+                            <ColourSwatch name={colour} />
+                            <SizeRunGrid
+                              readOnly
+                              sizes={Array.from(new Set([...DEFAULT_UK_SIZES, ...Object.keys(sizeMap)]))}
+                              values={sizeMap}
+                            />
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                )
+              })}
+            </div>
+          )}
+        </>
       )}
 
       {/* Stock Adjustment Drawer */}

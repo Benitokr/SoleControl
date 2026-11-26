@@ -227,54 +227,58 @@ export function DataTable<T>({
 
         <div className="flex items-center gap-1.5">
           {toolbarExtra}
-          <button
-            type="button"
-            onClick={() => setDense((d) => !d)}
-            title="Toggle row density"
-            className="h-8 px-2.5 rounded-md border border-slate-200 bg-white text-xs font-medium text-slate-600 hover:bg-slate-50 inline-flex items-center gap-1.5"
-          >
-            <Rows3 className="w-3.5 h-3.5" />
-            <span className="hidden sm:inline">{dense ? 'Compact' : 'Comfortable'}</span>
-          </button>
+          {sortedData.length >= 15 && (
+            <>
+              <button
+                type="button"
+                onClick={() => setDense((d) => !d)}
+                title="Toggle row density"
+                className="h-8 px-2.5 rounded-md border border-slate-200 bg-white text-xs font-medium text-slate-600 hover:bg-slate-50 inline-flex items-center gap-1.5"
+              >
+                <Rows3 className="w-3.5 h-3.5" />
+                <span className="hidden sm:inline">{dense ? 'Compact' : 'Comfortable'}</span>
+              </button>
 
-          <div ref={colMenuRef} className="relative">
-            <button
-              type="button"
-              onClick={() => setShowColMenu((o) => !o)}
-              className="h-8 px-2.5 rounded-md border border-slate-200 bg-white text-xs font-medium text-slate-600 hover:bg-slate-50 inline-flex items-center gap-1.5"
-            >
-              <Columns3 className="w-3.5 h-3.5" />
-              <span className="hidden sm:inline">Columns</span>
-            </button>
-            {showColMenu && (
-              <div className="absolute right-0 mt-1 w-52 bg-white border border-slate-200 rounded-lg shadow-lg p-2 z-30 space-y-1">
-                {columns.map((c) => (
-                  <label
-                    key={c.id}
-                    className="flex items-center gap-2 px-2 py-1.5 rounded hover:bg-slate-50 text-xs text-slate-700 cursor-pointer"
-                  >
-                    <input
-                      type="checkbox"
-                      checked={!hiddenCols.has(c.id)}
-                      onChange={() => toggleColumn(c.id)}
-                      className="rounded border-slate-300 text-teal-600 focus:ring-teal-600"
-                    />
-                    <span className="truncate">{c.header}</span>
-                  </label>
-                ))}
+              <div ref={colMenuRef} className="relative">
+                <button
+                  type="button"
+                  onClick={() => setShowColMenu((o) => !o)}
+                  className="h-8 px-2.5 rounded-md border border-slate-200 bg-white text-xs font-medium text-slate-600 hover:bg-slate-50 inline-flex items-center gap-1.5"
+                >
+                  <Columns3 className="w-3.5 h-3.5" />
+                  <span className="hidden sm:inline">Columns</span>
+                </button>
+                {showColMenu && (
+                  <div className="absolute right-0 mt-1 w-52 bg-white border border-slate-200 rounded-lg shadow-lg p-2 z-30 space-y-1">
+                    {columns.map((c) => (
+                      <label
+                        key={c.id}
+                        className="flex items-center gap-2 px-2 py-1.5 rounded hover:bg-slate-50 text-xs text-slate-700 cursor-pointer"
+                      >
+                        <input
+                          type="checkbox"
+                          checked={!hiddenCols.has(c.id)}
+                          onChange={() => toggleColumn(c.id)}
+                          className="rounded border-slate-300 text-teal-600 focus:ring-teal-600"
+                        />
+                        <span className="truncate">{c.header}</span>
+                      </label>
+                    ))}
+                  </div>
+                )}
               </div>
-            )}
-          </div>
 
-          {exportFilename && (
-            <button
-              type="button"
-              onClick={handleExportCsv}
-              className="h-8 px-2.5 rounded-md border border-slate-200 bg-white text-xs font-medium text-slate-600 hover:bg-slate-50 inline-flex items-center gap-1.5"
-            >
-              <Download className="w-3.5 h-3.5" />
-              <span className="hidden sm:inline">Export CSV</span>
-            </button>
+              {exportFilename && (
+                <button
+                  type="button"
+                  onClick={handleExportCsv}
+                  className="h-8 px-2.5 rounded-md border border-slate-200 bg-white text-xs font-medium text-slate-600 hover:bg-slate-50 inline-flex items-center gap-1.5"
+                >
+                  <Download className="w-3.5 h-3.5" />
+                  <span className="hidden sm:inline">Export CSV</span>
+                </button>
+              )}
+            </>
           )}
         </div>
       </div>

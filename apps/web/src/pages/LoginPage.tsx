@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { Eye, EyeOff, ShieldCheck, ArrowRight } from 'lucide-react'
 import { useAuthStore } from '../store/authStore'
@@ -13,6 +13,10 @@ export function LoginPage() {
   const [error, setError] = useState('')
   const { setUser, setAccessToken } = useAuthStore()
   const navigate = useNavigate()
+
+  useEffect(() => {
+    document.title = 'Sign In · SoleControl'
+  }, [])
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -37,13 +41,16 @@ export function LoginPage() {
       {/* Left panel */}
       <div className="hidden lg:flex flex-col justify-between p-12 w-1/2 bg-[#0F172A] text-white relative overflow-hidden">
         <div className="relative z-10 space-y-8">
-          <div className="inline-flex items-center gap-3 bg-white rounded-lg px-3 py-2 shadow-sm">
-            <img src="/fortyv-logo.png" alt="Forty V" className="h-7 w-auto object-contain" />
+          <div className="inline-flex items-center gap-2.5">
+            <span className="text-2xl font-bold tracking-tight text-white">SoleControl</span>
+            <span className="text-xs font-medium px-2 py-0.5 rounded bg-teal-600/20 text-teal-300 border border-teal-500/30">
+              Retail ERP
+            </span>
           </div>
 
           <div className="space-y-3 max-w-md">
             <h1 className="text-3xl font-semibold tracking-tight text-white">
-              SoleControl Retail ERP
+              Footwear Retail Operations
             </h1>
             <p className="text-sm text-slate-300 leading-relaxed">
               Manage footwear purchasing, size-run inventory, POS billing, GST compliance, and store accounting in one place.
@@ -52,7 +59,7 @@ export function LoginPage() {
         </div>
 
         <div className="relative z-10 flex items-center justify-between text-xs text-slate-400 border-t border-slate-800 pt-6">
-          <span>Forty V Footwear Retail Operations</span>
+          <span>SoleControl Retail Management</span>
           <span className="inline-flex items-center gap-1.5 text-slate-300">
             <ShieldCheck className="w-4 h-4 text-teal-400" />
             Role-based access
@@ -62,9 +69,9 @@ export function LoginPage() {
 
       {/* Right login form */}
       <div className="flex-1 flex items-center justify-center p-6 sm:p-12">
-        <div className="w-full max-w-sm bg-white rounded-xl border border-slate-200 p-6 sm:p-8 shadow-xs space-y-6">
-          <div className="lg:hidden flex items-center gap-2.5">
-            <img src="/fortyv-logo.png" alt="Forty V" className="h-7 w-auto object-contain" />
+        <div className="w-full max-w-sm bg-white rounded-xl border border-slate-200 p-6 sm:p-8 shadow-sm space-y-6">
+          <div className="lg:hidden">
+            <span className="text-xl font-bold tracking-tight text-slate-900">SoleControl</span>
           </div>
 
           <div>
@@ -91,7 +98,7 @@ export function LoginPage() {
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 className="w-full h-10 px-3 text-sm bg-white border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-teal-600/20 focus:border-teal-600"
-                placeholder="name@fortyv.local"
+                placeholder="name@store.local"
               />
             </div>
 

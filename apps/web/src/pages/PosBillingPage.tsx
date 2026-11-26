@@ -882,8 +882,8 @@ export function PosBillingPage() {
         {completedSale && (
           <div className="space-y-4 text-xs">
             <div className="text-center border-b border-slate-200 pb-3">
-              <h4 className="text-base font-bold">Forty V Footwear</h4>
-              <p className="text-slate-500">Tax Invoice · Retail POS</p>
+              <h4 className="text-base font-bold">Tax Invoice / Receipt</h4>
+              <p className="text-slate-500">SoleControl Retail POS</p>
               <p className="font-mono mt-1">
                 {completedSale.document_number || completedSale.docNumber || completedSale.id}
               </p>
@@ -929,7 +929,7 @@ export function PosBillingPage() {
               </div>
             </div>
             <p className="text-center text-[10px] text-slate-400 pt-2">
-              Powered by Forty V · Thank you for shopping
+              Thank you for shopping with us
             </p>
           </div>
         )}

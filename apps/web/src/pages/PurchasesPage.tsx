@@ -7,7 +7,7 @@ import { api } from '../lib/api'
 import { formatINR, formatDateIN, getApiErrorMessage } from '../lib/format'
 import {
   PageHeader, StatCard, FilterBar, DataTable, StatusBadge, Button,
-  Drawer, StatusTracker, ConfirmDialog, ColumnDef,
+  Drawer, StatusTracker, ConfirmDialog, HubTabs, ColumnDef,
 } from '../components/ui'
 
 export function PurchasesPage() {
@@ -15,7 +15,8 @@ export function PurchasesPage() {
   const [searchParams, setSearchParams] = useSearchParams()
   const qc = useQueryClient()
 
-  const activeTab = searchParams.get('tab') === 'orders' ? 'orders' : 'bills'
+  const tabParam = searchParams.get('tab')
+  const activeTab = tabParam === 'orders' ? 'orders' : tabParam === 'overview' ? 'overview' : 'bills'
   const [search, setSearch] = useState('')
   const [statusFilter, setStatusFilter] = useState('ALL')
   const [selectedBill, setSelectedBill] = useState<any | null>(null)
@@ -144,40 +145,57 @@ export function PurchasesPage() {
         }
       />
 
-      {/* Tabs */}
-      <div className="flex items-center gap-1 bg-white border border-slate-200 rounded-lg p-1 w-fit">
-        <button
-          type="button"
-          onClick={() => setSearchParams({})}
-          className={
-            activeTab === 'bills'
-              ? 'px-3.5 py-1.5 rounded-md text-xs font-medium bg-teal-600 text-white inline-flex items-center gap-1.5'
-              : 'px-3.5 py-1.5 rounded-md text-xs font-medium text-slate-600 hover:text-slate-900 inline-flex items-center gap-1.5'
-          }
-        >
-          <ReceiptText className="w-3.5 h-3.5" />
-          Purchase Bills / GRN
-        </button>
-        <button
-          type="button"
-          onClick={() => setSearchParams({ tab: 'orders' })}
-          className={
-            activeTab === 'orders'
-              ? 'px-3.5 py-1.5 rounded-md text-xs font-medium bg-teal-600 text-white inline-flex items-center gap-1.5'
-              : 'px-3.5 py-1.5 rounded-md text-xs font-medium text-slate-600 hover:text-slate-900 inline-flex items-center gap-1.5'
-          }
-        >
-          <ClipboardList className="w-3.5 h-3.5" />
-          Purchase Orders
-        </button>
-      </div>
+      {/* Hub Tabs */}
+      <HubTabs
+        tabs={[
+          { key: 'overview', label: 'Overview', active: activeTab === 'overview', onClick: () => setSearchParams({ tab: 'overview' }) },
+          { key: 'orders', label: 'Purchase Orders', active: activeTab === 'orders', onClick: () => setSearchParams({ tab: 'orders' }) },
+          { key: 'bills', label: 'Purchase Bills / GRN', active: activeTab === 'bills', onClick: () => setSearchParams({}) },
+          { key: 'vendors', label: 'Vendors', to: '/vendors' },
+        ]}
+      />
 
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        <StatCard label="Total bills" value={bills.length} icon={<ReceiptText className="w-4 h-4" />} tone="teal" />
-        <StatCard label="Total inward value" value={formatINR(totalValue)} tone="success" />
-        <StatCard label="Draft / Pending GRN" value={draftCount} tone={draftCount > 0 ? 'warning' : 'default'} />
-        <StatCard label="Finalised / Received" value={finalisedCount} icon={<Truck className="w-4 h-4" />} />
+        <StatCard label="Total bills" value={bills.length} subtext="Purchase documents" icon={<ReceiptText className="w-4 h-4" />} tone="teal" />
+        <StatCard label="Total inward value" value={formatINR(totalValue)} subtext="Cumulative value" tone="success" />
+        <StatCard label="Draft / Pending GRN" value={draftCount} subtext="Awaiting finalisation" tone={draftCount > 0 ? 'warning' : 'default'} />
+        <StatCard label="Finalised / Received" value={finalisedCount} subtext="Posted to stock" icon={<Truck className="w-4 h-4" />} />
       </div>
+
+      {activeTab === 'overview' ? (
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
+          <div className="bg-white rounded-xl border border-slate-200 p-5 space-y-3">
+            <h2 className="text-sm font-semibold text-slate-900">Needs attention</h2>
+            {draftCount === 0 ? (
+              <p className="text-sm text-slate-500">All purchase bills have been received into stock.</p>
+            ) : (
+              <div className="p-3 rounded-lg bg-amber-50 border border-amber-200 flex items-center justify-between text-sm">
+                <span className="text-amber-900">{draftCount} draft bills awaiting goods receipt</span>
+                <Button size="sm" variant="outline" onClick={() => setSearchParams({})}>
+                  Review bills
+                </Button>
+              </div>
+            )}
+          </div>
+          <div className="bg-white rounded-xl border border-slate-200 p-5 space-y-3">
+            <div className="flex items-center justify-between">
+              <h2 className="text-sm font-semibold text-slate-900">Recent purchase bills</h2>
+              <button type="button" onClick={() => setSearchParams({})} className="text-xs font-medium text-teal-700 hover:underline">
+                View all
+              </button>
+            </div>
+            <div className="divide-y divide-slate-100">
+              {bills.slice(0, 5).map((b, i) => (
+                <div key={b.id || i} className="py-2 flex items-center justify-between text-sm">
+                  <span className="font-mono text-xs text-teal-700">{b.document_number || b.docNumber || String(b.id).slice(0, 10)}</span>
+                  <span className="font-semibold tabular-nums">{formatINR(b.total_amount ?? b.totalAmount ?? 0)}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      ) : (
+        <>
 
       <FilterBar
         search={search}
@@ -214,6 +232,8 @@ export function PurchasesPage() {
           </Button>
         }
       />
+        </>
+      )}
 
       <Drawer
         open={!!selectedBill}
