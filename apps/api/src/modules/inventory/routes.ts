@@ -4,7 +4,7 @@ import { requirePermission } from '../../middleware/requirePermission.js';
 import { prisma } from '../../lib/prisma.js';
 import { AppError } from '../../middleware/errorHandler.js';
 import { randomUUID } from 'crypto';
-import { getPGlite } from '../../lib/db.js';
+import { getPGlite, resolveStoreId } from '../../lib/db.js';
 
 export const inventoryRoutes = Router();
 inventoryRoutes.use(requireAuth);
@@ -108,9 +108,9 @@ inventoryRoutes.post('/adjustments', requirePermission('inventory.create'), asyn
     if (!reason || !items?.length) throw new AppError('reason and items are required', 400, 'VALIDATION_ERROR');
 
     const adjId = randomUUID();
-    const resolvedStore = storeId || 'default';
+    const resolvedStore = await resolveStoreId(storeId);
     const adjustment = await prisma.stockAdjustment.create({
-      data: { id: adjId, storeId: resolvedStore, reason, notes, status: 'APPROVED', approvedBy: req.user!.id, approvedAt: new Date(), actorId: req.user!.id },
+      data: { id: adjId, storeId: resolvedStore, reason, notes, status: 'APPROVED', approvedBy: req.user!.id, approvedAt: new Date(), createdBy: req.user!.id },
     });
 
     for (const item of items) {
@@ -155,8 +155,9 @@ inventoryRoutes.post('/audits', requirePermission('inventory.create'), async (re
     const { storeId, reference } = req.body as { storeId?: string; reference?: string };
     const pglite = getPGlite();
 
+    const resolvedStore = await resolveStoreId(storeId);
     const session = await prisma.stockAuditSession.create({
-      data: { id: randomUUID(), storeId: storeId || 'default', reference, status: 'OPEN', snapshotAt: new Date(), actorId: req.user!.id },
+      data: { id: randomUUID(), storeId: resolvedStore, reference, status: 'OPEN', snapshotAt: new Date(), createdBy: req.user!.id },
     });
 
     const balRes = await pglite.query(`SELECT * FROM "stock_balances" WHERE quantity > 0`);

@@ -4,6 +4,7 @@ import { requirePermission } from '../../middleware/requirePermission.js';
 import { prisma } from '../../lib/prisma.js';
 import { AppError } from '../../middleware/errorHandler.js';
 import { randomUUID } from 'crypto';
+import { resolveStoreId } from '../../lib/db.js';
 
 export const displayRoutes = Router();
 displayRoutes.use(requireAuth);
@@ -34,9 +35,9 @@ displayRoutes.post('/allocate', requirePermission('inventory.create'), async (re
       throw new AppError('Insufficient stock at source location', 400, 'INSUFFICIENT_STOCK');
     }
 
-    const resolvedStore = storeId || 'default';
+    const resolvedStore = await resolveStoreId(storeId);
     const allocation = await prisma.displayAllocation.create({
-      data: { id: randomUUID(), storeId: resolvedStore, variantId, fromLocationId, displayLocationId, quantity, status: 'ACTIVE', notes, actorId: req.user!.id },
+      data: { id: randomUUID(), storeId: resolvedStore, variantId, fromLocationId, displayLocationId, quantity, status: 'ACTIVE', notes, createdBy: req.user!.id },
     });
 
     // Deduct from storage
@@ -48,7 +49,7 @@ displayRoutes.post('/allocate', requirePermission('inventory.create'), async (re
     if (dispBal) {
       await prisma.stockBalance.update({ where: { id: (dispBal as any).id }, data: { quantity: Number((dispBal as any).quantity) + quantity } });
     } else {
-      await prisma.stockBalance.create({ data: { id: randomUUID(), variantId, locationId: displayLocationId, quantity } });
+      await prisma.stockBalance.create({ data: { id: randomUUID(), storeId: resolvedStore, variantId, locationId: displayLocationId, quantity } });
     }
     await prisma.stockMovement.create({ data: { id: randomUUID(), storeId: resolvedStore, variantId, locationId: displayLocationId, type: 'DISPLAY_IN', quantity, referenceId: allocation.id, referenceType: 'DISPLAY', actorId: req.user!.id } });
 

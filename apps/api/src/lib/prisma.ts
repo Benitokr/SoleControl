@@ -24,10 +24,17 @@ export const prisma: any = new Proxy(
           get(_mTarget, method: string) {
             return async (...args: any[]) => {
               if (getDbMode() === 'POSTGRES') {
-                return (getPrisma() as any)[prop][method](...args);
+                const client = getPrisma() as any;
+                if (client[prop] && typeof client[prop][method] === 'function') {
+                  if (prop === 'auditLog' && method === 'create' && args[0]?.data?.actorId && !args[0]?.data?.userId) {
+                    const { actorId, ...rest } = args[0].data;
+                    args[0] = { ...args[0], data: { ...rest, userId: actorId } };
+                  }
+                  return client[prop][method](...args);
+                }
               }
 
-              // Embedded PostgreSQL (PGlite) operations
+              // SQL adapter (uses pgPoolInstance in POSTGRES mode, or PGlite in embedded mode)
               const pglite = getPGlite();
               return handlePgliteOperation(pglite, prop, method, args[0]);
             };
@@ -384,6 +391,23 @@ async function handlePgliteOperation(pglite: any, model: string, method: string,
       return { count: 1 };
     }
 
+    case 'delete': {
+      const whereConditions: string[] = [];
+      const values: any[] = [];
+      let idx = 1;
+      for (const [key, val] of Object.entries(params.where || {})) {
+        if (val === undefined) continue;
+        whereConditions.push(`"${snakeCase(key)}" = $${idx++}`);
+        values.push(val);
+      }
+      if (whereConditions.length === 0) {
+        throw new Error(`delete requires a where clause on ${model}`);
+      }
+      const query = `DELETE FROM "${table}" WHERE ${whereConditions.join(' AND ')} RETURNING *`;
+      const res = await pglite.query(query, values);
+      return camelCaseObject(res.rows[0] || null);
+    }
+
     case 'deleteMany': {
       const whereConditions: string[] = [];
       const values: any[] = [];
@@ -466,7 +490,7 @@ async function populateRelations(pglite: any, model: string, record: any, includ
         include: include.variants.include
       });
     }
-    if (include._count?.variants) {
+    if (include._count?.select?.variants || include._count?.variants) {
       const vCount = await handlePgliteOperation(pglite, 'productVariant', 'count', { where: { articleId: record.id } });
       record._count = { ...record._count, variants: vCount };
     }

@@ -56,7 +56,7 @@ reportsRoutes.get('/ageing', requirePermission('reports.view'), async (_req, res
   try {
     const pglite = getPGlite();
     const r = await pglite.query(
-      `SELECT pv.sku, a.name as article, cat.name as category, COALESCE(SUM(sb.quantity),0) as qty, MIN(sm.created_at) as first_movement FROM product_variants pv JOIN articles a ON pv.article_id=a.id JOIN products pr ON a.product_id=pr.id JOIN categories cat ON pr.category_id=cat.id LEFT JOIN stock_balances sb ON sb.variant_id=pv.id LEFT JOIN stock_movements sm ON sm.variant_id=pv.id AND sm.type='PURCHASE_IN' GROUP BY pv.id, pv.sku, a.name, cat.name HAVING COALESCE(SUM(sb.quantity),0) > 0 ORDER BY first_movement ASC NULLS LAST LIMIT 500`
+      `SELECT pv.sku, a.name as article, cat.name as category, COALESCE(SUM(sb.quantity),0) as qty, MIN(sm.created_at) as first_movement FROM product_variants pv JOIN articles a ON pv.article_id=a.id JOIN categories cat ON a.category_id=cat.id LEFT JOIN stock_balances sb ON sb.variant_id=pv.id LEFT JOIN stock_movements sm ON sm.variant_id=pv.id AND sm.type='PURCHASE_IN' GROUP BY pv.id, pv.sku, a.name, cat.name HAVING COALESCE(SUM(sb.quantity),0) > 0 ORDER BY first_movement ASC NULLS LAST LIMIT 500`
     );
     res.json({ data: r.rows });
   } catch (err) { next(err); }
@@ -66,7 +66,7 @@ reportsRoutes.get('/gst', requirePermission('reports.view'), async (_req, res, n
   try {
     const pglite = getPGlite();
     const r = await pglite.query(
-      `SELECT gt.*, p.doc_number as purchase_doc, s.doc_number as sale_doc FROM gst_transactions gt LEFT JOIN purchases p ON gt.reference_id=p.id AND gt.reference_type='PURCHASE' LEFT JOIN sales s ON gt.reference_id=s.id AND gt.reference_type='SALE' WHERE gt.purchase_class != 'B' OR gt.purchase_class IS NULL ORDER BY gt.transaction_date DESC LIMIT 500`
+      `SELECT gt.*, p.document_number as purchase_doc, s.document_number as sale_doc FROM gst_transactions gt LEFT JOIN purchases p ON gt.reference_id=p.id AND gt.reference_type='PURCHASE' LEFT JOIN sales s ON gt.reference_id=s.id AND gt.reference_type='SALE' WHERE gt.purchase_class != 'B' OR gt.purchase_class IS NULL ORDER BY gt.transaction_date DESC LIMIT 500`
     );
     res.json({ data: r.rows });
   } catch (err) { next(err); }

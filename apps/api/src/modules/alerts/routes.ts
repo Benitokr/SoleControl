@@ -50,7 +50,7 @@ alertRoutes.delete('/:id', requirePermission('audit.delete'), async (req, res, n
 alertRoutes.get('/rules', requirePermission('audit.view'), async (_req, res, next) => {
   try {
     const rules = await prisma.alertRule.findMany({
-      orderBy: { createdAt: 'desc' },
+      orderBy: { name: 'asc' },
     });
     res.json({ data: rules });
   } catch (err) {
@@ -61,14 +61,13 @@ alertRoutes.get('/rules', requirePermission('audit.view'), async (_req, res, nex
 // POST /rules - create alert rule
 alertRoutes.post('/rules', requirePermission('audit.create'), async (req, res, next) => {
   try {
-    const { name, condition, threshold, severity, isActive } = req.body;
+    const { code, name, condition, isActive } = req.body;
     const rule = await prisma.alertRule.create({
       data: {
         id: randomUUID(),
+        code: code || `RULE-${Date.now()}`,
         name,
-        condition,
-        threshold: threshold !== undefined ? Number(threshold) : 0,
-        severity: severity || 'INFO',
+        condition: condition ?? {},
         isActive: isActive !== undefined ? Boolean(isActive) : true,
       },
     });

@@ -189,7 +189,7 @@ export function AppShell() {
     queryFn: () => api.get('/company/profile').then((r) => r.data?.data ?? {}),
   })
 
-  const clientLogo = profileData?.logoUrl || profileData?.logo_url || localStorage.getItem('sc_client_logo') || ''
+  const clientLogo = profileData?.logoUrl || profileData?.logo_url || ''
   const stores: any[] = Array.isArray(storesData) ? storesData : []
   const activeStores = stores.filter((s) => s.isActive !== false && s.is_active !== false)
   const currentStore =

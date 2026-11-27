@@ -49,9 +49,9 @@ export function CompanyConfigPage() {
 
   useEffect(() => {
     if (data) {
-      setName(data.name || '')
+      setName(data.name || data.tradeName || data.trade_name || '')
       setLegalName(data.legalName || data.legal_name || '')
-      setLogoUrl(data.logoUrl || data.logo_url || localStorage.getItem('sc_client_logo') || '')
+      setLogoUrl(data.logoUrl || data.logo_url || '')
       setGstin(data.gstin || '')
       setAddress(data.address || '')
       setPhone(data.phone || '')
@@ -62,8 +62,6 @@ export function CompanyConfigPage() {
 
   const saveMutation = useMutation({
     mutationFn: () => {
-      if (logoUrl) localStorage.setItem('sc_client_logo', logoUrl)
-      else localStorage.removeItem('sc_client_logo')
       return api.put('/company/profile', {
         name,
         legalName,

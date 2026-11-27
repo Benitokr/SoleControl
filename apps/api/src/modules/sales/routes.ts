@@ -4,7 +4,7 @@ import { requirePermission } from '../../middleware/requirePermission.js';
 import { prisma } from '../../lib/prisma.js';
 import { AppError } from '../../middleware/errorHandler.js';
 import { randomUUID } from 'crypto';
-import { getPGlite, withTransaction } from '../../lib/db.js';
+import { getPGlite, withTransaction, resolveStoreId } from '../../lib/db.js';
 
 export const saleRoutes = Router();
 saleRoutes.use(requireAuth);
@@ -144,11 +144,21 @@ saleRoutes.post('/', requirePermission('sales.create'), async (req, res, next) =
       throw new AppError('items and payments are required', 400, 'VALIDATION_ERROR');
     }
 
-    const resolvedStore = storeId || 'default';
+    const resolvedStore = await resolveStoreId(storeId);
+    const pglite = getPGlite();
     const negSetting = await prisma.setting.findUnique({ where: { key: 'stock.allow_negative' } }).catch(() => null);
     const allowNegative = (negSetting as any)?.value === true || (negSetting as any)?.value === 'true';
 
-    const subtotal = items.reduce((s, i) => s + Number(i.sellingPrice) * i.quantity, 0);
+    // Validate stock availability
+    for (const item of items) {
+      const balRes = await pglite.query(`SELECT COALESCE(SUM(quantity),0) as total FROM "stock_balances" WHERE variant_id = $1`, [item.variantId]);
+      if (!allowNegative && Number((balRes.rows[0] as any)?.total || 0) < item.quantity) {
+        throw new AppError(`Insufficient stock for variant ${item.variantId}`, 400, 'INSUFFICIENT_STOCK');
+      }
+    }
+
+    // Calculate totals
+    const subtotal = items.reduce((s, i) => s + Number(i.sellingPrice ?? (i as any).unitPrice ?? i.mrp ?? 0) * i.quantity, 0);
     const { totalDiscount, appliedOffers } = await applyOffers(subtotal);
     const taxAmount = items.reduce((s, i) => s + Number(i.taxAmount || 0), 0);
     const totalAmount = subtotal - totalDiscount + taxAmount;
@@ -189,16 +199,18 @@ saleRoutes.post('/', requirePermission('sales.create'), async (req, res, next) =
 
       const saleId = randomUUID();
       await tx.query(
-        `INSERT INTO "sales" ("id","store_id","document_number","customer_id","status","class","subtotal","discount_amount","tax_amount","total_amount","paid_amount","credit_amount","notes","actor_id","created_at","updated_at")
+        `INSERT INTO "sales" ("id","store_id","document_number","customer_id","status","class","subtotal","discount_amount","tax_amount","total_amount","paid_amount","credit_amount","notes","created_by","created_at","updated_at")
          VALUES ($1,$2,$3,$4,'COMPLETED',$5,$6,$7,$8,$9,$10,$11,$12,$13,CURRENT_TIMESTAMP,CURRENT_TIMESTAMP)`,
         [saleId, resolvedStore, docNumber, customerId || null, saleClass || 'CLASS_A', subtotal, totalDiscount, taxAmount, totalAmount, paidAmount, creditAmount, notes || null, req.user!.id]
       );
 
       for (const { item, bal } of lockedBalances) {
+        const sellingPrice = Number(item.sellingPrice ?? item.unitPrice ?? item.mrp ?? 0);
+        const mrp = Number(item.mrp ?? sellingPrice);
         await tx.query(
           `INSERT INTO "sale_items" ("id","sale_id","variant_id","quantity","mrp","selling_price","discount_amount","tax_rate","tax_amount")
            VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)`,
-          [randomUUID(), saleId, item.variantId, item.quantity, item.mrp, item.sellingPrice, item.discountAmount || 0, item.taxRate || 0, item.taxAmount || 0]
+          [randomUUID(), saleId, item.variantId, item.quantity, mrp, sellingPrice, item.discountAmount || 0, item.taxRate || 0, item.taxAmount || 0]
         );
 
         if (bal) {
@@ -213,35 +225,57 @@ saleRoutes.post('/', requirePermission('sales.create'), async (req, res, next) =
 
       for (const payment of payments) {
         await tx.query(
-          `INSERT INTO "sale_payments" ("id","sale_id","payment_mode","amount","reference","created_at")
-           VALUES ($1,$2,$3,$4,$5,CURRENT_TIMESTAMP)`,
-          [randomUUID(), saleId, payment.paymentMode || 'CASH', payment.amount, payment.reference || null]
+          `INSERT INTO "sale_payments" ("id","sale_id","payment_mode","amount","reference")
+           VALUES ($1,$2,$3,$4,$5)`,
+          [randomUUID(), saleId, payment.paymentMode || (payment as any).mode || 'CASH', payment.amount, payment.reference || null]
         );
       }
 
-      // Post balanced journal: Dr Cash/Bank, Cr Sales Revenue (+ Output GST)
-      const cashAccRes = await tx.query(`SELECT id FROM "accounts" WHERE "code" = '1000' LIMIT 1`);
-      const salesAccRes = await tx.query(`SELECT id FROM "accounts" WHERE "code" = '4000' LIMIT 1`);
-      if ((cashAccRes.rows[0] as any)?.id && (salesAccRes.rows[0] as any)?.id) {
+      // Post balanced journal: Dr Cash/Bank, Cr Sales Revenue
+      const cashAccRes = await tx.query(`SELECT id, code, name FROM "accounts" WHERE "code" = '1000' LIMIT 1`);
+      const salesAccRes = await tx.query(`SELECT id, code, name FROM "accounts" WHERE "code" = '4000' LIMIT 1`);
+      const cashAcc = cashAccRes.rows[0] as any;
+      const salesAcc = salesAccRes.rows[0] as any;
+      if (cashAcc?.id && salesAcc?.id) {
         const entryId = randomUUID();
         await tx.query(
-          `INSERT INTO "journal_entries" ("id","store_id","reference","type","status","total_debit","total_credit","notes","posted_by","posted_at","created_at","updated_at")
-           VALUES ($1,$2,$3,'SALE','POSTED',$4,$4,$5,$6,CURRENT_TIMESTAMP,CURRENT_TIMESTAMP,CURRENT_TIMESTAMP)`,
-          [entryId, resolvedStore, docNumber, totalAmount, `Sale ${docNumber}`, req.user!.id]
+          `INSERT INTO "journal_entries" ("id","store_id","reference","reference_type","reference_id","type","status","total_debit","total_credit","notes","posted_by","posted_at","created_at","updated_at")
+           VALUES ($1,$2,$3,'SALE',$4,'SALE','POSTED',$5,$5,$6,$7,CURRENT_TIMESTAMP,CURRENT_TIMESTAMP,CURRENT_TIMESTAMP)`,
+          [entryId, resolvedStore, docNumber, saleId, totalAmount, `Sale ${docNumber}`, req.user!.id]
         );
-        await tx.query(`INSERT INTO "journal_lines" ("id","entry_id","account_id","type","amount","description") VALUES ($1,$2,$3,'DEBIT',$4,'Sale receipt')`, [randomUUID(), entryId, (cashAccRes.rows[0] as any).id, totalAmount]);
-        await tx.query(`INSERT INTO "journal_lines" ("id","entry_id","account_id","type","amount","description") VALUES ($1,$2,$3,'CREDIT',$4,'Sales revenue')`, [randomUUID(), entryId, (salesAccRes.rows[0] as any).id, totalAmount]);
+        await tx.query(`INSERT INTO "journal_lines" ("id","journal_entry_id","entry_id","account_id","account_code","account_name","type","amount","debit","credit","description") VALUES ($1,$2,$2,$3,$4,$5,'DEBIT',$6,$6,0,'Sale receipt')`, [randomUUID(), entryId, cashAcc.id, cashAcc.code || '1000', cashAcc.name || 'Cash', totalAmount]);
+        await tx.query(`INSERT INTO "journal_lines" ("id","journal_entry_id","entry_id","account_id","account_code","account_name","type","amount","debit","credit","description") VALUES ($1,$2,$2,$3,$4,$5,'CREDIT',$6,0,$6,'Sales revenue')`, [randomUUID(), entryId, salesAcc.id, salesAcc.code || '4000', salesAcc.name || 'Sales Revenue', totalAmount]);
       }
 
       // Audit log
       await tx.query(
-        `INSERT INTO "audit_logs" ("id","entity","entity_id","action","actor_id","after_state","created_at")
+        `INSERT INTO "audit_logs" ("id","entity","entity_id","action","user_id","after_state","created_at")
          VALUES ($1,'Sale',$2,'CREATE',$3,$4::jsonb,CURRENT_TIMESTAMP)`,
         [randomUUID(), saleId, req.user!.id, JSON.stringify({ documentNumber: docNumber, totalAmount })]
       );
 
+      // Record offer redemptions
+      for (const { offer, discount } of appliedOffers) {
+        await tx.query(
+          `INSERT INTO "offer_redemptions" ("id","offer_id","sale_id","discount_amount","created_at")
+           VALUES ($1,$2,$3,$4,CURRENT_TIMESTAMP)`,
+          [randomUUID(), offer.id, saleId, discount]
+        );
+      }
+
       return { id: saleId, document_number: docNumber, documentNumber: docNumber, totalAmount, status: 'COMPLETED' };
     });
+
+    // Update customer LTV and credit outstanding
+    if (customerId) {
+      const cust = await prisma.customer.findUnique({ where: { id: customerId } });
+      if (cust) {
+        await prisma.customer.update({
+          where: { id: customerId },
+          data: { lifetimeValue: Number((cust as any).lifetimeValue) + totalAmount, creditOutstanding: Number((cust as any).creditOutstanding) + creditAmount },
+        });
+      }
+    }
 
     res.status(201).json({ data: { ...saleResult, appliedOffers: appliedOffers.map(a => ({ name: a.offer.name, discount: a.discount })) } });
   } catch (err) { next(err); }

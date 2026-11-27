@@ -229,7 +229,7 @@ mastersRoutes.get('/articles', requirePermission('masters.view'), async (req: Au
     if (isActive !== undefined) where.isActive = isActive === 'true';
     const skip = (+page - 1) * +limit;
     const [items, total] = await Promise.all([
-      prisma.article.findMany({ where, skip, take: +limit, orderBy: { createdAt: 'desc' }, include: { brand: true, category: true, _count: { variants: true } as any } }),
+      prisma.article.findMany({ where, skip, take: +limit, orderBy: { createdAt: 'desc' }, include: { brand: true, category: true, _count: { select: { variants: true } } } }),
       prisma.article.count({ where }),
     ]);
     return res.json({ data: items, meta: { total, page: +page, limit: +limit, totalPages: Math.ceil(total / +limit) } });

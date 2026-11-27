@@ -67,6 +67,35 @@ bankRoutes.post('/unreconcile', requirePermission('bank_gst.create'), async (req
   } catch (err) { next(err); }
 });
 
+bankRoutes.post('/reconcile/:id', requirePermission('bank_gst.create'), async (req, res, next) => {
+  try {
+    const pglite = getPGlite();
+    await pglite.query(
+      `UPDATE bank_statement_lines SET is_reconciled=true WHERE id=$1 OR bank_account_id=$1`,
+      [req.params.id]
+    );
+    res.json({ data: { reconciled: true, id: req.params.id } });
+  } catch (err) { next(err); }
+});
+
+bankRoutes.get('/gst', requirePermission('bank_gst.view'), async (req, res, next) => {
+  try {
+    const pglite = getPGlite();
+    const reg = await pglite.query(
+      `SELECT gt.*, p.document_number as purchase_doc, s.document_number as sale_doc
+       FROM gst_transactions gt
+       LEFT JOIN purchases p ON gt.reference_id=p.id AND gt.reference_type='PURCHASE'
+       LEFT JOIN sales s ON gt.reference_id=s.id AND gt.reference_type='SALE'
+       WHERE gt.purchase_class != 'CLASS_B' AND gt.purchase_class != 'B' OR gt.purchase_class IS NULL
+       ORDER BY gt.transaction_date DESC LIMIT 500`
+    );
+    const rows = reg.rows as any[];
+    const outputTax = rows.filter(x => x.type === 'OUTPUT').reduce((s, x) => s + Number(x.cgst || 0) + Number(x.sgst || 0) + Number(x.igst || 0), 0);
+    const inputTax = rows.filter(x => x.type === 'INPUT').reduce((s, x) => s + Number(x.cgst || 0) + Number(x.sgst || 0) + Number(x.igst || 0), 0);
+    res.json({ data: { outputTax, inputTax, netPayable: outputTax - inputTax, transactions: rows } });
+  } catch (err) { next(err); }
+});
+
 bankRoutes.get('/gst-register', requirePermission('bank_gst.view'), async (req, res, next) => {
   try {
     const pglite = getPGlite();

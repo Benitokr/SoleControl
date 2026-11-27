@@ -159,6 +159,9 @@ export function getPGlite(): any {
       }
     };
   }
+  if (process.env.VERCEL || process.env.NODE_ENV === 'production') {
+    throw new Error('PostgreSQL pool not initialized in production');
+  }
   if (!pgliteInstance) {
     const prismaRoot = getRootPrismaDir();
     const dbDir = path.join(prismaRoot, 'pglite-data');
@@ -204,5 +207,14 @@ export function getPrisma(): PrismaClient {
     prismaInstance = new PrismaClient();
   }
   return prismaInstance;
+}
+
+export async function resolveStoreId(storeId?: string): Promise<string> {
+  if (storeId && storeId !== 'default') return storeId;
+  const db = getPGlite();
+  const r = await db.query(`SELECT id FROM "stores" WHERE "is_active" = true ORDER BY "created_at" ASC LIMIT 1`);
+  const id = (r.rows[0] as any)?.id;
+  if (!id) throw new Error('No active store found in database');
+  return id;
 }
 

@@ -235,24 +235,29 @@ purchaseRoutes.post('/:id/finalise', requirePermission('purchases.approve'), asy
       await prisma.documentSeries.update({ where: { id: (docSeries as any).id }, data: { currentNumber: (docSeries as any).currentNumber + 1 } } as any);
     }
 
-    // 1. Move stock
+    // 1. Move stock (resolve default rack location if item has none)
+    let defaultLocId: string | undefined;
+    const defLoc = await prisma.location.findFirst({ where: { storeId: (purchase as any).storeId, type: 'RACK' } } as any)
+      || await prisma.location.findFirst({ where: { storeId: (purchase as any).storeId } } as any);
+    if (defLoc) defaultLocId = (defLoc as any).id;
+
     for (const item of items as any[]) {
       if (item.quantity > 0) {
         await adjustStock({
           storeId: (purchase as any).storeId, variantId: item.variantId,
-          locationId: item.rackLocationId || undefined, delta: item.quantity,
+          locationId: item.rackLocationId || defaultLocId, delta: item.quantity,
           type: 'PURCHASE', referenceType: 'Purchase', referenceId: (purchase as any).id,
           actorId: req.user!.id,
         });
       }
     }
 
-    // 2. Vendor payable (update outstanding balance)
+    // 2. Vendor payable (update balance)
     const total = Number((purchase as any).totalAmount);
     const vendor = await prisma.vendor.findUnique({ where: { id: (purchase as any).vendorId } });
     if (vendor) {
-      const newBalance = Number((vendor as any).outstandingBalance) + total;
-      await prisma.vendor.update({ where: { id: (purchase as any).vendorId }, data: { outstandingBalance: newBalance } } as any);
+      const newBalance = Number((vendor as any).balance ?? (vendor as any).outstandingBalance ?? 0) + total;
+      await prisma.vendor.update({ where: { id: (purchase as any).vendorId }, data: { balance: newBalance } } as any);
     }
 
     // 3. Post journal
@@ -305,7 +310,8 @@ purchaseRoutes.post('/:id/return', requirePermission('purchases.create'), async 
     await prisma.purchase.update({ where: { id: (returnPurchase as any).id }, data: { totalAmount: returnTotal } } as any);
     const vendor = await prisma.vendor.findUnique({ where: { id: (original as any).vendorId } });
     if (vendor) {
-      await prisma.vendor.update({ where: { id: (original as any).vendorId }, data: { outstandingBalance: Math.max(0, Number((vendor as any).outstandingBalance) - returnTotal) } } as any);
+      const curBal = Number((vendor as any).balance ?? (vendor as any).outstandingBalance ?? 0);
+      await prisma.vendor.update({ where: { id: (original as any).vendorId }, data: { balance: Math.max(0, curBal - returnTotal) } } as any);
     }
 
     await prisma.auditLog.create({ data: { entity: 'Purchase', entityId: (returnPurchase as any).id, action: 'RETURN', actorId: req.user!.id, afterState: { originalId: req.params.id, total: returnTotal } } });
